@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Alert, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../constants/Theme';
+import { ConfirmationModal } from './ConfirmationModal';
 import { useAlert, AlertType } from '../hooks/useAlert';
 
 type ActionType = 'medical' | 'police' | 'fire';
@@ -30,18 +31,34 @@ const ACTION_CONFIG = {
 export const QuickActions = () => {
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const { loading, triggerAlert } = useAlert();
+  const [confirmModal, setConfirmModal] = useState({
+    visible: false,
+    title: '',
+    msg: '',
+    icon: 'checkmark-circle',
+    color: Colors.primary
+  });
 
   const handleConfirm = async () => {
     if (!selectedAction) return;
-    const success = await triggerAlert(selectedAction as AlertType);
+    
+    // Save the action so we can use it after clearing state
+    const actionToTrigger = selectedAction;
+    const config = ACTION_CONFIG[actionToTrigger];
+    
+    // Close the original modal before triggering network request
     setSelectedAction(null);
+    
+    const success = await triggerAlert(actionToTrigger as AlertType);
 
     if (success) {
-      const label = ACTION_CONFIG[selectedAction].label;
-      Alert.alert(
-        `${label} Request Sent`,
-        `Your ${label.toLowerCase()} alert has been logged with your location. Responders have been notified.`
-      );
+      setConfirmModal({
+        visible: true,
+        title: `${config.label} Request Sent`,
+        msg: `Your request for ${config.label.toLowerCase()} assistance has been sent. Responders will receive your live location shortly.`,
+        icon: 'checkmark-circle',
+        color: config.color
+      });
     } else {
       Alert.alert('Error', 'Could not send request. Please check your connection and try again.');
     }
@@ -109,6 +126,15 @@ export const QuickActions = () => {
           })()}
         </View>
       </Modal>
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.msg}
+        iconName={confirmModal.icon}
+        iconColor={confirmModal.color}
+        onClose={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 };

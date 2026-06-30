@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Shadows } from '../constants/Theme';
+import { ConfirmationModal } from './ConfirmationModal';
 import { useAlert } from '../hooks/useAlert';
 
 export const SOSButton = () => {
@@ -13,6 +14,14 @@ export const SOSButton = () => {
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
   const holdTimeout = useRef<NodeJS.Timeout | null>(null);
   const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
+  
+  const [confirmModal, setConfirmModal] = useState({
+    visible: false,
+    title: '',
+    msg: '',
+    icon: 'warning',
+    color: Colors.primary
+  });
 
   useEffect(() => {
     if (pulseLoop.current) pulseLoop.current.stop();
@@ -54,14 +63,26 @@ export const SOSButton = () => {
     if (isActivated) {
       const cancelled = await cancelAlert();
       if (cancelled) {
-        Alert.alert('Emergency Cancelled', 'Your SOS has been deactivated and logged.');
+        setConfirmModal({
+          visible: true,
+          title: "SOS CANCELLED",
+          msg: "Your SOS has been deactivated. Responders stood down.",
+          icon: "checkmark-circle",
+          color: Colors.status.safeText
+        });
       } else {
         Alert.alert('Error', 'Could not cancel the alert. Please try again.');
       }
     } else {
       const triggered = await triggerAlert('sos');
       if (triggered) {
-        Alert.alert('🚨 EMERGENCY TRIGGERED', 'Your SOS has been logged with your location. Your emergency contacts will be notified.');
+        setConfirmModal({
+          visible: true,
+          title: "SOS TRIGGERED",
+          msg: "Your emergency contacts have been notified and live location shared.",
+          icon: "warning",
+          color: Colors.primary
+        });
       } else {
         Alert.alert('Error', 'Could not send SOS. Please check your connection and try again.');
       }
@@ -105,6 +126,15 @@ export const SOSButton = () => {
       <Text style={[styles.helpText, isActivated && styles.helpTextActive]}>
         {loading ? 'PLEASE WAIT...' : isActivated ? 'HOLD TO CANCEL EMERGENCY' : 'HOLD TO TRIGGER EMERGENCY'}
       </Text>
+
+      <ConfirmationModal
+        visible={confirmModal.visible}
+        title={confirmModal.title}
+        message={confirmModal.msg}
+        iconName={confirmModal.icon}
+        iconColor={confirmModal.color}
+        onClose={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 };
