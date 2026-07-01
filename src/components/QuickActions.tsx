@@ -45,23 +45,26 @@ export const QuickActions = () => {
   const handleConfirm = async () => {
     if (!selectedAction) return;
     
-    // Save the action so we can use it after clearing state
     const actionToTrigger = selectedAction;
     const config = ACTION_CONFIG[actionToTrigger];
     
-    // Close the original modal before triggering network request
-    setSelectedAction(null);
-    
+    // Wait for the network request to finish while showing the loading spinner on the button
     const success = await triggerAlert(actionToTrigger as AlertType);
 
+    // Close the original modal now that it's done
+    setSelectedAction(null);
+    
     if (success) {
-      setConfirmModal({
-        visible: true,
-        title: `${config.label} Request Sent`,
-        msg: `Your request for ${config.label.toLowerCase()} assistance has been sent. Responders will receive your live location shortly.`,
-        icon: 'checkmark-circle',
-        color: config.color
-      });
+      setTimeout(() => {
+        setConfirmModal({
+          visible: true,
+          title: `${config.label} Request Sent`,
+          msg: `Your request for ${config.label.toLowerCase()} assistance has been sent. Responders will receive your live location shortly.`,
+          icon: 'checkmark-circle',
+          color: config.color
+        });
+      }, 300); // small delay to allow the first modal to close cleanly before opening the next
+
     } else {
       Alert.alert('Error', 'Could not send request. Please check your connection and try again.');
     }

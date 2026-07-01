@@ -31,16 +31,13 @@ export function useAlert() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return false; }
 
-    const coords = await getLocation();
-
+    // Fire the alert immediately for instant user feedback
     const { data, error } = await supabase
       .from('alerts')
       .insert({
         user_id: user.id,
         type,
         status: 'active',
-        latitude: coords?.latitude ?? null,
-        longitude: coords?.longitude ?? null,
       })
       .select('id')
       .single();
@@ -49,6 +46,21 @@ export function useAlert() {
     if (error || !data) return false;
 
     setActiveAlert({ id: data.id, type });
+
+    // Fetch and update location in the background so it doesn't block the UI
+    (async () => {
+      const coords = await getLocation();
+      if (coords) {
+        await supabase
+          .from('alerts')
+          .update({
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          })
+          .eq('id', data.id);
+      }
+    })();
+
     return true;
   };
 
