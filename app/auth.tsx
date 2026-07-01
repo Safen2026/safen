@@ -12,20 +12,21 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Image } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { supabase } from '../src/lib/supabase';
 
 const Colors = {
-  primary: '#2271EE',
-  primaryLight: '#E6F4FE',
+  primary: '#0A2463',
+  primaryLight: '#E8EDF7',
   background: '#F8F9FA',
   white: '#FFFFFF',
-  text: { primary: '#1F2937', secondary: '#6B7280', inverse: '#FFFFFF' },
+  text: { primary: '#0A2463', secondary: '#6B7280', inverse: '#FFFFFF' },
   border: '#E5E7EB',
-  borderFocus: '#2271EE',
-  status: { safeText: '#107C41' },
+  borderFocus: '#0A2463',
+  status: { safeText: '#1B5E20' },
 };
 
 const Shadows = {
@@ -163,11 +164,11 @@ export default function AuthScreen() {
       <ScrollView style={styles.flex} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         <View style={styles.brand}>
-          <View style={styles.logoMark}>
-            <View style={styles.chevronLeft} />
-            <View style={styles.chevronRight} />
-          </View>
-          <Text style={styles.wordmark}>safen</Text>
+          <Image
+            source={require('../assets/images/logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.tagline}>Your personal safety companion</Text>
         </View>
 
@@ -238,10 +239,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
   scroll: { flexGrow: 1, paddingHorizontal: 24 },
   brand: { alignItems: 'center', marginBottom: 32 },
-  logoMark: { width: 64, height: 64, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  chevronLeft: { position: 'absolute', width: 10, height: 40, borderRadius: 6, backgroundColor: Colors.primary, transform: [{ rotate: '-25deg' }, { translateX: -10 }, { translateY: 4 }] },
-  chevronRight: { position: 'absolute', width: 10, height: 40, borderRadius: 6, backgroundColor: Colors.primary, transform: [{ rotate: '25deg' }, { translateX: 10 }, { translateY: 4 }] },
-  wordmark: { fontSize: 32, fontWeight: '800', color: Colors.text.primary, letterSpacing: -0.5 },
+  logo: { width: 180, height: 120, marginBottom: 8 },
   tagline: { marginTop: 4, fontSize: 14, color: Colors.text.secondary, fontWeight: '500' },
   card: { backgroundColor: Colors.white, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: Colors.border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4 },
   tabRow: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: Colors.border, marginBottom: 24, position: 'relative' },
