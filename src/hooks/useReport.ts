@@ -5,6 +5,7 @@ export type ReportPayload = {
   address: string;
   details: string;
   isAnonymous: boolean;
+  media?: string[];
 };
 
 export function useReport() {

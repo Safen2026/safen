@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
+import { Shadows } from '../../src/constants/Theme';
 import { ConfirmationModal } from '../../src/components/ConfirmationModal';
 import { useReport } from '../../src/hooks/useReport';
 import { SwipeButton } from '../../src/components/SwipeButton';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
+import { Video, Audio, ResizeMode } from 'expo-av';
+import { Modal } from 'react-native';
 
 type IncidentType = 'medical' | 'fire' | 'security' | 'traffic';
 
@@ -52,25 +57,224 @@ export default function ReportScreen() {
   const [detailsText, setDetailsText] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [errorModal, setErrorModal] = useState({ visible: false, title: '', message: '' });
+  const [mediaFiles, setMediaFiles] = useState<string[]>([]);
+  const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
   const { loading, submitReport } = useReport();
 
+  const handleTakePhoto = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (mediaFiles.length >= 4) {
+      setErrorModal({
+        visible: true,
+        title: 'Limit Reached',
+        message: 'You can only attach up to 4 media items per report.'
+      });
+      return;
+    }
+    
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      setErrorModal({
+        visible: true,
+        title: 'Permission Required',
+        message: 'Please grant camera access in your device settings to take photos.'
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setMediaFiles(prev => [...prev, result.assets[0].uri]);
+    }
+  };
+
+  const handleRecordVideo = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (mediaFiles.length >= 4) {
+      setErrorModal({
+        visible: true,
+        title: 'Limit Reached',
+        message: 'You can only attach up to 4 media items per report.'
+      });
+      return;
+    }
+    
+    const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
+    
+    if (cameraPerm.status !== 'granted') {
+      setErrorModal({
+        visible: true,
+        title: 'Permissions Required',
+        message: 'Please grant camera access in your device settings to record video.'
+      });
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setMediaFiles(prev => [...prev, result.assets[0].uri]);
+    }
+  };
+
+  const handlePickLibrary = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (mediaFiles.length >= 4) {
+      setErrorModal({
+        visible: true,
+        title: 'Limit Reached',
+        message: 'You can only attach up to 4 media items per report.'
+      });
+      return;
+    }
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      setErrorModal({
+        visible: true,
+        title: 'Permission Required',
+        message: 'Please grant photo gallery access in your device settings.'
+      });
+      return;
+    }
+
+    const maxSelections = 4 - mediaFiles.length;
+    
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      selectionLimit: maxSelections,
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      const newUris = result.assets.map(a => a.uri);
+      setMediaFiles(prev => [...prev, ...newUris].slice(0, 4));
+    }
+  };
+
+  const startRecording = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    if (mediaFiles.length >= 4) {
+      setErrorModal({
+        visible: true,
+        title: 'Limit Reached',
+        message: 'You can only attach up to 4 media items per report.'
+      });
+      return;
+    }
+
+    try {
+      const perm = await Audio.requestPermissionsAsync();
+      if (perm.status !== 'granted') {
+        setErrorModal({
+          visible: true,
+          title: 'Permission Required',
+          message: 'Please grant microphone access in your device settings.'
+        });
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      
+      setRecording(recording);
+      
+      // Start pulse animation
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.3,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } catch (err) {
+      setErrorModal({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to start recording.'
+      });
+    }
+  };
+
+  const stopRecording = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (!recording) return;
+
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+      const uri = recording.getURI();
+      if (uri) {
+        setMediaFiles(prev => [...prev, uri]);
+      }
+    } catch (err) {
+      // Ignore errors if stopped abruptly
+    }
+    setRecording(null);
+    pulseAnim.setValue(1);
+    Animated.loop(Animated.timing(pulseAnim, { toValue: 1, duration: 10, useNativeDriver: true })).stop();
+  };
+
+  const removeMedia = (index: number) => {
+    setMediaFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async () => {
     if (!selectedType) {
-      Alert.alert('Missing Info', 'Please select an incident type.');
+      setErrorModal({
+        visible: true,
+        title: 'Missing Info',
+        message: 'Please select an incident type.'
+      });
       return;
     }
     const success = await submitReport({
       category: selectedType,
       address: '14 Allen Avenue, Ikeja', // Hardcoded for now
       details: detailsText,
-      isAnonymous
+      isAnonymous,
+      media: mediaFiles
     });
     
     if (success) {
       setSuccessModalVisible(true);
     } else {
-      Alert.alert('Error', 'Failed to submit report. Please try again.');
+      setErrorModal({
+        visible: true,
+        title: 'Error',
+        message: 'Failed to submit report. Please try again.'
+      });
     }
   };
 
@@ -80,6 +284,7 @@ export default function ReportScreen() {
     setDetailsText('');
     setIsAnonymous(false);
     setSelectedType('security');
+    setMediaFiles([]);
   };
 
   const renderHeader = () => (
@@ -104,13 +309,7 @@ export default function ReportScreen() {
             <View style={[styles.dot, step === 3 && styles.dotActive]} />
           </View>
         </View>
-        <View style={styles.headerRight}>
-          {step === 3 && (
-            <TouchableOpacity style={styles.menuButton}>
-              <Ionicons name="ellipsis-vertical" size={24} color={colors.text.primary} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <View style={styles.headerRight} />
       </View>
       <View style={styles.divider} />
     </>
@@ -229,23 +428,60 @@ export default function ReportScreen() {
         </Text>
 
         <View style={styles.mediaGrid}>
-          <TouchableOpacity style={styles.mediaCard} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.mediaCard} activeOpacity={0.5} onPress={handleTakePhoto}>
             <Ionicons name="camera-outline" size={28} color="#00875A" />
             <Text style={styles.mediaCardText}>Take Photo</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.mediaCard} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.mediaCard} activeOpacity={0.5} onPress={handleRecordVideo}>
             <Ionicons name="videocam-outline" size={28} color="#00875A" />
             <Text style={styles.mediaCardText}>Record Video</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.mediaCard} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.mediaCard} activeOpacity={0.5} onPress={startRecording}>
             <Ionicons name="mic-outline" size={28} color="#00875A" />
             <Text style={styles.mediaCardText}>Record Audio</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.mediaCard} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.mediaCard} activeOpacity={0.5} onPress={handlePickLibrary}>
             <Ionicons name="image-outline" size={28} color="#00875A" />
             <Text style={styles.mediaCardText}>Upload from{'\n'}Gallery</Text>
           </TouchableOpacity>
         </View>
+
+        {mediaFiles.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.mediaList}>
+            {mediaFiles.map((uri, index) => {
+              const isVideo = uri.endsWith('.mp4') || uri.endsWith('.mov') || uri.includes('video');
+              const isAudio = uri.endsWith('.m4a') || uri.endsWith('.caf') || uri.includes('audio') || uri.includes('recording');
+              
+              return (
+                <View key={index} style={styles.mediaPreviewContainer}>
+                  <TouchableOpacity activeOpacity={0.8} onPress={() => setSelectedPreview(uri)}>
+                    {isAudio ? (
+                      <View style={[styles.mediaPreview, { backgroundColor: colors.primary + '20', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Ionicons name="mic" size={32} color={colors.primary} />
+                      </View>
+                    ) : (
+                      <Image source={{ uri }} style={styles.mediaPreview} />
+                    )}
+                    
+                    {/* Play icon overlay for videos and audio */}
+                    {(isVideo || isAudio) && (
+                      <View style={styles.videoOverlayIcon}>
+                        <Ionicons name="play-circle" size={32} color={isAudio ? colors.primary : "#FFF"} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.removeMediaBtn} 
+                    onPress={() => removeMedia(index)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={16} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </ScrollView>
+        )}
 
         <TextInput
           style={styles.detailsInput}
@@ -280,19 +516,94 @@ export default function ReportScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {renderHeader()}
-      {step === 1 && renderStep1()}
-      {step === 2 && renderStep2()}
-      {step === 3 && renderStep3()}
-      
-      <ConfirmationModal
-        visible={successModalVisible}
-        title="Report Submitted"
-        message="Your report has been securely transmitted. Responders will review it shortly."
-        iconName="checkmark-circle"
-        iconColor="#00875A"
-        onClose={handleCloseSuccess}
-      />
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {renderHeader()}
+        {step === 1 && renderStep1()}
+        {step === 2 && renderStep2()}
+        {step === 3 && renderStep3()}
+        
+        <ConfirmationModal
+          visible={successModalVisible}
+          title="Report Submitted"
+          message="Your report has been securely transmitted. Responders will review it shortly."
+          iconName="checkmark-circle"
+          iconColor="#00875A"
+          onClose={handleCloseSuccess}
+        />
+
+        <ConfirmationModal
+          visible={errorModal.visible}
+          title={errorModal.title}
+          message={errorModal.message}
+          iconName="alert-circle"
+          iconColor="#EF4444"
+          onClose={() => setErrorModal({ ...errorModal, visible: false })}
+        />
+
+        {/* Media Preview Modal */}
+        <Modal
+          visible={selectedPreview !== null}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setSelectedPreview(null)}
+        >
+          <View style={styles.previewModalOverlay}>
+            <TouchableOpacity 
+              style={styles.previewCloseBtn} 
+              onPress={() => setSelectedPreview(null)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close" size={28} color="#FFF" />
+            </TouchableOpacity>
+
+            {selectedPreview && (selectedPreview.endsWith('.mp4') || selectedPreview.endsWith('.mov') || selectedPreview.includes('video') || selectedPreview.endsWith('.m4a') || selectedPreview.endsWith('.caf') || selectedPreview.includes('audio') || selectedPreview.includes('recording')) ? (
+              <View style={styles.audioPreviewWrapper}>
+                {(selectedPreview.endsWith('.m4a') || selectedPreview.endsWith('.caf') || selectedPreview.includes('audio') || selectedPreview.includes('recording')) && (
+                  <Ionicons name="musical-notes" size={80} color="#FFF" style={styles.audioPreviewIcon} />
+                )}
+                <Video
+                  source={{ uri: selectedPreview }}
+                  style={styles.fullScreenPreview}
+                  useNativeControls
+                  resizeMode={ResizeMode.CONTAIN}
+                  shouldPlay
+                />
+              </View>
+            ) : (
+              <Image 
+                source={{ uri: selectedPreview || undefined }} 
+                style={styles.fullScreenPreview} 
+                resizeMode="contain" 
+              />
+            )}
+          </View>
+        </Modal>
+
+        {/* Audio Recording Modal */}
+        <Modal
+          visible={recording !== null}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={stopRecording}
+        >
+          <View style={styles.recordingOverlay}>
+            <View style={styles.recordingCard}>
+              <Animated.View style={[styles.recordingPulse, { transform: [{ scale: pulseAnim }] }]}>
+                <Ionicons name="mic" size={40} color="#EF4444" />
+              </Animated.View>
+              <Text style={styles.recordingText}>Recording Audio...</Text>
+              
+              <TouchableOpacity style={styles.stopRecordingBtn} onPress={stopRecording} activeOpacity={0.7}>
+                <View style={styles.stopIcon} />
+                <Text style={styles.stopRecordingText}>Stop Recording</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -516,7 +827,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   mediaCard: {
     width: '47%',
     aspectRatio: 1.2,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
@@ -531,22 +842,146 @@ const getStyles = (colors: any) => StyleSheet.create({
     color: colors.text.primary,
     textAlign: 'center',
   },
+  mediaList: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  mediaPreviewContainer: {
+    marginRight: 12,
+    marginTop: 8, // Give space so the absolute X button at -6 isn't clipped
+    position: 'relative',
+  },
+  mediaPreview: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  removeMediaBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#EF4444',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.white,
+  },
   detailsInput: {
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 12,
     padding: 16,
-    fontSize: 16,
+    height: 120,
+    fontSize: 15,
     color: colors.text.primary,
-    minHeight: 120,
+    textAlignVertical: 'top',
     marginBottom: 24,
+    ...Shadows.sm,
+  },
+  videoOverlayIcon: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 12,
+  },
+  previewModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewCloseBtn: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  audioPreviewWrapper: {
+    width: '100%',
+    height: '80%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  audioPreviewIcon: {
+    position: 'absolute',
+    zIndex: 0,
+    opacity: 0.5,
+  },
+  fullScreenPreview: {
+    width: '100%',
+    height: '100%',
+    zIndex: 1,
+  },
+  recordingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  recordingCard: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    padding: 30,
+    alignItems: 'center',
+    ...Shadows.md,
+  },
+  recordingPulse: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#EF4444',
+  },
+  recordingText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text.primary,
+    marginBottom: 24,
+  },
+  stopRecordingBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    ...Shadows.sm,
+  },
+  stopIcon: {
+    width: 14,
+    height: 14,
+    backgroundColor: '#FFF',
+    borderRadius: 3,
+    marginRight: 10,
+  },
+  stopRecordingText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   anonymousCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: colors.background,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
