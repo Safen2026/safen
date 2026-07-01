@@ -1,75 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, Platform, StatusBar as RNStatusBar } from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import React from 'react';
+import { View, Text, StyleSheet, Platform, StatusBar as RNStatusBar, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/Theme';
 
 export const Header = () => {
-  const [locationName, setLocationName] = useState<string>('Locating...');
-
-  useEffect(() => {
-    let locationSubscription: Location.LocationSubscription | null = null;
-
-    (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setLocationName('Permission denied');
-        return;
-      }
-
-      try {
-        locationSubscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.High, // Use High instead of Balanced to avoid cell-tower hopping
-            timeInterval: 60000, // Check at most every 60 seconds
-            distanceInterval: 500, // Only update if device moves at least 500 meters
-          },
-          async (location) => {
-            try {
-              let geocode = await Location.reverseGeocodeAsync({
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude
-              });
-              
-              if (geocode && geocode.length > 0) {
-                const place = geocode[0];
-                const city = place.city || place.subregion || place.district || place.name || 'Unknown Area';
-                const state = place.region || '';
-                setLocationName(state ? `${city}, ${state}` : city);
-              } else {
-                setLocationName('Unknown Location');
-              }
-            } catch (error) {
-              console.log('Reverse geocoding error:', error);
-            }
-          }
-        );
-      } catch (error) {
-        setLocationName('Location Error');
-      }
-    })();
-
-    return () => {
-      if (locationSubscription) {
-        locationSubscription.remove();
-      }
-    };
-  }, []);
-
   return (
     <View style={styles.container}>
       <View style={styles.leftContent}>
-        <MaterialIcons name="location-on" size={24} color={Colors.status.safeText} />
-        <View style={styles.locationTextContainer}>
-          <Text style={styles.locationLabel}>Current Location</Text>
-          <Text style={styles.locationValue} numberOfLines={1}>{locationName}</Text>
+        <View style={styles.avatarContainer}>
+          <Ionicons name="person" size={24} color={Colors.white} />
+        </View>
+        <View style={styles.greetingContainer}>
+          <Text style={styles.greetingText}>Hello, David</Text>
+          <Text style={styles.subtitleText}>Stay safe today</Text>
         </View>
       </View>
+      
       <View style={styles.rightContent}>
-        <Text style={styles.greetingText}>Hi, David</Text>
-        <View style={styles.avatarContainer}>
-          <Ionicons name="person" size={20} color={Colors.text.secondary} />
-        </View>
+        <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+          <Ionicons name="moon-outline" size={22} color={Colors.text.primary} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+          <View style={styles.badge} />
+          <Ionicons name="notifications-outline" size={22} color={Colors.text.primary} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -84,42 +39,65 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight ? RNStatusBar.currentHeight + 10 : 40 : 50,
     paddingBottom: 15,
     backgroundColor: Colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
   },
   leftContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  locationTextContainer: {
-    marginLeft: 8,
+  avatarContainer: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#00875A', // Using the app's green accent
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  locationLabel: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    marginBottom: 2,
+  greetingContainer: {
+    justifyContent: 'center',
   },
-  locationValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  greetingText: {
+    fontSize: 18,
+    fontWeight: '800',
     color: Colors.text.primary,
+  },
+  subtitleText: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    marginTop: 2,
+    fontWeight: '500',
   },
   rightContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  greetingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginRight: 12,
-  },
-  avatarContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.border,
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  badge: {
+    position: 'absolute',
+    top: 8,
+    right: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary, // Red badge for alerts
+    borderWidth: 1.5,
+    borderColor: Colors.white,
+    zIndex: 1,
   },
 });
