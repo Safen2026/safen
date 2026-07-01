@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Shadows } from '../constants/Theme';
+import { Shadows } from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
 import { ConfirmationModal } from './ConfirmationModal';
 import { useAlert } from '../hooks/useAlert';
 
 export const SOSButton = () => {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const { loading, activeAlert, triggerAlert, cancelAlert } = useAlert();
   const isActivated = !!activeAlert;
 
@@ -20,7 +23,7 @@ export const SOSButton = () => {
     title: '',
     msg: '',
     icon: 'warning',
-    color: Colors.primary
+    color: colors.primary
   });
 
   useEffect(() => {
@@ -68,7 +71,7 @@ export const SOSButton = () => {
           title: "SOS CANCELLED",
           msg: "Your SOS has been deactivated. Responders stood down.",
           icon: "checkmark-circle",
-          color: Colors.status.safeText
+          color: colors.status.safeText
         });
       } else {
         Alert.alert('Error', 'Could not cancel the alert. Please try again.');
@@ -81,7 +84,7 @@ export const SOSButton = () => {
           title: "SOS TRIGGERED",
           msg: "Your emergency contacts have been notified and live location shared.",
           icon: "warning",
-          color: Colors.primary
+          color: colors.primary
         });
       } else {
         Alert.alert('Error', 'Could not send SOS. Please check your connection and try again.');
@@ -93,7 +96,7 @@ export const SOSButton = () => {
     <View style={styles.container}>
       <View style={styles.buttonWrapper}>
         <Animated.View
-          style={[styles.pulseRing, { transform: [{ scale }], opacity, backgroundColor: isActivated ? '#7F1D1D' : Colors.primary }]}
+          style={[styles.pulseRing, { transform: [{ scale }], opacity, backgroundColor: isActivated ? '#7F1D1D' : colors.primary }]}
         />
         <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
           <TouchableOpacity
@@ -107,14 +110,14 @@ export const SOSButton = () => {
               style={[styles.holdOverlay, {
                 transform: [{ scale: chargeScale }],
                 opacity: chargeOpacity,
-                backgroundColor: isActivated ? Colors.primary : 'rgba(0,0,0,0.4)',
+                backgroundColor: isActivated ? colors.primary : 'rgba(0,0,0,0.4)',
               }]}
             />
             {loading ? (
-              <ActivityIndicator size="large" color={Colors.white} style={{ zIndex: 1 }} />
+              <ActivityIndicator size="large" color={colors.white} style={{ zIndex: 1 }} />
             ) : (
               <>
-                <Ionicons name={isActivated ? 'close-circle-outline' : 'warning-outline'} size={50} color={Colors.white} style={{ zIndex: 1 }} />
+                <Ionicons name={isActivated ? 'close-circle-outline' : 'warning-outline'} size={50} color={colors.white} style={{ zIndex: 1 }} />
                 <Text style={[styles.sosText, { zIndex: 1, fontSize: isActivated ? 24 : 32 }]}>
                   {isActivated ? 'CANCEL' : 'SOS'}
                 </Text>
@@ -139,18 +142,18 @@ export const SOSButton = () => {
   );
 };
 
-const styles = StyleSheet.create({
-  container: { alignItems: 'center', marginVertical: 30, backgroundColor: Colors.background },
+const getStyles = (colors: any) => StyleSheet.create({
+  container: { alignItems: 'center', marginVertical: 30, backgroundColor: colors.background },
   buttonWrapper: { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   pulseRing: { position: 'absolute', width: 160, height: 160, borderRadius: 80 },
   buttonInner: {
     width: 160, height: 160, borderRadius: 80,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
     overflow: 'hidden', ...Shadows.sos,
   },
   holdOverlay: { position: 'absolute', width: 160, height: 160, borderRadius: 80 },
-  sosText: { color: Colors.white, fontSize: 32, fontWeight: 'bold', marginTop: 5, letterSpacing: 2 },
-  helpText: { color: Colors.text.primary, fontSize: 14, fontWeight: '700', letterSpacing: 1 },
-  helpTextActive: { color: Colors.primary },
+  sosText: { color: colors.white, fontSize: 32, fontWeight: 'bold', marginTop: 5, letterSpacing: 2 },
+  helpText: { color: colors.text.primary, fontSize: 14, fontWeight: '700', letterSpacing: 1 },
+  helpTextActive: { color: colors.primary },
 });

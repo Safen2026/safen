@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, PanResponder, Dimensions, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface SwipeButtonProps {
   onComplete: () => void;
@@ -16,6 +16,8 @@ const BUTTON_WIDTH = SCREEN_WIDTH - 48; // accounting for screen padding
 const SWIPE_RANGE = BUTTON_WIDTH - THUMB_SIZE - PADDING * 2;
 
 export const SwipeButton = ({ onComplete, loading }: SwipeButtonProps) => {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const [completed, setCompleted] = useState(false);
   const pan = useRef(new Animated.ValueXY()).current;
 
@@ -83,16 +85,16 @@ export const SwipeButton = ({ onComplete, loading }: SwipeButtonProps) => {
         {...panResponder.panHandlers}
       >
         {loading ? (
-          <ActivityIndicator size="small" color={Colors.white} />
+          <ActivityIndicator size="small" color={colors.white} />
         ) : (
-          <MaterialCommunityIcons name="chevron-double-right" size={28} color={Colors.white} />
+          <MaterialCommunityIcons name="chevron-double-right" size={28} color={colors.white} />
         )}
       </Animated.View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     height: BUTTON_HEIGHT,
     backgroundColor: '#E6F4F1',

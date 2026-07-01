@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '../../src/constants/Theme';
+import { useTheme } from '../../src/context/ThemeContext';
 import { ConfirmationModal } from '../../src/components/ConfirmationModal';
 import { useReport } from '../../src/hooks/useReport';
 import { SwipeButton } from '../../src/components/SwipeButton';
@@ -16,6 +16,7 @@ const INCIDENT_CATEGORIES = [
     icon: 'medical-bag',
     color: '#D92D20',
     bgColor: '#FEF3F2',
+    darkBgColor: '#3F1D1D',
   },
   {
     id: 'fire',
@@ -23,6 +24,7 @@ const INCIDENT_CATEGORIES = [
     icon: 'fire',
     color: '#DC6803',
     bgColor: '#FFFAEB',
+    darkBgColor: '#3D250E',
   },
   {
     id: 'security',
@@ -30,6 +32,7 @@ const INCIDENT_CATEGORIES = [
     icon: 'shield-outline',
     color: '#1570EF',
     bgColor: '#EFF8FF',
+    darkBgColor: '#172B4D',
   },
   {
     id: 'traffic',
@@ -37,10 +40,13 @@ const INCIDENT_CATEGORIES = [
     icon: 'car',
     color: '#EAB308',
     bgColor: '#FEFCE8',
+    darkBgColor: '#3F3315',
   },
 ];
 
 export default function ReportScreen() {
+  const { colors, isDark } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const [step, setStep] = useState(1);
   const [selectedType, setSelectedType] = useState<IncidentType | null>('security');
   const [detailsText, setDetailsText] = useState('');
@@ -87,7 +93,7 @@ export default function ReportScreen() {
           <Ionicons 
             name="arrow-back" 
             size={24} 
-            color={step > 1 ? '#00875A' : Colors.text.primary} 
+            color={step > 1 ? '#00875A' : colors.text.primary} 
           />
         </TouchableOpacity>
         <View style={styles.stepContainer}>
@@ -101,7 +107,7 @@ export default function ReportScreen() {
         <View style={styles.headerRight}>
           {step === 3 && (
             <TouchableOpacity style={styles.menuButton}>
-              <Ionicons name="ellipsis-vertical" size={24} color={Colors.text.primary} />
+              <Ionicons name="ellipsis-vertical" size={24} color={colors.text.primary} />
             </TouchableOpacity>
           )}
         </View>
@@ -121,6 +127,7 @@ export default function ReportScreen() {
         <View style={styles.grid}>
           {INCIDENT_CATEGORIES.map((cat) => {
             const isSelected = selectedType === cat.id;
+            const activeBgColor = isDark ? cat.darkBgColor : cat.bgColor;
             return (
               <TouchableOpacity
                 key={cat.id}
@@ -128,7 +135,7 @@ export default function ReportScreen() {
                   styles.card,
                   isSelected && {
                     borderColor: cat.color,
-                    backgroundColor: cat.bgColor,
+                    backgroundColor: activeBgColor,
                     borderWidth: 1.5,
                   }
                 ]}
@@ -140,10 +147,10 @@ export default function ReportScreen() {
                     <Ionicons name="checkmark-circle" size={22} color={cat.color} />
                   </View>
                 )}
-                <View style={[styles.iconCircle, { backgroundColor: isSelected ? Colors.white : cat.bgColor }]}>
+                <View style={[styles.iconCircle, { backgroundColor: isSelected ? colors.white : activeBgColor }]}>
                   <MaterialCommunityIcons name={cat.icon as any} size={32} color={cat.color} />
                 </View>
-                <Text style={styles.cardLabel}>{cat.label}</Text>
+                <Text style={[styles.cardLabel, isSelected && { color: isDark ? colors.text.primary : cat.color }]}>{cat.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -158,7 +165,7 @@ export default function ReportScreen() {
           onPress={() => setStep(2)}
         >
           <Text style={styles.nextButtonText}>Next: Add Location</Text>
-          <Ionicons name="arrow-forward" size={20} color={Colors.white} />
+          <Ionicons name="arrow-forward" size={20} color={colors.white} />
         </TouchableOpacity>
       </View>
     </>
@@ -170,13 +177,13 @@ export default function ReportScreen() {
         <Text style={styles.titleLeft}>Where is this happening?</Text>
         
         <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={Colors.text.secondary} />
+          <Ionicons name="search" size={20} color={colors.text.secondary} />
           <TextInput 
             style={styles.searchInput}
             value="14 Allen Avenue, Ikeja"
             editable={false} // Hardcoded for design matching
           />
-          <Ionicons name="close" size={20} color={Colors.text.primary} />
+          <Ionicons name="close" size={20} color={colors.text.primary} />
         </View>
 
         <View style={styles.mapContainer}>
@@ -207,7 +214,7 @@ export default function ReportScreen() {
           onPress={() => setStep(3)}
         >
           <Text style={styles.nextButtonText}>Next: Add Details</Text>
-          <Ionicons name="arrow-forward" size={20} color={Colors.white} />
+          <Ionicons name="arrow-forward" size={20} color={colors.white} />
         </TouchableOpacity>
       </View>
     </>
@@ -243,7 +250,7 @@ export default function ReportScreen() {
         <TextInput
           style={styles.detailsInput}
           placeholder="Type any additional details here..."
-          placeholderTextColor={Colors.text.secondary}
+          placeholderTextColor={colors.text.secondary}
           multiline
           numberOfLines={5}
           value={detailsText}
@@ -290,10 +297,10 @@ export default function ReportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
   },
   header: {
     flexDirection: 'row',
@@ -321,7 +328,7 @@ const styles = StyleSheet.create({
   stepText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   dotsRow: {
     flexDirection: 'row',
@@ -338,7 +345,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     opacity: 0.5,
   },
   
@@ -350,14 +357,14 @@ const styles = StyleSheet.create({
   titleCentered: {
     fontSize: 26,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     textAlign: 'center',
     marginBottom: 12,
     lineHeight: 34,
   },
   subtitleCentered: {
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     marginBottom: 40,
     paddingHorizontal: 10,
@@ -372,10 +379,10 @@ const styles = StyleSheet.create({
   card: {
     width: '47%',
     aspectRatio: 0.9,
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#F3F4F6',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
@@ -401,7 +408,7 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontSize: 17,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
   },
   
   // Step 2 Styles
@@ -413,21 +420,21 @@ const styles = StyleSheet.create({
   titleLeft: {
     fontSize: 24,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 12,
   },
   subtitleLeft: {
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     marginBottom: 24,
     lineHeight: 22,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -436,7 +443,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     fontWeight: '500',
     marginHorizontal: 12,
   },
@@ -446,7 +453,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#D1FAEE', // Light blue/green to mock map water/land
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
@@ -479,7 +486,7 @@ const styles = StyleSheet.create({
   currentLocationBtn: {
     position: 'absolute',
     bottom: 24,
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
@@ -493,7 +500,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   currentLocationText: {
-    color: Colors.text.primary,
+    color: colors.text.primary,
     fontWeight: '700',
     fontSize: 15,
   },
@@ -512,7 +519,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
@@ -521,17 +528,17 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     textAlign: 'center',
   },
   detailsInput: {
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
-    color: Colors.text.primary,
+    color: colors.text.primary,
     minHeight: 120,
     marginBottom: 24,
   },
@@ -542,7 +549,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     padding: 16,
   },
   anonymousTextContainer: {
@@ -552,12 +559,12 @@ const styles = StyleSheet.create({
   anonymousTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 4,
   },
   anonymousSubtitle: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     lineHeight: 20,
   },
   swipeButtonContainer: {
@@ -588,9 +595,9 @@ const styles = StyleSheet.create({
   footer: {
     padding: 24,
     paddingBottom: 16,
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   nextButton: {
     backgroundColor: '#00875A',
@@ -605,7 +612,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   nextButtonText: {
-    color: Colors.white,
+    color: colors.white,
     fontSize: 16,
     fontWeight: 'bold',
   },

@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } fr
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Colors } from '../../src/constants/Theme';
+import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
 import { SessionContext } from '../../src/context/SessionContext';
 
 export default function SettingsScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const session = useContext(SessionContext);
   const [signingOut, setSigningOut] = useState(false);
@@ -45,7 +47,7 @@ export default function SettingsScreen() {
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <View style={styles.card}>
           <View style={styles.row}>
-            <Ionicons name="person-circle-outline" size={20} color={Colors.text.secondary} />
+            <Ionicons name="person-circle-outline" size={20} color={colors.text.secondary} />
             <Text style={styles.rowText}>{session?.user?.phone ?? 'Unknown'}</Text>
           </View>
         </View>
@@ -69,12 +71,12 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, paddingHorizontal: 20 },
-  header: { fontSize: 28, fontWeight: '800', color: Colors.text.primary, marginBottom: 28 },
+const getStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 20 },
+  header: { fontSize: 28, fontWeight: '800', color: colors.text.primary, marginBottom: 28 },
   section: { marginBottom: 24 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: Colors.text.secondary, letterSpacing: 0.8, marginBottom: 8 },
-  card: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.text.secondary, letterSpacing: 0.8, marginBottom: 8 },
+  card: { backgroundColor: colors.white, borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
-  rowText: { fontSize: 15, color: Colors.text.primary, fontWeight: '500' },
+  rowText: { fontSize: 15, color: colors.text.primary, fontWeight: '500' },
 });

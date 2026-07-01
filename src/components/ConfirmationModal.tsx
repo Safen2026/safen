@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Shadows } from '../constants/Theme';
+import { Shadows } from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface ConfirmationModalProps {
   visible: boolean;
@@ -17,9 +18,12 @@ export const ConfirmationModal = ({
   title, 
   message, 
   iconName, 
-  iconColor = Colors.primary, 
+  iconColor,
   onClose 
 }: ConfirmationModalProps) => {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const activeIconColor = iconColor || colors.primary;
   const scaleValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -43,14 +47,14 @@ export const ConfirmationModal = ({
     >
       <View style={styles.overlay}>
         <Animated.View style={[styles.modalContainer, { transform: [{ scale: scaleValue }] }]}>
-          <View style={[styles.iconCircle, { backgroundColor: iconColor + '20' }]}>
-            <Ionicons name={iconName} size={40} color={iconColor} />
+          <View style={[styles.iconCircle, { backgroundColor: activeIconColor + '20' }]}>
+            <Ionicons name={iconName} size={40} color={activeIconColor} />
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           
           <TouchableOpacity 
-            style={[styles.button, { backgroundColor: iconColor }]} 
+            style={[styles.button, { backgroundColor: activeIconColor }]} 
             onPress={onClose} 
             activeOpacity={0.8}
           >
@@ -62,7 +66,7 @@ export const ConfirmationModal = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -71,7 +75,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalContainer: {
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
     borderRadius: 20,
     padding: 24,
     alignItems: 'center',
@@ -90,13 +94,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: Colors.text.primary,
+    color: colors.text.primary,
     marginBottom: 8,
     textAlign: 'center',
   },
   message: {
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 22,
@@ -108,7 +112,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: {
-    color: Colors.white,
+    color: colors.white,
     fontSize: 16,
     fontWeight: 'bold',
   },

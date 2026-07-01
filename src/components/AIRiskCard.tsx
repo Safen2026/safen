@@ -1,33 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
-import { Colors } from '../constants/Theme';
-
-const MOCK_SCENARIOS = [
-  {
-    risk: "Low Risk",
-    color: Colors.status.safeText,
-    bgColor: '#E8F5E9',
-    icon: "shield-check-outline",
-    message: "You are on a well-mapped, active route. No immediate environmental risks detected."
-  },
-  {
-    risk: "Caution",
-    color: Colors.status.warningText,
-    bgColor: '#FEF3C7',
-    icon: "alert-circle-outline",
-    message: "Late night walk detected. It is recommended to stick to main roads and avoid unlit alleys."
-  },
-  {
-    risk: "High Alert",
-    color: Colors.status.alertText,
-    bgColor: '#FEE2E2',
-    icon: "shield-alert-outline",
-    message: "You have entered a secluded area with low lighting. Keep your phone accessible."
-  }
-];
+import { useTheme } from '../context/ThemeContext';
 
 export const AIRiskCard = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
+
+  const MOCK_SCENARIOS = useMemo(() => [
+    {
+      risk: "Low Risk",
+      color: colors.status.safeText,
+      bgColor: colors.status.safeBackground,
+      icon: "shield-check-outline",
+      message: "You are on a well-mapped, active route. No immediate environmental risks detected."
+    },
+    {
+      risk: "Caution",
+      color: colors.status.warningText,
+      bgColor: colors.status.warningBackground,
+      icon: "alert-circle-outline",
+      message: "Late night walk detected. It is recommended to stick to main roads and avoid unlit alleys."
+    },
+    {
+      risk: "High Alert",
+      color: colors.status.alertText,
+      bgColor: colors.status.alertBackground,
+      icon: "shield-alert-outline",
+      message: "You have entered a secluded area with low lighting. Keep your phone accessible."
+    }
+  ], [colors]);
+
   const [expanded, setExpanded] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scenario, setScenario] = useState(MOCK_SCENARIOS[0]);
@@ -55,16 +58,16 @@ export const AIRiskCard = () => {
       <View style={styles.header}>
         <View style={[
           styles.iconContainer, 
-          { backgroundColor: expanded && !isScanning ? scenario.bgColor : '#E8F5E9' }
+          { backgroundColor: expanded && !isScanning ? scenario.bgColor : colors.status.safeBackground }
         ]}>
           {isScanning ? (
-            <ActivityIndicator color={Colors.status.safeText} size="small" />
+            <ActivityIndicator color={colors.status.safeText} size="small" />
           ) : (
             <MaterialCommunityIcons 
               // @ts-ignore - dynamic icon name
               name={expanded ? scenario.icon : "shield-search"} 
               size={24} 
-              color={expanded ? scenario.color : Colors.status.safeText} 
+              color={expanded ? scenario.color : colors.status.safeText} 
             />
           )}
         </View>
@@ -77,7 +80,7 @@ export const AIRiskCard = () => {
             {isScanning ? "Scanning environment..." : expanded ? `Status: ${scenario.risk}` : "Tap to scan surroundings"}
           </Text>
         </View>
-        <Entypo name={expanded ? "chevron-up" : "chevron-down"} size={24} color={Colors.text.secondary} />
+        <Entypo name={expanded ? "chevron-up" : "chevron-down"} size={24} color={colors.text.secondary} />
       </View>
 
       {expanded && (
@@ -101,15 +104,15 @@ export const AIRiskCard = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
     marginHorizontal: 20,
     marginBottom: 20,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   header: {
     flexDirection: 'row',
@@ -129,26 +132,26 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
     fontWeight: '800',
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     letterSpacing: 0.5,
     marginBottom: 4,
   },
   statusText: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: Colors.status.safeText,
+    color: colors.status.safeText,
   },
   expandedContent: {
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   scanningBox: {
     paddingVertical: 8,
   },
   scanningText: {
-    color: Colors.text.secondary,
+    color: colors.text.secondary,
     fontSize: 14,
     fontStyle: 'italic',
     marginBottom: 6,

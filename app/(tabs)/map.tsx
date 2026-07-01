@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../src/constants/Theme';
+import { useTheme } from '../../src/context/ThemeContext';
 
 export default function MapScreen() {
+  const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   return (
     <View style={styles.container}>
       <Text style={styles.text}>Map Screen</Text>
@@ -10,15 +12,15 @@ export default function MapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   text: {
     fontSize: 18,
-    color: Colors.text.primary,
+    color: colors.text.primary,
   }
 });

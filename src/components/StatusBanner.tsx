@@ -1,31 +1,32 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors } from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
 
 export const StatusBanner = () => {
+  const { colors } = useTheme();
   // For testing purposes, you can toggle this by tapping the banner
   const [isAtHome, setIsAtHome] = useState(true);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <TouchableOpacity 
         activeOpacity={0.8}
         onPress={() => setIsAtHome(!isAtHome)}
         style={[
           styles.pill,
           { 
-            backgroundColor: isAtHome ? Colors.status.safeBackground : Colors.status.warningBackground,
-            borderColor: isAtHome ? '#AEE4C9' : '#FDE68A'
+            backgroundColor: isAtHome ? colors.status.safeBackground : colors.status.warningBackground,
+            borderColor: isAtHome ? colors.status.safeText + '40' : colors.status.warningText + '40'
           }
         ]}
       >
         <View style={[
           styles.dot, 
-          { backgroundColor: isAtHome ? Colors.status.safeText : Colors.status.warningText }
+          { backgroundColor: isAtHome ? colors.status.safeText : colors.status.warningText }
         ]} />
         <Text style={[
           styles.text, 
-          { color: isAtHome ? Colors.status.safeText : Colors.status.warningText }
+          { color: isAtHome ? colors.status.safeText : colors.status.warningText }
         ]}>
           {isAtHome ? "Status: Safe at Home (Auto-Notify Active)" : "Status: Out (Tracking Active)"}
         </Text>
@@ -39,7 +40,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 15,
     alignItems: 'center',
-    backgroundColor: Colors.background,
   },
   pill: {
     flexDirection: 'row',

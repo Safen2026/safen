@@ -6,11 +6,12 @@ import { SOSButton } from '../../src/components/SOSButton';
 import { QuickActions } from '../../src/components/QuickActions';
 import { AIRiskCard } from '../../src/components/AIRiskCard';
 import { RecentAlerts } from '../../src/components/RecentAlerts';
-import { Colors } from '../../src/constants/Theme';
+import { useTheme } from '../../src/context/ThemeContext';
 
 export default function HomeScreen() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header />
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <StatusBanner />
@@ -26,7 +27,6 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   scrollContent: {
     paddingBottom: 40,
