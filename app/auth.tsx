@@ -105,6 +105,7 @@ export default function AuthScreen() {
 
   // Login
   const [loginPhone, setLoginPhone] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
 
   // Signup
   const [fullName, setFullName] = useState('');
@@ -142,13 +143,19 @@ export default function AuthScreen() {
   };
 
   const handleLogIn = async () => {
-    if (!loginPhone) { Alert.alert('Missing field', 'Please enter your phone number.'); return; }
+    if (!loginPhone || !loginPassword) {
+      Alert.alert('Missing fields', 'Please enter your phone number and password.');
+      return;
+    }
     const formattedPhone = toE164Nigeria(loginPhone);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone: formattedPhone });
+    const { error } = await supabase.auth.signInWithPassword({
+      phone: formattedPhone,
+      password: loginPassword,
+    });
     setLoading(false);
     if (error) { Alert.alert('Login failed', error.message); return; }
-    router.push({ pathname: '/verify', params: { phone: formattedPhone } });
+    router.replace('/(tabs)');
   };
 
   return (
@@ -187,6 +194,7 @@ export default function AuthScreen() {
             ) : (
               <>
                 <InputField label="Phone Number" placeholder="08012345678" value={loginPhone} onChangeText={setLoginPhone} keyboardType="phone-pad" icon={<Ionicons name="call-outline" size={18} color={Colors.text.secondary} />} />
+                <InputField label="Password" placeholder="••••••••" value={loginPassword} onChangeText={setLoginPassword} secureTextEntry icon={<Ionicons name="lock-closed-outline" size={18} color={Colors.text.secondary} />} />
                 <TouchableOpacity style={styles.forgotRow}>
                   <Text style={styles.forgotText}>Forgot password?</Text>
                 </TouchableOpacity>
@@ -195,7 +203,7 @@ export default function AuthScreen() {
           </View>
 
           <TouchableOpacity style={[styles.cta, loading && styles.ctaDisabled]} activeOpacity={0.85} onPress={mode === 'signup' ? handleSignUp : handleLogIn} disabled={loading}>
-            {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.ctaText}>{mode === 'login' ? 'Send OTP' : 'Create Account'}</Text>}
+            {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.ctaText}>{mode === 'login' ? 'Sign In' : 'Create Account'}</Text>}
           </TouchableOpacity>
 
           <View style={styles.dividerRow}>
