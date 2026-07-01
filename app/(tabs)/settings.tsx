@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
 import { SessionContext } from '../../src/context/SessionContext';
+import { FeedbackModal } from '../../src/components/FeedbackModal';
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -15,6 +16,7 @@ export default function SettingsScreen() {
   const [signingOut, setSigningOut] = useState(false);
 
   const [signOutModalVisible, setSignOutModalVisible] = useState(false);
+  const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
 
   const handleSignOut = () => {
     setSignOutModalVisible(true);
@@ -44,6 +46,18 @@ export default function SettingsScreen() {
             <Ionicons name="person-circle-outline" size={20} color={colors.text.secondary} />
             <Text style={styles.rowText}>{session?.user?.phone ?? 'Unknown'}</Text>
           </View>
+        </View>
+      </View>
+
+      {/* Support info */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>SUPPORT</Text>
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.row} onPress={() => setFeedbackModalVisible(true)}>
+            <Ionicons name="chatbubbles-outline" size={20} color={colors.icon.police} />
+            <Text style={styles.rowText}>Share Feedback</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} style={{ marginLeft: 'auto' }} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -103,6 +117,11 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      <FeedbackModal 
+        visible={feedbackModalVisible} 
+        onClose={() => setFeedbackModalVisible(false)} 
+      />
     </View>
   );
 }
