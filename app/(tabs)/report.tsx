@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../src/constants/Theme';
+import { ConfirmationModal } from '../../src/components/ConfirmationModal';
+import { useReport } from '../../src/hooks/useReport';
+import { SwipeButton } from '../../src/components/SwipeButton';
 
 type IncidentType = 'medical' | 'fire' | 'security' | 'traffic';
 
@@ -42,6 +45,36 @@ export default function ReportScreen() {
   const [selectedType, setSelectedType] = useState<IncidentType | null>('security');
   const [detailsText, setDetailsText] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+
+  const { loading, submitReport } = useReport();
+
+  const handleSubmit = async () => {
+    if (!selectedType) {
+      Alert.alert('Missing Info', 'Please select an incident type.');
+      return;
+    }
+    const success = await submitReport({
+      category: selectedType,
+      address: '14 Allen Avenue, Ikeja', // Hardcoded for now
+      details: detailsText,
+      isAnonymous
+    });
+    
+    if (success) {
+      setSuccessModalVisible(true);
+    } else {
+      Alert.alert('Error', 'Failed to submit report. Please try again.');
+    }
+  };
+
+  const handleCloseSuccess = () => {
+    setSuccessModalVisible(false);
+    setStep(1);
+    setDetailsText('');
+    setIsAnonymous(false);
+    setSelectedType('security');
+  };
 
   const renderHeader = () => (
     <>
@@ -93,17 +126,21 @@ export default function ReportScreen() {
                 key={cat.id}
                 style={[
                   styles.card,
-                  isSelected && styles.cardSelected,
+                  isSelected && {
+                    borderColor: cat.color,
+                    backgroundColor: cat.bgColor,
+                    borderWidth: 1.5,
+                  }
                 ]}
                 activeOpacity={0.7}
                 onPress={() => setSelectedType(cat.id as IncidentType)}
               >
                 {isSelected && (
                   <View style={styles.checkBadge}>
-                    <Ionicons name="checkmark-circle" size={22} color="#00875A" />
+                    <Ionicons name="checkmark-circle" size={22} color={cat.color} />
                   </View>
                 )}
-                <View style={[styles.iconCircle, { backgroundColor: cat.bgColor }]}>
+                <View style={[styles.iconCircle, { backgroundColor: isSelected ? Colors.white : cat.bgColor }]}>
                   <MaterialCommunityIcons name={cat.icon as any} size={32} color={cat.color} />
                 </View>
                 <Text style={styles.cardLabel}>{cat.label}</Text>
@@ -229,21 +266,7 @@ export default function ReportScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity 
-          style={styles.swipeButtonContainer}
-          activeOpacity={0.8}
-          onPress={() => {
-            setStep(1);
-            setDetailsText('');
-            setIsAnonymous(false);
-          }}
-        >
-          <View style={styles.swipeButtonIcon}>
-            <MaterialCommunityIcons name="chevron-double-right" size={24} color={Colors.white} />
-          </View>
-          <Text style={styles.swipeButtonText}>Swipe to Submit</Text>
-          <MaterialCommunityIcons name="arrow-right" size={20} color="#00875A" />
-        </TouchableOpacity>
+        <SwipeButton onComplete={handleSubmit} loading={loading} />
       </View>
     </>
   );
@@ -254,6 +277,15 @@ export default function ReportScreen() {
       {step === 1 && renderStep1()}
       {step === 2 && renderStep2()}
       {step === 3 && renderStep3()}
+      
+      <ConfirmationModal
+        visible={successModalVisible}
+        title="Report Submitted"
+        message="Your report has been securely transmitted. Responders will review it shortly."
+        iconName="checkmark-circle"
+        iconColor="#00875A"
+        onClose={handleCloseSuccess}
+      />
     </SafeAreaView>
   );
 }
@@ -342,7 +374,7 @@ const styles = StyleSheet.create({
     aspectRatio: 0.9,
     backgroundColor: Colors.white,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -352,11 +384,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 2,
-  },
-  cardSelected: {
-    borderColor: '#00875A',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1.5,
   },
   checkBadge: {
     position: 'absolute',
