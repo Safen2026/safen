@@ -20,7 +20,8 @@
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/logo.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.kingdave17.safen"
     },
     "web": {
       "favicon": "./assets/logo.png"
