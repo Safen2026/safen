@@ -11,6 +11,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Video, Audio, ResizeMode } from 'expo-av';
 import { Modal } from 'react-native';
+import * as Location from 'expo-location';
+import MapView, { PROVIDER_DEFAULT } from 'react-native-maps';
 
 type IncidentType = 'medical' | 'fire' | 'security' | 'traffic';
 
@@ -62,6 +64,9 @@ export default function ReportScreen() {
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [address, setAddress] = useState('Fetching location...');
 
   const { loading, submitReport } = useReport();
 
@@ -261,7 +266,7 @@ export default function ReportScreen() {
     }
     const success = await submitReport({
       category: selectedType,
-      address: '14 Allen Avenue, Ikeja', // Hardcoded for now
+      address: address,
       details: detailsText,
       isAnonymous,
       media: mediaFiles
@@ -361,7 +366,30 @@ export default function ReportScreen() {
           style={[styles.nextButton, !selectedType && styles.nextButtonDisabled]}
           disabled={!selectedType}
           activeOpacity={0.8}
-          onPress={() => setStep(2)}
+          onPress={async () => {
+            setStep(2);
+            // Fetch location when entering step 2
+            let { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+              setAddress('Location permission denied');
+              return;
+            }
+            let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            setLocation(loc);
+            
+            try {
+              let geocode = await Location.reverseGeocodeAsync(loc.coords);
+              if (geocode && geocode.length > 0) {
+                const place = geocode[0];
+                const formattedAddress = `${place.streetNumber ? place.streetNumber + ' ' : ''}${place.street || place.name}, ${place.city || place.subregion}`;
+                setAddress(formattedAddress);
+              } else {
+                setAddress('Location found, address unknown');
+              }
+            } catch (e) {
+              setAddress('Location found');
+            }
+          }}
         >
           <Text style={styles.nextButtonText}>Next: Add Location</Text>
           <Ionicons name="arrow-forward" size={20} color={colors.white} />
@@ -379,20 +407,35 @@ export default function ReportScreen() {
           <Ionicons name="search" size={20} color={colors.text.secondary} />
           <TextInput 
             style={styles.searchInput}
-            value="14 Allen Avenue, Ikeja"
-            editable={false} // Hardcoded for design matching
+            value={address}
+            editable={false}
           />
           <Ionicons name="close" size={20} color={colors.text.primary} />
         </View>
 
-        <View style={styles.mapContainer}>
-          {/* Simulated Map Background */}
-          <View style={styles.mapMockBg}>
-            {/* Map lines simulation could go here, but a clean color works for a mock */}
-          </View>
+        <View style={[styles.mapContainer, { overflow: 'hidden' }]}>
+          {location ? (
+            <MapView
+              style={{ width: '100%', height: '100%' }}
+              provider={PROVIDER_DEFAULT}
+              initialRegion={{
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              }}
+              showsUserLocation={true}
+              scrollEnabled={false}
+              zoomEnabled={false}
+            />
+          ) : (
+            <View style={[styles.mapMockBg, { justifyContent: 'center', alignItems: 'center' }]}>
+               <ActivityIndicator color={colors.primary} />
+            </View>
+          )}
 
-          {/* Center Map Pin */}
-          <View style={styles.mapPinContainer}>
+          {/* Center Map Pin Overlay */}
+          <View style={styles.mapPinContainer} pointerEvents="none">
             <View style={styles.mapPinRing}>
               <View style={styles.mapPinCenter} />
             </View>
