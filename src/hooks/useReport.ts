@@ -34,9 +34,9 @@ const uploadMediaFile = async (
     const storagePath = `${userId}/${reportId}/${fileName}`;
 
     // Read the file as base64
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
+const base64 = await FileSystem.readAsStringAsync(uri, {
+  encoding: 'base64',
+});
 
     // Decode base64 to binary
     const byteCharacters = atob(base64);
