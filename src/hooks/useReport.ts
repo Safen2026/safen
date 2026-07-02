@@ -23,44 +23,44 @@ const getFileInfo = (uri: string): { fileName: string; mimeType: string } => {
   return { fileName: `photo_${timestamp}.jpg`, mimeType: 'image/jpeg' };
 };
 
-// Uploads a single local file URI to Supabase Storage and returns its path
-const uploadMediaFile = async (
-  uri: string,
-  userId: string,
-  reportId: string
-): Promise<string | null> => {
+// Uploads a single local file URI to Cloudinary and returns its secure URL
+const uploadToCloudinary = async (uri: string): Promise<string | null> => {
   try {
-    const { fileName, mimeType } = getFileInfo(uri);
-    const storagePath = `${userId}/${reportId}/${fileName}`;
+    const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
-    // Read the file as base64
-const base64 = await FileSystem.readAsStringAsync(uri, {
-  encoding: 'base64',
-});
-
-    // Decode base64 to binary
-    const byteCharacters = atob(base64);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-
-    const { error } = await supabase.storage
-      .from('report-media')
-      .upload(storagePath, byteArray, {
-        contentType: mimeType,
-        upsert: false,
-      });
-
-    if (error) {
-      console.warn('Media upload failed:', error.message);
+    if (!cloudName || !uploadPreset) {
+      console.warn('Cloudinary environment variables missing');
       return null;
     }
 
-    return storagePath;
+    const { fileName, mimeType } = getFileInfo(uri);
+    const isVideo = mimeType.startsWith('video') || mimeType.startsWith('audio');
+    const resourceType = isVideo ? 'video' : 'image'; // Cloudinary groups audio under 'video'
+
+    const formData = new FormData();
+    formData.append('file', {
+      uri,
+      type: mimeType,
+      name: fileName
+    } as any);
+    formData.append('upload_preset', uploadPreset);
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
+      method: 'POST',
+      body: formData,
+      headers: { 'Accept': 'application/json' },
+    });
+
+    const data = await response.json();
+    if (data.secure_url) {
+      return data.secure_url;
+    } else {
+      console.warn('Cloudinary upload failed:', data);
+      return null;
+    }
   } catch (err) {
-    console.warn('Media upload error:', err);
+    console.warn('Cloudinary upload error:', err);
     return null;
   }
 };
@@ -78,15 +78,25 @@ export function useReport() {
         return false;
       }
 
-      // 1. Insert the report row first — fast, gives us the report ID
+      // 1. Upload media to Cloudinary first
+      const uploadedPaths: string[] = [];
+      if (payload.media && payload.media.length > 0) {
+        for (const uri of payload.media) {
+          const url = await uploadToCloudinary(uri);
+          if (url) uploadedPaths.push(url);
+        }
+      }
+
+      // 2. Insert the report row with the Cloudinary URLs
       const { data: report, error: reportError } = await supabase
         .from('reports')
         .insert({
           user_id: payload.isAnonymous ? null : user.id,
           category: payload.category,
-          description: payload.details || null,
+          description: payload.address ? `Reported Address: ${payload.address}\n\n${payload.details || ''}`.trim() : (payload.details || null),
           latitude: payload.latitude ?? null,
           longitude: payload.longitude ?? null,
+          media_urls: uploadedPaths,
           status: 'open',
         })
         .select('id')
@@ -99,22 +109,6 @@ export function useReport() {
       }
 
       setLoading(false);
-
-      // 2. Upload media in the background — user isn't waiting for this
-      if (payload.media && payload.media.length > 0) {
-        (async () => {
-          const uploadedPaths: string[] = [];
-
-          for (const uri of payload.media!) {
-            const path = await uploadMediaFile(uri, user.id, report.id);
-            if (path) uploadedPaths.push(path);
-          }
-
-          // Optionally: you could store the uploaded paths back on the report
-          // For now they live in storage under userId/reportId/filename
-          // which is enough to retrieve them later
-        })();
-      }
 
       return true;
     } catch (error) {

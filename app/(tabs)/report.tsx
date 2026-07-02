@@ -64,9 +64,50 @@ export default function ReportScreen() {
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const mapRef = React.useRef<MapView>(null);
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [address, setAddress] = useState('Fetching location...');
+
+  const handleRegionChangeComplete = async (region: any) => {
+    try {
+      setLocation(prev => prev ? {
+        ...prev,
+        coords: {
+          ...prev.coords,
+          latitude: region.latitude,
+          longitude: region.longitude
+        }
+      } : null);
+      
+      setAddress('Fetching location...');
+      let geocode = await Location.reverseGeocodeAsync({
+        latitude: region.latitude,
+        longitude: region.longitude
+      });
+      if (geocode && geocode.length > 0) {
+        const place = geocode[0];
+        
+        // Filter out Plus Codes (e.g. 6FR5RC8J+Q6R)
+        let primaryName = place.street;
+        if (!primaryName && place.name && !place.name.includes('+')) {
+          primaryName = place.name;
+        }
+        
+        // If we still don't have a street, use the district/neighborhood
+        if (!primaryName) {
+          primaryName = place.district || 'Unnamed Road';
+        }
+
+        const formattedAddress = `${place.streetNumber ? place.streetNumber + ' ' : ''}${primaryName}, ${place.city || place.subregion || place.region}`;
+        setAddress(formattedAddress);
+      } else {
+        setAddress('Location found, address unknown');
+      }
+    } catch (e) {
+      setAddress('Location found');
+    }
+  };
 
   const { loading, submitReport } = useReport();
 
@@ -269,7 +310,9 @@ export default function ReportScreen() {
       address: address,
       details: detailsText,
       isAnonymous,
-      media: mediaFiles
+      media: mediaFiles,
+      latitude: location?.coords.latitude,
+      longitude: location?.coords.longitude
     });
     
     if (success) {
@@ -381,7 +424,16 @@ export default function ReportScreen() {
               let geocode = await Location.reverseGeocodeAsync(loc.coords);
               if (geocode && geocode.length > 0) {
                 const place = geocode[0];
-                const formattedAddress = `${place.streetNumber ? place.streetNumber + ' ' : ''}${place.street || place.name}, ${place.city || place.subregion}`;
+                
+                let primaryName = place.street;
+                if (!primaryName && place.name && !place.name.includes('+')) {
+                  primaryName = place.name;
+                }
+                if (!primaryName) {
+                  primaryName = place.district || 'Unnamed Road';
+                }
+
+                const formattedAddress = `${place.streetNumber ? place.streetNumber + ' ' : ''}${primaryName}, ${place.city || place.subregion || place.region}`;
                 setAddress(formattedAddress);
               } else {
                 setAddress('Location found, address unknown');
@@ -408,14 +460,48 @@ export default function ReportScreen() {
           <TextInput 
             style={styles.searchInput}
             value={address}
-            editable={false}
+            onChangeText={setAddress}
+            placeholder="Enter address manually..."
+            placeholderTextColor={colors.text.secondary}
+            returnKeyType="search"
+            onSubmitEditing={async () => {
+              if (address.trim().length > 3) {
+                try {
+                  const geocodeResult = await Location.geocodeAsync(address);
+                  if (geocodeResult && geocodeResult.length > 0) {
+                    const { latitude, longitude } = geocodeResult[0];
+                    setLocation(prev => prev ? {
+                      ...prev,
+                      coords: {
+                        ...prev.coords,
+                        latitude,
+                        longitude
+                      }
+                    } : null);
+                    mapRef.current?.animateToRegion({
+                      latitude,
+                      longitude,
+                      latitudeDelta: 0.005,
+                      longitudeDelta: 0.005,
+                    }, 500);
+                  }
+                } catch (e) {
+                  // Geocoding failed, leave as is
+                }
+              }
+            }}
           />
-          <Ionicons name="close" size={20} color={colors.text.primary} />
+          {address.length > 0 && (
+            <TouchableOpacity onPress={() => setAddress('')}>
+              <Ionicons name="close" size={20} color={colors.text.primary} />
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={[styles.mapContainer, { overflow: 'hidden' }]}>
           {location ? (
             <MapView
+              ref={mapRef}
               style={{ width: '100%', height: '100%' }}
               provider={PROVIDER_DEFAULT}
               initialRegion={{
@@ -425,8 +511,7 @@ export default function ReportScreen() {
                 longitudeDelta: 0.005,
               }}
               showsUserLocation={true}
-              scrollEnabled={false}
-              zoomEnabled={false}
+              onRegionChangeComplete={handleRegionChangeComplete}
             />
           ) : (
             <View style={[styles.mapMockBg, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -442,7 +527,23 @@ export default function ReportScreen() {
           </View>
 
           {/* Use Current Location Button */}
-          <TouchableOpacity style={styles.currentLocationBtn} activeOpacity={0.8}>
+          <TouchableOpacity 
+            style={styles.currentLocationBtn} 
+            activeOpacity={0.8}
+            onPress={async () => {
+              try {
+                let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                mapRef.current?.animateToRegion({
+                  latitude: loc.coords.latitude,
+                  longitude: loc.coords.longitude,
+                  latitudeDelta: 0.005,
+                  longitudeDelta: 0.005,
+                }, 500);
+              } catch (e) {
+                // Ignore error if location fetch fails
+              }
+            }}
+          >
             <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#00875A" />
             <Text style={styles.currentLocationText}>Use Current Location</Text>
           </TouchableOpacity>
@@ -805,7 +906,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     flex: 1,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#D1FAEE', // Light blue/green to mock map water/land
+    backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: colors.border,
     position: 'relative',
@@ -818,6 +919,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     opacity: 0.8,
   },
   mapPinContainer: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
