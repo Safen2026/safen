@@ -13,10 +13,15 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.safen.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
+        "package": "com.safen.app",
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/logo.png"
       },
@@ -39,6 +44,12 @@
           "locationAlwaysAndWhenInUsePermission": "Allow SAFEN to use your location to share it during emergencies."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6d07b9e3-1a01-46ca-b2e1-5c81bd8a4c25"
+      }
+    }
   }
 }
