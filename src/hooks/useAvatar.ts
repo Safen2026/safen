@@ -39,7 +39,6 @@ export function useAvatar() {
         setUploading(false);
         return false;
       }
-      
 
       const userId = session.user.id;
       const storagePath = `${userId}/avatar.jpg`;
@@ -53,28 +52,26 @@ export function useAvatar() {
         type: 'image/jpeg',
       } as any);
 
-     const response = await fetch(uploadUrl, {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${session.access_token}`,
-    'x-upsert': 'true',
-  },
-  body: formData,
-});
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'x-upsert': 'true',
+        },
+        body: formData,
+      });
 
-const responseText = await response.text();
-console.log('=== AVATAR UPLOAD ===');
-console.log('URL:', uploadUrl);
-console.log('Status:', response.status);
-console.log('Response:', responseText);
-console.log('Session exists:', !!session);
-console.log('Access token exists:', !!session.access_token);
+      const responseText = await response.text();
+      console.log('=== AVATAR UPLOAD ===');
+      console.log('URL:', uploadUrl);
+      console.log('Status:', response.status);
+      console.log('Response:', responseText);
+      console.log('Token exists:', !!session.access_token);
 
-if (!response.ok) {
-  setUploading(false);
-  return false;
-}
-      
+      if (!response.ok) {
+        setUploading(false);
+        return false;
+      }
 
       // Save the storage path to the profile
       const { error: updateError } = await supabase

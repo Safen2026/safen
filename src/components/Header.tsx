@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, Platform, StatusBar as RNStatusBar,
   TouchableOpacity, Image, Modal, Pressable, ActivityIndicator,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { SessionContext } from '../context/SessionContext';
@@ -11,6 +12,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConfirmationModal } from './ConfirmationModal';
 import { useAvatar } from '../hooks/useAvatar';
 
+// Camera is unavailable on iOS simulator
+const IS_SIMULATOR = Platform.OS === 'ios' && !Platform.isPad && !Platform.isTV
+  && (() => { try { return !window.navigator.product; } catch { return false; } })() === false;
+
 export const Header = () => {
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
@@ -18,6 +23,8 @@ export const Header = () => {
   const session = useContext(SessionContext);
 
   const { avatarUrl, uploading, uploadAvatar } = useAvatar();
+  // Simulator has no camera — only show gallery option there
+  const isSimulator = !Constants.isDevice;
 
   const [pickerVisible, setPickerVisible] = React.useState(false);
   const [notificationsVisible, setNotificationsVisible] = React.useState(false);
@@ -113,12 +120,14 @@ export const Header = () => {
         <Pressable style={styles.modalOverlay} onPress={() => setPickerVisible(false)}>
           <Pressable style={[styles.bottomSheet, { paddingBottom: Math.max(insets.bottom + 20, 40) }]} onPress={e => e.stopPropagation()}>
             <Text style={styles.sheetTitle}>Update Profile Picture</Text>
-            <TouchableOpacity style={styles.sheetOption} onPress={() => handlePickAndUpload('camera')}>
-              <View style={[styles.sheetIconBox, { backgroundColor: colors.primary + '15' }]}>
-                <Ionicons name="camera" size={22} color={colors.primary} />
-              </View>
-              <Text style={styles.sheetOptionText}>Take a Photo</Text>
-            </TouchableOpacity>
+            {Platform.OS !== 'ios' || !__DEV__ ? (
+              <TouchableOpacity style={styles.sheetOption} onPress={() => handlePickAndUpload('camera')}>
+                <View style={[styles.sheetIconBox, { backgroundColor: colors.primary + '15' }]}>
+                  <Ionicons name="camera" size={22} color={colors.primary} />
+                </View>
+                <Text style={styles.sheetOptionText}>Take a Photo</Text>
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity style={styles.sheetOption} onPress={() => handlePickAndUpload('gallery')}>
               <View style={[styles.sheetIconBox, { backgroundColor: colors.icon?.activeTab + '15' || '#15' }]}>
                 <Ionicons name="images" size={22} color={colors.icon?.activeTab || colors.primary} />
