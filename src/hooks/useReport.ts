@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import * as FileSystem from 'expo-file-system';
 import { supabase } from '../lib/supabase';
 
 export type ReportPayload = {
@@ -8,21 +7,21 @@ export type ReportPayload = {
   details: string;
   isAnonymous: boolean;
   media?: string[];
-  latitude?: number;
-  longitude?: number;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
-// Derives a clean filename and MIME type from a local URI
 const getFileInfo = (uri: string): { fileName: string; mimeType: string } => {
-  const isVideo = uri.includes('video') || uri.endsWith('.mp4') || uri.endsWith('.mov');
-  const isAudio = uri.includes('audio') || uri.includes('recording') || uri.endsWith('.m4a') || uri.endsWith('.caf');
+  const lower = uri.toLowerCase();
   const timestamp = Date.now();
-
-  if (isVideo) return { fileName: `video_${timestamp}.mp4`, mimeType: 'video/mp4' };
-  if (isAudio) return { fileName: `audio_${timestamp}.m4a`, mimeType: 'audio/m4a' };
+  if (lower.includes('video') || lower.endsWith('.mp4') || lower.endsWith('.mov'))
+    return { fileName: `video_${timestamp}.mp4`, mimeType: 'video/mp4' };
+  if (lower.includes('audio') || lower.includes('recording') || lower.endsWith('.m4a') || lower.endsWith('.caf'))
+    return { fileName: `audio_${timestamp}.m4a`, mimeType: 'audio/m4a' };
   return { fileName: `photo_${timestamp}.jpg`, mimeType: 'image/jpeg' };
 };
 
+<<<<<<< HEAD
 // Uploads a single local file URI to Cloudinary and returns its secure URL
 const uploadToCloudinary = async (uri: string): Promise<string | null> => {
   try {
@@ -31,6 +30,40 @@ const uploadToCloudinary = async (uri: string): Promise<string | null> => {
 
     if (!cloudName || !uploadPreset) {
       console.warn('Cloudinary environment variables missing');
+=======
+const uploadMediaFile = async (
+  uri: string,
+  userId: string,
+  reportId: string,
+  accessToken: string,
+  supabaseUrl: string,
+): Promise<string | null> => {
+  try {
+    const { fileName, mimeType } = getFileInfo(uri);
+    const storagePath = `${userId}/${reportId}/${fileName}`;
+    const uploadUrl = `${supabaseUrl}/storage/v1/object/report-media/${storagePath}`;
+
+    // FormData + fetch — most reliable in Expo Go
+    const formData = new FormData();
+    formData.append('file', {
+      uri,
+      name: fileName,
+      type: mimeType,
+    } as any);
+
+    const response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'x-upsert': 'true',
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      console.warn(`Media upload failed [${response.status}]:`, body);
+>>>>>>> 04c6235 (contact fix trial)
       return null;
     }
 
@@ -60,7 +93,11 @@ const uploadToCloudinary = async (uri: string): Promise<string | null> => {
       return null;
     }
   } catch (err) {
+<<<<<<< HEAD
     console.warn('Cloudinary upload error:', err);
+=======
+    console.warn('uploadMediaFile error:', err);
+>>>>>>> 04c6235 (contact fix trial)
     return null;
   }
 };
@@ -72,12 +109,14 @@ export function useReport() {
     setLoading(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        console.warn('No session found');
         setLoading(false);
         return false;
       }
 
+<<<<<<< HEAD
       // 1. Upload media to Cloudinary first
       const uploadedPaths: string[] = [];
       if (payload.media && payload.media.length > 0) {
@@ -88,6 +127,12 @@ export function useReport() {
       }
 
       // 2. Insert the report row with the Cloudinary URLs
+=======
+      const { user, access_token } = session;
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+
+      // 1. Insert the report row immediately so user sees success fast
+>>>>>>> 04c6235 (contact fix trial)
       const { data: report, error: reportError } = await supabase
         .from('reports')
         .insert({
@@ -108,11 +153,33 @@ export function useReport() {
         return false;
       }
 
+      // Done — user sees success
       setLoading(false);
 
+<<<<<<< HEAD
+=======
+      // 2. Upload media in background
+      if (payload.media && payload.media.length > 0) {
+        (async () => {
+          const uploadedPaths: string[] = [];
+          for (const uri of payload.media!) {
+            const path = await uploadMediaFile(uri, user.id, report.id, access_token, supabaseUrl);
+            if (path) uploadedPaths.push(path);
+          }
+          if (uploadedPaths.length > 0) {
+            await supabase
+              .from('reports')
+              .update({ media_paths: uploadedPaths })
+              .eq('id', report.id);
+          }
+          console.log(`Uploaded ${uploadedPaths.length}/${payload.media!.length} media files`);
+        })();
+      }
+
+>>>>>>> 04c6235 (contact fix trial)
       return true;
-    } catch (error) {
-      console.error('submitReport error:', error);
+    } catch (err) {
+      console.error('submitReport error:', err);
       setLoading(false);
       return false;
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   TextInput, ActivityIndicator, Alert, Modal, Pressable,
@@ -48,6 +48,7 @@ export default function ContactsScreen() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const hasRechecked = useRef(false);
   const [checking, setChecking] = useState(false); // checking if phone is on app
   const [deleting, setDeleting] = useState<string | null>(null);
   const [phoneStatus, setPhoneStatus] = useState<'idle' | 'on_app' | 'not_on_app'>('idle');
@@ -77,34 +78,41 @@ export default function ContactsScreen() {
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
-  // Re-check unverified contacts on screen load — auto-upgrades any that joined since last check
-  const recheckUnverified = useCallback(async () => {
-    const unverified = contacts.filter(c => !c.is_on_app);
-    if (unverified.length === 0) return;
-
-    for (const contact of unverified) {
-      const normalized = toE164Nigeria(contact.phone);
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('phone', normalized)
-        .maybeSingle();
-
-      if (data) {
-        await supabase
-          .from('emergency_contacts')
-          .update({ is_on_app: true, contact_user_id: data.id })
-          .eq('id', contact.id);
-      }
-    }
-
-    // Refresh list if any were updated
-    const hadUnverified = unverified.length > 0;
-    if (hadUnverified) fetchContacts();
-  }, [contacts]);
-
+  // Re-check unverified contacts once after initial load.
+  // Uses a ref flag so it never triggers more than once per mount,
+  // breaking the fetchContacts → contacts change → re-trigger loop.
   useEffect(() => {
-    if (!loading) recheckUnverified();
+    if (loading || hasRechecked.current) return;
+    hasRechecked.current = true;
+
+    const runRecheck = async () => {
+      const unverified = contacts.filter(c => !c.is_on_app);
+      if (unverified.length === 0) return;
+
+      let anyUpdated = false;
+      for (const contact of unverified) {
+        const normalized = toE164Nigeria(contact.phone);
+        const { data } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('phone', normalized)
+          .maybeSingle();
+
+        if (data) {
+          await supabase
+            .from('emergency_contacts')
+            .update({ is_on_app: true, contact_user_id: data.id })
+            .eq('id', contact.id);
+          anyUpdated = true;
+        }
+      }
+
+      // Only re-fetch if something actually changed
+      if (anyUpdated) fetchContacts();
+    };
+
+    runRecheck();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   // Check phone number as user types (debounced)
@@ -115,14 +123,24 @@ export default function ContactsScreen() {
       return;
     }
     setChecking(true);
-    const normalized = toE164Nigeria(phone);
-    const { data } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('phone', normalized)
-      .maybeSingle();
 
-    setPhoneStatus(data ? 'on_app' : 'not_on_app');
+    // Supabase may store phones with or without the leading '+' depending
+    // on the SDK version / how the user signed up. Try all likely formats.
+    const e164 = toE164Nigeria(phone);               // +2348125919742
+    const withoutPlus = e164.replace(/^\+/, '');    // 2348125919742
+    const formats = [...new Set([e164, withoutPlus, digits])];
+
+    let found = false;
+    for (const fmt of formats) {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone', fmt)
+        .maybeSingle();
+      if (data) { found = true; break; }
+    }
+
+    setPhoneStatus(found ? 'on_app' : 'not_on_app');
     setChecking(false);
   }, []);
 
@@ -177,13 +195,16 @@ export default function ContactsScreen() {
     // If on app, get their user ID to link
     let contactUserId: string | null = null;
     if (phoneStatus === 'on_app') {
-      const normalized = toE164Nigeria(form.phone);
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('phone', normalized)
-        .maybeSingle();
-      contactUserId = data?.id ?? null;
+      const e164 = toE164Nigeria(form.phone);
+      const formats = [...new Set([e164, e164.replace(/^\+/, ''), form.phone.replace(/\D/g, '')])];
+      for (const fmt of formats) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('phone', fmt)
+          .maybeSingle();
+        if (data) { contactUserId = data.id; break; }
+      }
     }
 
     await persistContact(phoneStatus === 'on_app', contactUserId);
@@ -267,17 +288,6 @@ export default function ContactsScreen() {
         <View style={styles.contactInfo}>
           <View style={styles.nameRow}>
             <Text style={styles.contactName}>{item.name}</Text>
-            {item.is_on_app ? (
-              <View style={styles.verifiedBadge}>
-                <Ionicons name="shield-checkmark" size={11} color={colors.status.safeText} />
-                <Text style={styles.verifiedText}>On Safen</Text>
-              </View>
-            ) : (
-              <View style={styles.unverifiedBadge}>
-                <Ionicons name="alert-circle-outline" size={11} color="#B45309" />
-                <Text style={styles.unverifiedText}>Not on app</Text>
-              </View>
-            )}
           </View>
           <Text style={styles.contactPhone}>{item.phone}</Text>
           {item.relationship && (
