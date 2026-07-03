@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
 import { ConfirmationModal } from '../../src/components/ConfirmationModal';
+import { notifyContactAdded } from '../../src/lib/notifications';
 
 const MAX_CONTACTS = 5;
 
@@ -104,6 +105,14 @@ export default function ContactsScreen() {
             .update({ is_on_app: true, contact_user_id: data.id })
             .eq('id', contact.id);
           anyUpdated = true;
+
+          // This contact just turned out to be on Safen — let them know
+          // they were added, same as if they'd been on the app already.
+          const { data: { user: me } } = await supabase.auth.getUser();
+          if (me) {
+            const myName = me.user_metadata?.full_name || me.user_metadata?.first_name || 'A Safen user';
+            notifyContactAdded(data.id, myName);
+          }
         }
       }
 
@@ -249,6 +258,13 @@ export default function ContactsScreen() {
         ? `${form.name} is on Safen and will receive in-app alerts when you trigger SOS.`
         : `${form.name} has been saved. They'll be auto-verified once they join Safen.`,
     });
+
+    // Let the added person know, but only the first time this link is
+    // made — not on every edit of an already-linked contact.
+    if (isOnApp && contactUserId && contactUserId !== editingContact?.contact_user_id) {
+      const myName = user.user_metadata?.full_name || user.user_metadata?.first_name || 'A Safen user';
+      notifyContactAdded(contactUserId, myName);
+    }
   };
 
   const handleDeleteConfirm = async () => {

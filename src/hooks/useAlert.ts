@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
+import { notifyEmergencyContacts } from '../lib/notifications';
 
 export type AlertType = 'sos' | 'medical' | 'police' | 'fire';
 
@@ -47,6 +48,9 @@ export function useAlert() {
 
     setActiveAlert({ id: data.id, type });
 
+    // Let emergency contacts know immediately — don't make them wait on GPS.
+    notifyEmergencyContacts({ type, alertId: data.id });
+
     // Fetch and update location in the background so it doesn't block the UI
     (async () => {
       const coords = await getLocation();
@@ -58,6 +62,12 @@ export function useAlert() {
             longitude: coords.longitude,
           })
           .eq('id', data.id);
+
+        // Patch the notifications we already sent with the real location.
+        await supabase
+          .from('notifications')
+          .update({ latitude: coords.latitude, longitude: coords.longitude })
+          .eq('alert_id', data.id);
       }
     })();
 

@@ -1,6 +1,41 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
+// Upload to Cloudinary — same approach as report media, since direct
+// Supabase Storage uploads were unreliable in Expo Go.
+const uploadToCloudinary = async (uri: string): Promise<string | null> => {
+  try {
+    const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+    if (!cloudName || !uploadPreset) {
+      console.warn('Cloudinary env vars missing: EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME and EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET');
+      return null;
+    }
+
+    const formData = new FormData();
+    formData.append('file', { uri, type: 'image/jpeg', name: `avatar_${Date.now()}.jpg` } as any);
+    formData.append('upload_preset', uploadPreset);
+    // Keep avatars in their own folder so they're easy to find/manage
+    // in the Cloudinary media library, separate from report media.
+    formData.append('folder', 'avatars');
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      { method: 'POST', body: formData, headers: { Accept: 'application/json' } }
+    );
+
+    const data = await response.json();
+    if (data.secure_url) return data.secure_url;
+
+    console.warn('Cloudinary avatar upload failed:', data);
+    return null;
+  } catch (err) {
+    console.warn('Cloudinary avatar upload error:', err);
+    return null;
+  }
+};
+
 export function useAvatar() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -18,11 +53,10 @@ export function useAvatar() {
         .eq('id', session.user.id)
         .single();
 
+      // avatar_url now stores the full Cloudinary secure_url directly,
+      // so we can use it as-is (no signed/public URL lookup needed).
       if (data?.avatar_url) {
-        const { data: urlData } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(data.avatar_url);
-        setAvatarUrl(`${urlData.publicUrl}?t=${Date.now()}`);
+        setAvatarUrl(data.avatar_url);
       }
     } catch (err) {
       console.warn('loadAvatar error:', err);
@@ -32,7 +66,6 @@ export function useAvatar() {
   const uploadAvatar = async (localUri: string): Promise<boolean> => {
     setUploading(true);
     try {
-      // Correctly get session for the access token
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         console.warn('No session found');
@@ -40,44 +73,16 @@ export function useAvatar() {
         return false;
       }
 
-      const userId = session.user.id;
-      const storagePath = `${userId}/avatar.jpg`;
-      const uploadUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/avatars/${storagePath}`;
-
-      // FormData + fetch is the most reliable upload method in Expo Go
-      const formData = new FormData();
-      formData.append('file', {
-        uri: localUri,
-        name: 'avatar.jpg',
-        type: 'image/jpeg',
-      } as any);
-
-      const response = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-          'x-upsert': 'true',
-        },
-        body: formData,
-      });
-
-      const responseText = await response.text();
-      console.log('=== AVATAR UPLOAD ===');
-      console.log('URL:', uploadUrl);
-      console.log('Status:', response.status);
-      console.log('Response:', responseText);
-      console.log('Token exists:', !!session.access_token);
-
-      if (!response.ok) {
+      const secureUrl = await uploadToCloudinary(localUri);
+      if (!secureUrl) {
         setUploading(false);
         return false;
       }
 
-      // Save the storage path to the profile
       const { error: updateError } = await supabase
         .from('profiles')
-        .update({ avatar_url: storagePath })
-        .eq('id', userId);
+        .update({ avatar_url: secureUrl })
+        .eq('id', session.user.id);
 
       if (updateError) {
         console.warn('Profile update failed:', updateError.message);
@@ -85,12 +90,7 @@ export function useAvatar() {
         return false;
       }
 
-      // Refresh the displayed URL with cache bust
-      const { data: urlData } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(storagePath);
-      setAvatarUrl(`${urlData.publicUrl}?t=${Date.now()}`);
-
+      setAvatarUrl(secureUrl);
       setUploading(false);
       return true;
     } catch (err) {

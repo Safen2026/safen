@@ -11,10 +11,31 @@ import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConfirmationModal } from './ConfirmationModal';
 import { useAvatar } from '../hooks/useAvatar';
+import { useNotifications, AppNotification } from '../hooks/useNotifications';
 
 // Camera is unavailable on iOS simulator
 const IS_SIMULATOR = Platform.OS === 'ios' && !Platform.isPad && !Platform.isTV
   && (() => { try { return !window.navigator.product; } catch { return false; } })() === false;
+
+const NOTIFICATION_TYPE_META: Record<AppNotification['type'], { icon: string; color: string }> = {
+  sos: { icon: 'alert-circle', color: '#E02B2B' },
+  medical: { icon: 'medkit', color: '#DC2626' },
+  police: { icon: 'shield', color: '#2563EB' },
+  fire: { icon: 'flame', color: '#EA580C' },
+  report: { icon: 'document-text', color: '#7C3AED' },
+  contact_added: { icon: 'person-add', color: '#00875A' },
+};
+
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins} min${mins > 1 ? 's' : ''} ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr${hrs > 1 ? 's' : ''} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days > 1 ? 's' : ''} ago`;
+}
 
 export const Header = () => {
   const insets = useSafeAreaInsets();
@@ -26,9 +47,10 @@ export const Header = () => {
   // Simulator has no camera — only show gallery option there
   const isSimulator = !Constants.isDevice;
 
+  const { notifications, loading: notificationsLoading, unreadCount, markAllRead } = useNotifications();
+
   const [pickerVisible, setPickerVisible] = React.useState(false);
   const [notificationsVisible, setNotificationsVisible] = React.useState(false);
-  const [hasUnreadNotifications, setHasUnreadNotifications] = React.useState(true);
   const [permissionError, setPermissionError] = React.useState<{ visible: boolean; msg: string }>({ visible: false, msg: '' });
   const [uploadSuccess, setUploadSuccess] = React.useState(false);
 
@@ -108,9 +130,9 @@ export const Header = () => {
         <TouchableOpacity
           style={styles.iconButton}
           activeOpacity={0.7}
-          onPress={() => { setNotificationsVisible(true); setHasUnreadNotifications(false); }}
+          onPress={() => { setNotificationsVisible(true); markAllRead(); }}
         >
-          {hasUnreadNotifications && <View style={styles.badge} />}
+          {unreadCount > 0 && <View style={styles.badge} />}
           <Ionicons name="notifications-outline" size={22} color={colors.text.primary} />
         </TouchableOpacity>
       </View>
@@ -151,22 +173,32 @@ export const Header = () => {
                 <Ionicons name="close" size={24} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
-            {[
-              { icon: 'shield-checkmark', color: colors.primary, title: 'Emergency Contacts Updated', body: 'Your emergency contacts have been successfully synced.', time: '2 hours ago' },
-              { icon: 'bulb-outline', color: colors.status?.safeText || '#00875A', title: 'Safety Tip of the Day', body: 'Did you know you can hold the SOS button to trigger an emergency?', time: 'Yesterday' },
-              { icon: 'sync-circle-outline', color: '#3B82F6', title: 'App Updated', body: 'Safen has been updated with new features and improvements.', time: '3 days ago' },
-            ].map((n, i, arr) => (
-              <View key={n.title} style={[styles.notificationItem, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                <View style={[styles.notificationIcon, { backgroundColor: n.color + '15' }]}>
-                  <Ionicons name={n.icon as any} size={20} color={n.color} />
-                </View>
-                <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTextTitle}>{n.title}</Text>
-                  <Text style={styles.notificationTextBody}>{n.body}</Text>
-                  <Text style={styles.notificationTime}>{n.time}</Text>
-                </View>
+            {notificationsLoading ? (
+              <View style={styles.notificationsEmpty}>
+                <ActivityIndicator color={colors.primary} />
               </View>
-            ))}
+            ) : notifications.length === 0 ? (
+              <View style={styles.notificationsEmpty}>
+                <Ionicons name="notifications-off-outline" size={32} color={colors.text.secondary} />
+                <Text style={styles.notificationsEmptyText}>You're all caught up</Text>
+              </View>
+            ) : (
+              notifications.map((n, i, arr) => {
+                const meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+                return (
+                  <View key={n.id} style={[styles.notificationItem, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                    <View style={[styles.notificationIcon, { backgroundColor: meta.color + '15' }]}>
+                      <Ionicons name={meta.icon as any} size={20} color={meta.color} />
+                    </View>
+                    <View style={styles.notificationContent}>
+                      <Text style={styles.notificationTextTitle}>{n.title}</Text>
+                      <Text style={styles.notificationTextBody}>{n.body}</Text>
+                      <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
           </Pressable>
         </Pressable>
       </Modal>
@@ -214,6 +246,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   notificationsModal: { width: '90%', backgroundColor: colors.white, borderRadius: 20, padding: 24, alignSelf: 'center' },
   notificationsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   notificationsTitle: { fontSize: 20, fontWeight: '700', color: colors.text.primary },
+  notificationsEmpty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 32, gap: 10 },
+  notificationsEmptyText: { fontSize: 14, color: colors.text.secondary },
   notificationItem: { flexDirection: 'row', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
   notificationIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   notificationContent: { flex: 1 },

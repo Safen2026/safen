@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { notifyEmergencyContacts } from '../lib/notifications';
 
 export type ReportPayload = {
   category: string;
@@ -39,6 +40,7 @@ const uploadToCloudinary = async (uri: string): Promise<string | null> => {
     const formData = new FormData();
     formData.append('file', { uri, type: mimeType, name: fileName } as any);
     formData.append('upload_preset', uploadPreset);
+    formData.append('folder', 'reports');
 
     const response = await fetch(
       `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
@@ -72,13 +74,18 @@ export function useReport() {
 
       const { user } = session;
 
-      // 1. Insert report row immediately — user sees success fast
+      // 1. Insert report row immediately — user sees success fast.
+      // user_id is always the reporting user (the FK/NOT NULL constraint
+      // requires it) — `is_anonymous` is what actually controls whether
+      // their identity is shown to responders, not this column.
       const { data: report, error: reportError } = await supabase
         .from('reports')
         .insert({
-          user_id: payload.isAnonymous ? null : user.id,
+          user_id: user.id,
           category: payload.category,
           description: payload.details || null,
+          address: payload.address || null,
+          is_anonymous: payload.isAnonymous,
           latitude: payload.latitude ?? null,
           longitude: payload.longitude ?? null,
           status: 'open',
@@ -94,7 +101,16 @@ export function useReport() {
 
       setLoading(false);
 
-      // 2. Upload media to Cloudinary in background
+      // 2. Let emergency contacts know right away — don't wait on media.
+      notifyEmergencyContacts({
+        type: 'report',
+        reportId: report.id,
+        latitude: payload.latitude ?? null,
+        longitude: payload.longitude ?? null,
+        detailsSnippet: payload.details ? payload.details.slice(0, 120) : null,
+      });
+
+      // 3. Upload media to Cloudinary in background
       if (payload.media && payload.media.length > 0) {
         (async () => {
           const uploadedUrls: string[] = [];
@@ -103,10 +119,13 @@ export function useReport() {
             if (url) uploadedUrls.push(url);
           }
           if (uploadedUrls.length > 0) {
-            await supabase
+            const { error: updateError } = await supabase
               .from('reports')
               .update({ media_paths: uploadedUrls })
               .eq('id', report.id);
+            if (updateError) {
+              console.warn('Failed to attach media_paths to report:', updateError.message);
+            }
           }
           console.log(`Uploaded ${uploadedUrls.length}/${payload.media!.length} media files to Cloudinary`);
         })();

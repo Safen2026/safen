@@ -6,10 +6,13 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '../src/lib/supabase';
 import { SessionContext } from '../src/context/SessionContext';
 import { ThemeProvider } from '../src/context/ThemeContext';
+import { usePushNotifications } from '../src/hooks/usePushNotifications';
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+
+  usePushNotifications(session?.user?.id);
 
   useEffect(() => {
     // Get the current session on app load
