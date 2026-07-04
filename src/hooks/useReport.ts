@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
 import { uploadToCloudinary } from '../lib/cloudinary';
@@ -65,7 +66,9 @@ export function useReport() {
         detailsSnippet: payload.details ? payload.details.slice(0, 120) : null,
       });
 
-      // 3. Upload media to Cloudinary in background
+      // 3. Upload media to Cloudinary in background. Each file already
+      // retries internally (see lib/cloudinary.ts) — this loop only
+      // has to handle what's left after those retries are exhausted.
       if (payload.media && payload.media.length > 0) {
         (async () => {
           const uploadedUrls: string[] = [];
@@ -73,6 +76,7 @@ export function useReport() {
             const url = await uploadToCloudinary(uri);
             if (url) uploadedUrls.push(url);
           }
+
           if (uploadedUrls.length > 0) {
             const { error: updateError } = await supabase
               .from('reports')
@@ -82,7 +86,26 @@ export function useReport() {
               console.warn('Failed to attach media_paths to report:', updateError.message);
             }
           }
+
+          const failedCount = payload.media!.length - uploadedUrls.length;
           console.log(`Uploaded ${uploadedUrls.length}/${payload.media!.length} media files to Cloudinary`);
+
+          // Don't leave the user thinking their evidence attached when
+          // it didn't — this fires even if the app has since been
+          // closed/backgrounded, since it's a local (not push) notification
+          // scheduled with trigger: null (immediate).
+          if (failedCount > 0) {
+            Notifications.scheduleNotificationAsync({
+              content: {
+                title: 'Some media failed to attach',
+                body: uploadedUrls.length > 0
+                  ? `${failedCount} of ${payload.media!.length} file(s) from your report couldn't be uploaded. The report itself was saved.`
+                  : `None of your ${payload.media!.length} attached file(s) could be uploaded, but the report itself was saved.`,
+                sound: 'default',
+              },
+              trigger: null,
+            }).catch(() => {});
+          }
         })();
       }
 

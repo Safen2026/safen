@@ -1,40 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-
-// Upload to Cloudinary — same approach as report media, since direct
-// Supabase Storage uploads were unreliable in Expo Go.
-const uploadToCloudinary = async (uri: string): Promise<string | null> => {
-  try {
-    const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-    if (!cloudName || !uploadPreset) {
-      console.warn('Cloudinary env vars missing: EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME and EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET');
-      return null;
-    }
-
-    const formData = new FormData();
-    formData.append('file', { uri, type: 'image/jpeg', name: `avatar_${Date.now()}.jpg` } as any);
-    formData.append('upload_preset', uploadPreset);
-    // Keep avatars in their own folder so they're easy to find/manage
-    // in the Cloudinary media library, separate from report media.
-    formData.append('folder', 'avatars');
-
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-      { method: 'POST', body: formData, headers: { Accept: 'application/json' } }
-    );
-
-    const data = await response.json();
-    if (data.secure_url) return data.secure_url;
-
-    console.warn('Cloudinary avatar upload failed:', data);
-    return null;
-  } catch (err) {
-    console.warn('Cloudinary avatar upload error:', err);
-    return null;
-  }
-};
+import { uploadToCloudinary } from '../lib/cloudinary';
 
 export function useAvatar() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -53,8 +19,8 @@ export function useAvatar() {
         .eq('id', session.user.id)
         .single();
 
-      // avatar_url now stores the full Cloudinary secure_url directly,
-      // so we can use it as-is (no signed/public URL lookup needed).
+      // avatar_url stores the full Cloudinary secure_url directly, so
+      // it can be used as-is (no signed/public URL lookup needed).
       if (data?.avatar_url) {
         setAvatarUrl(data.avatar_url);
       }
@@ -73,7 +39,9 @@ export function useAvatar() {
         return false;
       }
 
-      const secureUrl = await uploadToCloudinary(localUri);
+      // Keep avatars in their own Cloudinary folder, separate from
+      // report media, and retry/timeout-hardened via the shared helper.
+      const secureUrl = await uploadToCloudinary(localUri, { folder: 'avatars' });
       if (!secureUrl) {
         setUploading(false);
         return false;

@@ -31,17 +31,17 @@ export const useFeedback = () => {
         throw error;
       }
 
-      Alert.alert('Success', 'Thank you for your feedback!');
+      // The insert itself is what matters for the user — the email to
+      // the team fires automatically via a Database Webhook on this
+      // table, so there's nothing else to await here.
+      Alert.alert('Thank you!', 'Your feedback has been sent to the team.');
       return true;
     } catch (error: any) {
       console.error('Error submitting feedback:', error);
-      // Fallback for when the table doesn't exist yet!
-      if (error.code === '42P01') {
-         // 42P01 is Postgres code for "undefined_table"
-         Alert.alert('Success', 'Feedback submitted! (Saved locally until database is ready)');
-         return true;
-      }
-      Alert.alert('Error', error.message || 'Failed to submit feedback.');
+      Alert.alert(
+        'Something went wrong',
+        error.message || 'Failed to submit feedback. Please try again in a moment.'
+      );
       return false;
     } finally {
       setIsSubmitting(false);
