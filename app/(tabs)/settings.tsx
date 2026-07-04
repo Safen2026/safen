@@ -1,5 +1,5 @@
-import React, { useContext, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, Switch, ScrollView, Image, Share } from 'react-native';
+import React, { useContext, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, Switch, ScrollView, Image, Share, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -23,9 +23,61 @@ export default function SettingsScreen() {
 
   // Mock states for demo purposes
   const [pushEnabled, setPushEnabled] = useState(true);
-  const [locationEnabled, setLocationEnabled] = useState(true);
+  const [pushModalVisible, setPushModalVisible] = useState(false);
+
+  // Fetch initial preference from Supabase
+  useEffect(() => {
+    async function fetchPreferences() {
+      if (!session?.user?.id) return;
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('push_enabled')
+        .eq('id', session.user.id)
+        .single();
+        
+      if (!error && data && data.push_enabled !== null) {
+        setPushEnabled(data.push_enabled);
+      }
+    }
+    fetchPreferences();
+  }, [session?.user?.id]);
+
+  const updatePushInSupabase = async (val: boolean) => {
+    if (!session?.user?.id) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ push_enabled: val })
+      .eq('id', session.user.id);
+
+    if (error) {
+      console.warn('Failed to update push preference:', error);
+      setPushEnabled(!val); // Revert on failure
+      Alert.alert('Error', 'Failed to save your preference. Please try again.');
+    }
+  };
+
+  const handleTogglePush = async (val: boolean) => {
+    triggerHaptic();
+    if (!val) {
+      // Trying to disable, show modal
+      setPushModalVisible(true);
+    } else {
+      // Enabling, do it immediately
+      setPushEnabled(true);
+      await updatePushInSupabase(true);
+    }
+  };
+
+  const confirmDisablePush = async () => {
+    setPushModalVisible(false);
+    triggerHaptic();
+    setPushEnabled(false);
+    await updatePushInSupabase(false);
+  };
+
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
-  const [appLockEnabled, setAppLockEnabled] = useState(false);
+
 
   const fullName = session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.first_name || 'User';
 
@@ -50,6 +102,14 @@ export default function SettingsScreen() {
     }
     setSignOutModalVisible(false);
     router.replace('/auth');
+  };
+
+  const openLink = async (url: string) => {
+    try {
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert("Error", "Could not open the link.");
+    }
   };
 
   const handleShareApp = async () => {
@@ -124,20 +184,11 @@ export default function SettingsScreen() {
               "Push Notifications",
               <Switch 
                 value={pushEnabled} 
-                onValueChange={(val) => { triggerHaptic(); setPushEnabled(val); }} 
+                onValueChange={handleTogglePush} 
                 trackColor={{ true: '#00875A' }} 
               />
             )}
-            <View style={styles.divider} />
-            {renderRow(
-              "location-outline",
-              "Location Tracking",
-              <Switch 
-                value={locationEnabled} 
-                onValueChange={(val) => { triggerHaptic(); setLocationEnabled(val); }} 
-                trackColor={{ true: '#00875A' }} 
-              />
-            )}
+
             <View style={styles.divider} />
             {renderRow(
               "hardware-chip-outline",
@@ -154,21 +205,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Security & Safety */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>SECURITY & SAFETY</Text>
-          <View style={styles.card}>
-            {renderRow(
-              "lock-closed-outline",
-              "App Lock (Face ID / PIN)",
-              <Switch 
-                value={appLockEnabled} 
-                onValueChange={(val) => { triggerHaptic(); setAppLockEnabled(val); }} 
-                trackColor={{ true: '#00875A' }} 
-              />
-            )}
-          </View>
-        </View>
+
 
         {/* Support */}
         <View style={styles.section}>
@@ -192,14 +229,14 @@ export default function SettingsScreen() {
               "document-text-outline",
               "Privacy Policy",
               <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />,
-              () => {} // Mock
+              () => openLink('https://safen.app/privacy')
             )}
             <View style={styles.divider} />
             {renderRow(
               "shield-checkmark-outline",
               "Terms of Service",
               <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />,
-              () => {} // Mock
+              () => openLink('https://safen.app/terms')
             )}
           </View>
         </View>
@@ -221,7 +258,7 @@ export default function SettingsScreen() {
         <Text style={styles.versionText}>SAFEN v1.0.0</Text>
       </ScrollView>
 
-      {/* Modals stay exactly the same */}
+      {/* Sign Out Modal */}
       <Modal
         visible={signOutModalVisible}
         transparent
@@ -245,6 +282,37 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.confirmButton, signingOut && { opacity: 0.7 }]} onPress={() => { triggerHaptic(); confirmSignOut(); }} disabled={signingOut}>
                   {signingOut ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmText}>Sign Out</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Disable Push Modal */}
+      <Modal
+        visible={pushModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPushModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="notifications-off-outline" size={48} color="#EF4444" />
+              <Text style={styles.modalTitle}>Disable Alerts?</Text>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={styles.modalMessage}>Are you sure you want to turn off Push Notifications?</Text>
+              <Text style={styles.modalWarning}>
+                If disabled, you will not be notified when your emergency contacts trigger an SOS or share reports with you!
+              </Text>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => { triggerHaptic(); setPushModalVisible(false); }}>
+                  <Text style={styles.cancelText}>Keep On</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.confirmButton} onPress={confirmDisablePush}>
+                  <Text style={styles.confirmText}>Turn Off</Text>
                 </TouchableOpacity>
               </View>
             </View>
