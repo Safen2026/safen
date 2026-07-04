@@ -14,7 +14,7 @@ import { Modal } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { PROVIDER_DEFAULT } from 'react-native-maps';
 
-type IncidentType = 'medical' | 'fire' | 'security' | 'traffic';
+type IncidentType = 'medical' | 'fire' | 'security';
 
 const INCIDENT_CATEGORIES = [
   {
@@ -40,14 +40,6 @@ const INCIDENT_CATEGORIES = [
     color: '#1570EF',
     bgColor: '#EFF8FF',
     darkBgColor: '#172B4D',
-  },
-  {
-    id: 'traffic',
-    label: 'Traffic',
-    icon: 'car',
-    color: '#EAB308',
-    bgColor: '#FEFCE8',
-    darkBgColor: '#3F3315',
   },
 ];
 
@@ -372,7 +364,38 @@ export default function ReportScreen() {
         </Text>
 
         <View style={styles.grid}>
-          {INCIDENT_CATEGORIES.map((cat) => {
+          {INCIDENT_CATEGORIES.slice(0, 2).map((cat) => {
+            const isSelected = selectedType === cat.id;
+            const activeBgColor = isDark ? cat.darkBgColor : cat.bgColor;
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                style={[
+                  styles.card,
+                  isSelected && {
+                    borderColor: cat.color,
+                    backgroundColor: activeBgColor,
+                    borderWidth: 1.5,
+                  }
+                ]}
+                activeOpacity={0.7}
+                onPress={() => setSelectedType(cat.id as IncidentType)}
+              >
+                {isSelected && (
+                  <View style={styles.checkBadge}>
+                    <Ionicons name="checkmark-circle" size={22} color={cat.color} />
+                  </View>
+                )}
+                <View style={[styles.iconCircle, { backgroundColor: isSelected ? colors.white : activeBgColor }]}>
+                  <MaterialCommunityIcons name={cat.icon as any} size={32} color={cat.color} />
+                </View>
+                <Text style={[styles.cardLabel, isSelected && { color: isDark ? colors.text.primary : cat.color }]}>{cat.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <View style={[styles.grid, { justifyContent: 'center', marginTop: 16 }]}>
+          {INCIDENT_CATEGORIES.slice(2).map((cat) => {
             const isSelected = selectedType === cat.id;
             const activeBgColor = isDark ? cat.darkBgColor : cat.bgColor;
             return (

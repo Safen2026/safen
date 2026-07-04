@@ -9,7 +9,7 @@ const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreCl
 let Notifications: any = null;
 if (!isExpoGo) {
   try {
-// Notifications = require('expo-notifications');
+    Notifications = require('expo-notifications');
   } catch (e) {}
 }
 

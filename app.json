@@ -26,12 +26,7 @@
         "foregroundImage": "./assets/logo.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.kingdave17.safen",
-      "config": {
-        "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY_HERE"
-        }
-      }
+      "package": "com.kingdave17.safen"
     },
     "web": {
       "favicon": "./assets/logo.png"
@@ -43,7 +38,27 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow SAFEN to use your location to share it during emergencies."
         }
-    ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow SAFEN to access your photos so you can attach evidence to reports.",
+          "cameraPermission": "Allow SAFEN to access your camera to capture evidence for emergency reports."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow SAFEN to access your microphone to record audio evidence for reports."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo.png",
+          "color": "#00875A"
+        }
+      ]
     ],
     "extra": {
       "router": {},

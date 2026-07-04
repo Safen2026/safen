@@ -47,7 +47,7 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
           </View>
 
           <Text style={[styles.description, { color: colors.text.secondary }]}>
-            Found a bug or have an idea? We're listening! Let us know how we can improve SAFEN.
+            Found a bug or have an idea? We&apos;re listening! Let us know how we can improve SAFEN.
           </Text>
 
           <TextInput

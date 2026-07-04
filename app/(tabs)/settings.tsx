@@ -20,6 +20,8 @@ export default function SettingsScreen() {
   const [signingOut, setSigningOut] = useState(false);
   const [signOutModalVisible, setSignOutModalVisible] = useState(false);
   const [feedbackModalVisible, setFeedbackModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Mock states for demo purposes
   const [pushEnabled, setPushEnabled] = useState(true);
@@ -101,6 +103,24 @@ export default function SettingsScreen() {
       return;
     }
     setSignOutModalVisible(false);
+    router.replace('/auth');
+  };
+
+  const confirmDeleteAccount = async () => {
+    setDeleting(true);
+    triggerHaptic();
+    
+    const { error } = await supabase.rpc('delete_user');
+    
+    if (error) {
+      setDeleting(false);
+      Alert.alert('Error', error.message || 'Could not delete your account.');
+      return;
+    }
+    
+    await supabase.auth.signOut();
+    setDeleting(false);
+    setDeleteModalVisible(false);
     router.replace('/auth');
   };
 
@@ -241,7 +261,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Sign out */}
+        {/* Session */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>SESSION</Text>
           <View style={styles.card}>
@@ -252,11 +272,50 @@ export default function SettingsScreen() {
               handleSignOut,
               true
             )}
+            <View style={styles.divider} />
+            {renderRow(
+              "trash-outline",
+              "Delete Account",
+              <Ionicons name="chevron-forward" size={16} color="#EF4444" />,
+              () => { triggerHaptic(); setDeleteModalVisible(true); },
+              true
+            )}
           </View>
         </View>
 
         <Text style={styles.versionText}>SAFEN v1.0.0</Text>
       </ScrollView>
+
+      {/* Delete Account Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeleteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="warning-outline" size={48} color="#EF4444" />
+              <Text style={styles.modalTitle}>Delete Account?</Text>
+            </View>
+            <View style={styles.modalBody}>
+              <Text style={styles.modalMessage}>This action is permanent and cannot be undone.</Text>
+              <Text style={styles.modalWarning}>
+                All of your safety data, emergency contacts, and settings will be permanently wiped from our servers immediately.
+              </Text>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => { triggerHaptic(); setDeleteModalVisible(false); }} disabled={deleting}>
+                  <Text style={styles.cancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.confirmButton, deleting && { opacity: 0.7 }]} onPress={confirmDeleteAccount} disabled={deleting}>
+                  {deleting ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmText}>Delete Forever</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Sign Out Modal */}
       <Modal

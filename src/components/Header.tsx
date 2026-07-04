@@ -180,7 +180,7 @@ export const Header = () => {
             ) : notifications.length === 0 ? (
               <View style={styles.notificationsEmpty}>
                 <Ionicons name="notifications-off-outline" size={32} color={colors.text.secondary} />
-                <Text style={styles.notificationsEmptyText}>You're all caught up</Text>
+                <Text style={styles.notificationsEmptyText}>You&apos;re all caught up</Text>
               </View>
             ) : (
               notifications.map((n, i, arr) => {

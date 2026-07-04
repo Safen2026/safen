@@ -449,7 +449,7 @@ export default function ContactsScreen() {
                 <View style={styles.phoneHint}>
                   <Ionicons name="checkmark-circle" size={14} color={colors.status.safeText} />
                   <Text style={[styles.phoneHintText, { color: colors.status.safeText }]}>
-                    This person is on Safen — they'll receive in-app alerts.
+                    This person is on Safen — they&apos;ll receive in-app alerts.
                   </Text>
                 </View>
               )}
@@ -457,7 +457,7 @@ export default function ContactsScreen() {
                 <View style={[styles.phoneHint, { backgroundColor: '#FEF3C7' }]}>
                   <Ionicons name="alert-circle-outline" size={14} color="#B45309" />
                   <Text style={[styles.phoneHintText, { color: '#B45309' }]}>
-                    Not on Safen yet. You can still save — they'll be auto-verified when they join.
+                    Not on Safen yet. You can still save — they&apos;ll be auto-verified when they join.
                   </Text>
                 </View>
               )}

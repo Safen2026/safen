@@ -157,7 +157,7 @@ export default function VerifyScreen() {
 
         {/* Resend */}
         <View style={styles.resendRow}>
-          <Text style={styles.resendLabel}>Didn't receive a code? </Text>
+          <Text style={styles.resendLabel}>Didn&apos;t receive a code? </Text>
           <TouchableOpacity onPress={handleResend} disabled={resendCooldown > 0 || loading}>
             <Text style={[styles.resendBtn, resendCooldown > 0 && styles.resendBtnDisabled]}>
               {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend'}
