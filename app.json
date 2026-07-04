@@ -43,15 +43,7 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Allow SAFEN to use your location to share it during emergencies."
         }
-      ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/logo.png",
-          "color": "#00875A",
-          "sounds": []
-        }
-      ]
+    ]
     ],
     "extra": {
       "router": {},

@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '../lib/supabase';
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let Notifications: any = null;
+if (!isExpoGo) {
+  try {
+// Notifications = require('expo-notifications');
+  } catch (e) {}
+}
+
 
 export type AppNotification = {
   id: string;
@@ -70,15 +80,17 @@ export function useNotifications() {
             const row = payload.new as AppNotification;
             setNotifications(prev => [row, ...prev]);
 
-            Notifications.scheduleNotificationAsync({
-              content: {
-                title: row.title,
-                body: row.body,
-                sound: 'default',
-                data: { notificationId: row.id, type: row.type },
-              },
-              trigger: null, // fire immediately
-            }).catch(() => {});
+            if (!isExpoGo && Notifications) {
+              Notifications.scheduleNotificationAsync({
+                content: {
+                  title: row.title,
+                  body: row.body,
+                  sound: 'default',
+                  data: { notificationId: row.id, type: row.type },
+                },
+                trigger: null, // fire immediately
+              }).catch(() => {});
+            }
           }
         )
         .subscribe();
