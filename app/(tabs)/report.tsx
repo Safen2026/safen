@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Animated, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -10,7 +10,6 @@ import { SwipeButton } from '../../src/components/SwipeButton';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Video, Audio, ResizeMode } from 'expo-av';
-import { Modal } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { PROVIDER_DEFAULT } from 'react-native-maps';
 
@@ -96,7 +95,7 @@ export default function ReportScreen() {
       } else {
         setAddress('Unnamed Location');
       }
-    } catch (e) {
+    } catch {
       setAddress('Unnamed Location');
     }
   };
@@ -254,7 +253,7 @@ export default function ReportScreen() {
           }),
         ])
       ).start();
-    } catch (err) {
+    } catch {
       setErrorModal({
         visible: true,
         title: 'Error',
@@ -276,7 +275,7 @@ export default function ReportScreen() {
       if (uri) {
         setMediaFiles(prev => [...prev, uri]);
       }
-    } catch (err) {
+    } catch {
       // Ignore errors if stopped abruptly
     }
     setRecording(null);
@@ -461,7 +460,7 @@ export default function ReportScreen() {
               } else {
                 setAddress('Unnamed Location');
               }
-            } catch (e) {
+            } catch {
               setAddress('Unnamed Location');
             }
           }}
@@ -508,7 +507,7 @@ export default function ReportScreen() {
                       longitudeDelta: 0.005,
                     }, 500);
                   }
-                } catch (e) {
+                } catch {
                   // Geocoding failed, leave as is
                 }
               }
@@ -563,7 +562,7 @@ export default function ReportScreen() {
                   latitudeDelta: 0.005,
                   longitudeDelta: 0.005,
                 }, 500);
-              } catch (e) {
+              } catch {
                 setAddress('Failed to find location');
               }
             }}

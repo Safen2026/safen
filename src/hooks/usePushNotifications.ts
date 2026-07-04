@@ -9,8 +9,9 @@ const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreCl
 let Notifications: any = null;
 if (!isExpoGo) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     Notifications = require('expo-notifications');
-  } catch (e) {}
+  } catch {}
 }
 
 

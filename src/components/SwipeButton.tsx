@@ -63,6 +63,7 @@ export const SwipeButton = ({ onComplete, loading }: SwipeButtonProps) => {
         useNativeDriver: false,
       }).start();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
   return (

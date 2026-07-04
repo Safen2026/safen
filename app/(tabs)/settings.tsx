@@ -23,7 +23,6 @@ export default function SettingsScreen() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Mock states for demo purposes
   const [pushEnabled, setPushEnabled] = useState(true);
   const [pushModalVisible, setPushModalVisible] = useState(false);
 
@@ -127,7 +126,7 @@ export default function SettingsScreen() {
   const openLink = async (url: string) => {
     try {
       await Linking.openURL(url);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Could not open the link.");
     }
   };

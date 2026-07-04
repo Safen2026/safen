@@ -38,10 +38,7 @@ export const useFeedback = () => {
       return true;
     } catch (error: any) {
       console.error('Error submitting feedback:', error);
-      Alert.alert(
-        'Something went wrong',
-        error.message || 'Failed to submit feedback. Please try again in a moment.'
-      );
+      Alert.alert('Error', error.message || 'Failed to submit feedback.');
       return false;
     } finally {
       setIsSubmitting(false);

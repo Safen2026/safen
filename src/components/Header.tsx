@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, Platform, StatusBar as RNStatusBar,
   TouchableOpacity, Image, Modal, Pressable, ActivityIndicator,
 } from 'react-native';
-import Constants from 'expo-constants';
+
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { SessionContext } from '../context/SessionContext';
@@ -13,9 +13,7 @@ import { ConfirmationModal } from './ConfirmationModal';
 import { useAvatar } from '../hooks/useAvatar';
 import { useNotifications, AppNotification } from '../hooks/useNotifications';
 
-// Camera is unavailable on iOS simulator
-const IS_SIMULATOR = Platform.OS === 'ios' && !Platform.isPad && !Platform.isTV
-  && (() => { try { return !window.navigator.product; } catch { return false; } })() === false;
+
 
 const NOTIFICATION_TYPE_META: Record<AppNotification['type'], { icon: string; color: string }> = {
   sos: { icon: 'alert-circle', color: '#E02B2B' },
@@ -44,8 +42,7 @@ export const Header = () => {
   const session = useContext(SessionContext);
 
   const { avatarUrl, uploading, uploadAvatar } = useAvatar();
-  // Simulator has no camera — only show gallery option there
-  const isSimulator = !Constants.isDevice;
+
 
   const { notifications, loading: notificationsLoading, unreadCount, markAllRead } = useNotifications();
 

@@ -11,8 +11,8 @@ import {
   Animated,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
-import { Image } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -29,10 +29,7 @@ const Colors = {
   status: { safeText: '#1B5E20' },
 };
 
-const Shadows = {
-  sm: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
-  md: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 4 },
-};
+
 
 type Mode = 'login' | 'signup';
 

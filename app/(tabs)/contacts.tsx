@@ -4,9 +4,8 @@ import {
   TextInput, ActivityIndicator, Alert, Modal, Pressable,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
 import { ConfirmationModal } from '../../src/components/ConfirmationModal';
@@ -157,6 +156,7 @@ export default function ContactsScreen() {
     if (!sheetVisible) { setPhoneStatus('idle'); return; }
     const timer = setTimeout(() => checkPhoneOnApp(form.phone), 600);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.phone, sheetVisible]);
 
   const openAddSheet = () => {

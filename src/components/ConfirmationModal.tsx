@@ -36,6 +36,7 @@ export const ConfirmationModal = ({
     } else {
       scaleValue.setValue(0);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   return (
