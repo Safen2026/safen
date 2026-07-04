@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
+import { uploadToCloudinary } from '../lib/cloudinary';
 
 export type ReportPayload = {
   category: string;
@@ -10,52 +11,6 @@ export type ReportPayload = {
   media?: string[];
   latitude?: number | null;
   longitude?: number | null;
-};
-
-const getFileInfo = (uri: string): { fileName: string; mimeType: string } => {
-  const lower = uri.toLowerCase();
-  const timestamp = Date.now();
-  if (lower.includes('video') || lower.endsWith('.mp4') || lower.endsWith('.mov'))
-    return { fileName: `video_${timestamp}.mp4`, mimeType: 'video/mp4' };
-  if (lower.includes('audio') || lower.includes('recording') || lower.endsWith('.m4a') || lower.endsWith('.caf'))
-    return { fileName: `audio_${timestamp}.m4a`, mimeType: 'audio/m4a' };
-  return { fileName: `photo_${timestamp}.jpg`, mimeType: 'image/jpeg' };
-};
-
-// Upload to Cloudinary — works reliably in Expo Go for all media types
-const uploadToCloudinary = async (uri: string): Promise<string | null> => {
-  try {
-    const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-    if (!cloudName || !uploadPreset) {
-      console.warn('Cloudinary env vars missing: EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME and EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET');
-      return null;
-    }
-
-    const { fileName, mimeType } = getFileInfo(uri);
-    // Cloudinary groups audio under 'video' resource type
-    const resourceType = mimeType.startsWith('video') || mimeType.startsWith('audio') ? 'video' : 'image';
-
-    const formData = new FormData();
-    formData.append('file', { uri, type: mimeType, name: fileName } as any);
-    formData.append('upload_preset', uploadPreset);
-    formData.append('folder', 'reports');
-
-    const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
-      { method: 'POST', body: formData, headers: { Accept: 'application/json' } }
-    );
-
-    const data = await response.json();
-    if (data.secure_url) return data.secure_url;
-
-    console.warn('Cloudinary upload failed:', data);
-    return null;
-  } catch (err) {
-    console.warn('Cloudinary upload error:', err);
-    return null;
-  }
 };
 
 export function useReport() {

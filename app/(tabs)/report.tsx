@@ -102,10 +102,10 @@ export default function ReportScreen() {
         const formattedAddress = `${place.streetNumber ? place.streetNumber + ' ' : ''}${primaryName}, ${place.city || place.subregion || place.region}`;
         setAddress(formattedAddress);
       } else {
-        setAddress('Location found, address unknown');
+        setAddress('Unnamed Location');
       }
     } catch (e) {
-      setAddress('Location found');
+      setAddress('Unnamed Location');
     }
   };
 
@@ -436,10 +436,10 @@ export default function ReportScreen() {
                 const formattedAddress = `${place.streetNumber ? place.streetNumber + ' ' : ''}${primaryName}, ${place.city || place.subregion || place.region}`;
                 setAddress(formattedAddress);
               } else {
-                setAddress('Location found, address unknown');
+                setAddress('Unnamed Location');
               }
             } catch (e) {
-              setAddress('Location found');
+              setAddress('Unnamed Location');
             }
           }}
         >
@@ -532,6 +532,7 @@ export default function ReportScreen() {
             activeOpacity={0.8}
             onPress={async () => {
               try {
+                setAddress('Locating you...');
                 let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
                 mapRef.current?.animateToRegion({
                   latitude: loc.coords.latitude,
@@ -540,7 +541,7 @@ export default function ReportScreen() {
                   longitudeDelta: 0.005,
                 }, 500);
               } catch (e) {
-                // Ignore error if location fetch fails
+                setAddress('Failed to find location');
               }
             }}
           >
