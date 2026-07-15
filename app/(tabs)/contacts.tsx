@@ -10,17 +10,10 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
 import { ConfirmationModal } from '../../src/components/ConfirmationModal';
 import { notifyContactAdded } from '../../src/lib/notifications';
+import { ContactDetailsModal, Contact } from '../../src/components/ContactDetailsModal';
 
 const MAX_CONTACTS = 5;
 
-type Contact = {
-  id: string;
-  name: string;
-  phone: string;
-  relationship: string | null;
-  is_on_app: boolean;
-  contact_user_id: string | null;
-};
 
 type FormData = {
   name: string;
@@ -54,6 +47,7 @@ export default function ContactsScreen() {
   const [phoneStatus, setPhoneStatus] = useState<'idle' | 'on_app' | 'not_on_app'>('idle');
 
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [deleteModal, setDeleteModal] = useState<{ visible: boolean; contact: Contact | null }>({
@@ -91,17 +85,28 @@ export default function ContactsScreen() {
 
       let anyUpdated = false;
       for (const contact of unverified) {
-        const normalized = toE164Nigeria(contact.phone);
-        const { data } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('phone', normalized)
-          .maybeSingle();
+        const e164 = toE164Nigeria(contact.phone);
+        const withoutPlus = e164.replace(/^\+/, '');
+        const digits = contact.phone.replace(/\D/g, '');
+        const formats = [...new Set([e164, withoutPlus, digits])];
 
-        if (data) {
+        let foundId = null;
+        for (const fmt of formats) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('phone', fmt)
+            .maybeSingle();
+          if (data) {
+            foundId = data.id;
+            break;
+          }
+        }
+
+        if (foundId) {
           await supabase
             .from('emergency_contacts')
-            .update({ is_on_app: true, contact_user_id: data.id })
+            .update({ is_on_app: true, contact_user_id: foundId })
             .eq('id', contact.id);
           anyUpdated = true;
 
@@ -110,7 +115,7 @@ export default function ContactsScreen() {
           const { data: { user: me } } = await supabase.auth.getUser();
           if (me) {
             const myName = me.user_metadata?.full_name || me.user_metadata?.first_name || 'A Safen user';
-            notifyContactAdded(data.id, myName);
+            notifyContactAdded(foundId, myName);
           }
         }
       }
@@ -171,6 +176,7 @@ export default function ContactsScreen() {
   };
 
   const openEditSheet = (contact: Contact) => {
+    setSelectedContact(null);
     setEditingContact(contact);
     setForm({ name: contact.name, phone: contact.phone, relationship: contact.relationship ?? '' });
     setPhoneStatus(contact.is_on_app ? 'on_app' : 'not_on_app');
@@ -291,7 +297,11 @@ export default function ContactsScreen() {
     const isBeingDeleted = deleting === item.id;
 
     return (
-      <View style={styles.contactCard}>
+      <TouchableOpacity 
+        style={styles.contactCard}
+        activeOpacity={0.7}
+        onPress={() => setSelectedContact(item)}
+      >
         <View style={[styles.avatar, { backgroundColor: getAvatarColor(item.name) }]}>
           <Text style={styles.avatarText}>{getInitials(item.name)}</Text>
           {/* Online indicator dot */}
@@ -328,7 +338,7 @@ export default function ContactsScreen() {
             }
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -514,6 +524,18 @@ export default function ContactsScreen() {
           </View>
         </View>
       </Modal>
+
+      <ContactDetailsModal 
+        visible={!!selectedContact}
+        contact={selectedContact}
+        onClose={() => setSelectedContact(null)}
+        onEdit={() => {
+          if (selectedContact) openEditSheet(selectedContact);
+        }}
+        onDelete={() => {
+          if (selectedContact) setDeleteModal({ visible: true, contact: selectedContact });
+        }}
+      />
 
       <ConfirmationModal
         visible={successModal.visible}

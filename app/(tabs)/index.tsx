@@ -3,7 +3,6 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { Header } from '../../src/components/Header';
 import { SOSButton } from '../../src/components/SOSButton';
 import { QuickActions } from '../../src/components/QuickActions';
-import { AIRiskCard } from '../../src/components/AIRiskCard';
 import { RecentAlerts } from '../../src/components/RecentAlerts';
 import { useTheme } from '../../src/context/ThemeContext';
 
@@ -15,7 +14,6 @@ export default function HomeScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         <SOSButton />
         <QuickActions />
-        <AIRiskCard />
         <RecentAlerts />
       </ScrollView>
     </View>

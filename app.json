@@ -1,9 +1,15 @@
 {
   "expo": {
-    "name": "SAFEN",
+    "name": "Safen",
     "slug": "safen",
     "scheme": "safen",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/91afa9ad-f350-4ac7-b9f9-255bc59225c7"
+    },
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
@@ -23,10 +29,12 @@
       "adaptiveIcon": {
         "package": "com.safen.app",
         "backgroundColor": "#ffffff",
-        "foregroundImage": "./assets/logo.png"
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.kingdave17.safen"
+      "softwareKeyboardLayoutMode": "resize",
+      "package": "com.kingdave17.safen",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/logo.png"
@@ -63,8 +71,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "6d07b9e3-1a01-46ca-b2e1-5c81bd8a4c25"
+        "projectId": "91afa9ad-f350-4ac7-b9f9-255bc59225c7"
       }
-    }
+    },
+    "owner": "kingdave17"
   }
 }

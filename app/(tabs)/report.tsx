@@ -59,6 +59,7 @@ export default function ReportScreen() {
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [address, setAddress] = useState('Fetching location...');
+  const [locationDetails, setLocationDetails] = useState('');
 
   const handleRegionChangeComplete = async (region: any) => {
     try {
@@ -296,10 +297,14 @@ export default function ReportScreen() {
       });
       return;
     }
+    const combinedDetails = locationDetails.trim() 
+      ? `Location Note: ${locationDetails.trim()}\n\nIncident Details: ${detailsText}`
+      : detailsText;
+
     const success = await submitReport({
       category: selectedType,
       address: address,
-      details: detailsText,
+      details: combinedDetails,
       isAnonymous,
       media: mediaFiles,
       latitude: location?.coords.latitude,
@@ -356,7 +361,7 @@ export default function ReportScreen() {
 
   const renderStep1 = () => (
     <>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.titleCentered}>What type of emergency is{'\n'}this?</Text>
         <Text style={styles.subtitleCentered}>
           Select the category that best describes the situation.
@@ -474,9 +479,17 @@ export default function ReportScreen() {
 
   const renderStep2 = () => (
     <>
-      <View style={styles.step2Container}>
-        <Text style={styles.titleLeft}>Where is this happening?</Text>
+      <View style={[styles.step2Container, { paddingBottom: 0, paddingHorizontal: 0 }]}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <Text style={styles.titleLeft}>Where is this happening?</Text>
         
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', backgroundColor: 'rgba(217, 45, 32, 0.1)', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+          <Ionicons name="warning-outline" size={16} color="#D92D20" style={{ marginTop: 2, marginRight: 8 }} />
+          <Text style={{ flex: 1, fontSize: 13, color: '#D92D20', lineHeight: 18 }}>
+            GPS can be inaccurate indoors. Please verify the pin and provide exact details below if needed.
+          </Text>
+        </View>
+
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={colors.text.secondary} />
           <TextInput 
@@ -520,7 +533,7 @@ export default function ReportScreen() {
           )}
         </View>
 
-        <View style={[styles.mapContainer, { overflow: 'hidden' }]}>
+        <View style={[styles.mapContainer, { height: 350, overflow: 'hidden', marginBottom: 8 }]}>
           {location ? (
             <MapView
               ref={mapRef}
@@ -571,6 +584,31 @@ export default function ReportScreen() {
             <Text style={styles.currentLocationText}>Use Current Location</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={{ marginTop: 20 }}>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text.primary, marginBottom: 8 }}>
+            Exact Location Details (Optional)
+          </Text>
+          <TextInput
+            style={[styles.searchInput, { 
+              backgroundColor: colors.white, 
+              borderWidth: 1, 
+              borderColor: colors.border, 
+              borderRadius: 12, 
+              padding: 12, 
+              minHeight: 80, 
+              textAlignVertical: 'top',
+              marginLeft: 0,
+              marginRight: 0
+            }]}
+            multiline
+            placeholder="e.g., Floor 3, Room 402, or near the library entrance..."
+            placeholderTextColor={colors.text.secondary}
+            value={locationDetails}
+            onChangeText={setLocationDetails}
+          />
+        </View>
+        </ScrollView>
       </View>
 
       <View style={styles.footer}>
@@ -588,7 +626,7 @@ export default function ReportScreen() {
 
   const renderStep3 = () => (
     <>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.titleLeft}>Provide evidence (Optional)</Text>
         <Text style={styles.subtitleLeft}>
           Any media or description helps responders.
@@ -685,7 +723,7 @@ export default function ReportScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {renderHeader()}
         {step === 1 && renderStep1()}

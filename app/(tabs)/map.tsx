@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
+import { View, Text, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import MapView, { Marker, PROVIDER_DEFAULT, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useLocalSearchParams } from 'expo-router';
 
 export default function MapScreen() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const { lat, lng } = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  
+  const mapRef = React.useRef<MapView>(null);
 
   useEffect(() => {
     (async () => {
@@ -24,6 +29,21 @@ export default function MapScreen() {
       setLocation(loc);
     })();
   }, []);
+
+  useEffect(() => {
+    if (lat && lng && mapRef.current) {
+      const targetLat = parseFloat(lat);
+      const targetLng = parseFloat(lng);
+      if (!isNaN(targetLat) && !isNaN(targetLng)) {
+        mapRef.current.animateToRegion({
+          latitude: targetLat,
+          longitude: targetLng,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      }
+    }
+  }, [lat, lng, location]);
 
   if (errorMsg) {
     return (
@@ -45,17 +65,30 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <MapView 
+        ref={mapRef}
         style={styles.map}
         provider={PROVIDER_DEFAULT}
         initialRegion={{
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
+          latitude: (lat && !isNaN(parseFloat(lat))) ? parseFloat(lat) : location.coords.latitude,
+          longitude: (lng && !isNaN(parseFloat(lng))) ? parseFloat(lng) : location.coords.longitude,
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         }}
         showsUserLocation={true}
         showsMyLocationButton={true}
       >
+        {lat && lng && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng)) && (
+          <Marker
+            coordinate={{ latitude: parseFloat(lat), longitude: parseFloat(lng) }}
+            title="Emergency Location"
+            description="Tap here to get directions"
+            pinColor={colors.primary}
+            onCalloutPress={() => {
+              const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+              Linking.openURL(url);
+            }}
+          />
+        )}
         <Marker 
           coordinate={{
             latitude: location.coords.latitude,

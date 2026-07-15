@@ -15,18 +15,15 @@ export default function RootLayout() {
   usePushNotifications(session?.user?.id);
 
   useEffect(() => {
-    // Get the current session on app load
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Listen for Supabase auth state changes natively
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setLoading(false);
     });
 
-    // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {

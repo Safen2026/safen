@@ -19,6 +19,9 @@ export type AppNotification = {
   title: string;
   body: string;
   sender_name: string | null;
+  sender_id: string | null;
+  alert_id: string | null;
+  report_id: string | null;
   latitude: number | null;
   longitude: number | null;
   is_read: boolean;

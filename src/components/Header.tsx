@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import {
   View, Text, StyleSheet, Platform, StatusBar as RNStatusBar,
-  TouchableOpacity, Image, Modal, Pressable, ActivityIndicator,
+  TouchableOpacity, Image, Modal, Pressable, ActivityIndicator, ScrollView
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,7 @@ import { SessionContext } from '../context/SessionContext';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ConfirmationModal } from './ConfirmationModal';
+import { NotificationDetailsModal } from './NotificationDetailsModal';
 import { useAvatar } from '../hooks/useAvatar';
 import { useNotifications, AppNotification } from '../hooks/useNotifications';
 
@@ -48,6 +49,7 @@ export const Header = () => {
 
   const [pickerVisible, setPickerVisible] = React.useState(false);
   const [notificationsVisible, setNotificationsVisible] = React.useState(false);
+  const [selectedNotification, setSelectedNotification] = React.useState<AppNotification | null>(null);
   const [permissionError, setPermissionError] = React.useState<{ visible: boolean; msg: string }>({ visible: false, msg: '' });
   const [uploadSuccess, setUploadSuccess] = React.useState(false);
 
@@ -180,21 +182,27 @@ export const Header = () => {
                 <Text style={styles.notificationsEmptyText}>You&apos;re all caught up</Text>
               </View>
             ) : (
-              notifications.map((n, i, arr) => {
-                const meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
-                return (
-                  <View key={n.id} style={[styles.notificationItem, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                    <View style={[styles.notificationIcon, { backgroundColor: meta.color + '15' }]}>
-                      <Ionicons name={meta.icon as any} size={20} color={meta.color} />
-                    </View>
-                    <View style={styles.notificationContent}>
-                      <Text style={styles.notificationTextTitle}>{n.title}</Text>
-                      <Text style={styles.notificationTextBody}>{n.body}</Text>
-                      <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
-                    </View>
-                  </View>
-                );
-              })
+              <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
+                {notifications.map((n, i, arr) => {
+                  const meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+                  return (
+                    <TouchableOpacity 
+                      key={n.id} 
+                      style={[styles.notificationItem, i === arr.length - 1 && { borderBottomWidth: 0 }]}
+                      onPress={() => setSelectedNotification(n)}
+                    >
+                      <View style={[styles.notificationIcon, { backgroundColor: meta.color + '15' }]}>
+                        <Ionicons name={meta.icon as any} size={20} color={meta.color} />
+                      </View>
+                      <View style={styles.notificationContent}>
+                        <Text style={styles.notificationTextTitle}>{n.title}</Text>
+                        <Text style={styles.notificationTextBody}>{n.body}</Text>
+                        <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             )}
           </Pressable>
         </Pressable>
@@ -215,6 +223,12 @@ export const Header = () => {
         iconName="checkmark-circle"
         iconColor="#00875A"
         onClose={() => setUploadSuccess(false)}
+      />
+
+      <NotificationDetailsModal
+        visible={!!selectedNotification}
+        notification={selectedNotification}
+        onClose={() => setSelectedNotification(null)}
       />
     </View>
   );

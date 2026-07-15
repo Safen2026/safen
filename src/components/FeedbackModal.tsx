@@ -36,7 +36,7 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
     >
       <KeyboardAvoidingView 
         style={styles.overlay} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={[styles.content, { backgroundColor: colors.white }]}>
           <View style={styles.header}>

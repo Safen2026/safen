@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, Alert, ActivityIndicator, Vibration } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Shadows } from '../constants/Theme';
 import { useTheme } from '../context/ThemeContext';
@@ -13,11 +13,13 @@ export const SOSButton = () => {
   const isActivated = !!activeAlert;
 
   const pulseAnim = useRef(new Animated.Value(0)).current;
-  const holdAnim = useRef(new Animated.Value(0)).current;
+  const holdAnim = useRef(new Animated.Value(isActivated ? 1 : 0)).current;
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
-  const holdTimeout = useRef<NodeJS.Timeout | null>(null);
   const pulseLoop = useRef<Animated.CompositeAnimation | null>(null);
   
+  const tapCount = useRef(0);
+  const resetTimeout = useRef<any>(null);
+
   const [confirmModal, setConfirmModal] = useState({
     visible: false,
     title: '',
@@ -27,12 +29,17 @@ export const SOSButton = () => {
   });
 
   useEffect(() => {
+    // Keep holdAnim in sync if external status changes
+    Animated.timing(holdAnim, { toValue: isActivated ? 1 : 0, duration: 300, useNativeDriver: true }).start();
+  }, [isActivated]);
+
+  useEffect(() => {
     if (pulseLoop.current) pulseLoop.current.stop();
     pulseAnim.setValue(0);
     pulseLoop.current = Animated.loop(
       Animated.timing(pulseAnim, {
         toValue: 1,
-        duration: isActivated ? 500 : 2000,
+        duration: isActivated ? 300 : 2000,
         useNativeDriver: true,
       })
     );
@@ -40,29 +47,46 @@ export const SOSButton = () => {
     return () => { if (pulseLoop.current) pulseLoop.current.stop(); };
   }, [isActivated, pulseAnim]);
 
-  const scale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
-  const opacity = pulseAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [0.6, 0.2, 0] });
+  const scale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, isActivated ? 1.2 : 1.5] });
+  const opacity = pulseAnim.interpolate({ inputRange: [0, 0.7, 1], outputRange: [isActivated ? 0.8 : 0.6, 0.2, 0] });
   const chargeScale = holdAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
   const chargeOpacity = holdAnim.interpolate({ inputRange: [0, 0.05, 1], outputRange: [0, 1, 1] });
 
-  const handlePressIn = () => {
-    if (loading) return;
-    Animated.spring(buttonScaleAnim, { toValue: 0.93, useNativeDriver: true }).start();
-    Animated.timing(holdAnim, { toValue: 1, duration: 3000, useNativeDriver: true }).start();
-    holdTimeout.current = setTimeout(() => { handleToggle(); }, 3000);
-  };
-
-  const handlePressOut = () => {
-    if (holdTimeout.current) { clearTimeout(holdTimeout.current); holdTimeout.current = null; }
+  const handlePress = () => {
+    if (loading || tapCount.current >= 3) return;
+    
+    // Visual feedback for the tap
+    buttonScaleAnim.setValue(0.9);
     Animated.spring(buttonScaleAnim, { toValue: 1, useNativeDriver: true }).start();
-    Animated.timing(holdAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+    Vibration.vibrate(50); // Light haptic click on each tap
+
+    tapCount.current += 1;
+
+    const finalValue = isActivated ? 0 : 1;
+
+    if (tapCount.current >= 3) {
+      if (resetTimeout.current) clearTimeout(resetTimeout.current);
+      // Fast timing to finalValue to show the final charge hitting the edges
+      Animated.timing(holdAnim, { toValue: finalValue, duration: 150, useNativeDriver: true }).start(() => {
+        tapCount.current = 0;
+        handleToggle();
+      });
+    } else {
+      // Calculate how full the circle should be (0 to 1)
+      const targetValue = isActivated ? (1 - (tapCount.current / 3)) : (tapCount.current / 3);
+      Animated.spring(holdAnim, { toValue: targetValue, useNativeDriver: true }).start();
+
+      if (resetTimeout.current) clearTimeout(resetTimeout.current);
+      resetTimeout.current = setTimeout(() => {
+        tapCount.current = 0;
+        Animated.timing(holdAnim, { toValue: isActivated ? 1 : 0, duration: 300, useNativeDriver: true }).start();
+      }, 1000);
+    }
   };
 
   const handleToggle = async () => {
-    // Reset hold animation
-    Animated.timing(holdAnim, { toValue: 0, duration: 0, useNativeDriver: true }).start();
-    Animated.spring(buttonScaleAnim, { toValue: 1, useNativeDriver: true }).start();
-
+    Vibration.vibrate([0, 500, 200, 500]); // Aggressive vibration for final trigger
+    
     if (isActivated) {
       const cancelled = await cancelAlert();
       if (cancelled) {
@@ -74,6 +98,7 @@ export const SOSButton = () => {
           color: colors.status.safeText
         });
       } else {
+        Animated.timing(holdAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
         Alert.alert('Error', 'Could not cancel the alert. Please try again.');
       }
     } else {
@@ -87,6 +112,7 @@ export const SOSButton = () => {
           color: colors.primary
         });
       } else {
+        Animated.timing(holdAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
         Alert.alert('Error', 'Could not send SOS. Please check your connection and try again.');
       }
     }
@@ -100,17 +126,16 @@ export const SOSButton = () => {
         />
         <Animated.View style={{ transform: [{ scale: buttonScaleAnim }] }}>
           <TouchableOpacity
-            style={[styles.buttonInner, isActivated && { backgroundColor: '#7F1D1D' }]}
+            style={styles.buttonInner}
             activeOpacity={1}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
+            onPress={handlePress}
             disabled={loading}
           >
             <Animated.View
               style={[styles.holdOverlay, {
                 transform: [{ scale: chargeScale }],
                 opacity: chargeOpacity,
-                backgroundColor: isActivated ? colors.primary : 'rgba(0,0,0,0.4)',
+                backgroundColor: '#7F1D1D',
               }]}
             />
             {loading ? (
@@ -127,7 +152,7 @@ export const SOSButton = () => {
         </Animated.View>
       </View>
       <Text style={[styles.helpText, isActivated && styles.helpTextActive]}>
-        {loading ? 'PLEASE WAIT...' : isActivated ? 'HOLD TO CANCEL EMERGENCY' : 'HOLD TO TRIGGER EMERGENCY'}
+        {loading ? 'PLEASE WAIT...' : isActivated ? 'TAP 3 TIMES TO CANCEL' : 'TAP 3 TIMES FOR EMERGENCY'}
       </Text>
 
       <ConfirmationModal
@@ -150,10 +175,10 @@ const getStyles = (colors: any) => StyleSheet.create({
     width: 160, height: 160, borderRadius: 80,
     backgroundColor: colors.primary,
     justifyContent: 'center', alignItems: 'center',
-    overflow: 'hidden', ...Shadows.sos,
+    overflow: 'hidden', ...Shadows.md,
   },
   holdOverlay: { position: 'absolute', width: 160, height: 160, borderRadius: 80 },
-  sosText: { color: colors.white, fontSize: 32, fontWeight: 'bold', marginTop: 5, letterSpacing: 2 },
+  sosText: { color: colors.white, fontWeight: 'bold', marginTop: 2, letterSpacing: 2 },
   helpText: { color: colors.text.primary, fontSize: 14, fontWeight: '700', letterSpacing: 1 },
   helpTextActive: { color: colors.primary },
 });

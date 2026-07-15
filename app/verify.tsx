@@ -1,11 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
+import app, { firebaseAuth } from '../src/lib/firebase';
+import { PhoneAuthProvider, signInWithCredential, updateProfile } from 'firebase/auth';
 import { supabase } from '../src/lib/supabase';
 
 const Colors = {
@@ -23,12 +26,14 @@ const RESEND_COOLDOWN = 60;
 
 export default function VerifyScreen() {
   const insets = useSafeAreaInsets();
-  const { phone } = useLocalSearchParams<{ phone: string }>();
+  const { phone, verificationId: initialVerificationId, firstName, lastName, email } = useLocalSearchParams<{ phone: string, verificationId: string, firstName?: string, lastName?: string, email?: string }>();
 
+  const [verificationId, setVerificationId] = useState(initialVerificationId);
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN);
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  const recaptchaVerifier = useRef(null);
 
   // Countdown timer for resend button
   useEffect(() => {
@@ -71,49 +76,119 @@ export default function VerifyScreen() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
-      phone,
-      token,
-      type: 'sms',
-    });
-    setLoading(false);
-
-    if (error) {
-      Alert.alert('Verification failed', error.message);
+    try {
+      const credential = PhoneAuthProvider.credential(verificationId, token);
+      const { user } = await signInWithCredential(firebaseAuth, credential);
+      
+      if (firstName && lastName) {
+        await updateProfile(user, { displayName: `${firstName} ${lastName}` });
+      }
+      
+      // HYBRID AUTH: Synchronize Firebase phone verification securely to Supabase
+      const dummyPassword = 'SafenSecurePassword2026!';
+      
+      // Try signing in
+      let { error: sbError } = await supabase.auth.signInWithPassword({
+        phone: user.phoneNumber as string,
+        password: dummyPassword
+      });
+      
+      // If user doesn't exist in Supabase yet, sign them up!
+      if (sbError?.message.includes('Invalid login credentials')) {
+        if (!firstName || !lastName) {
+          setLoading(false);
+          Alert.alert('Account not found', 'This phone number is not registered. Please go back and select Sign Up.');
+          // Sign out of Firebase so they can restart fresh
+          await firebaseAuth.signOut();
+          return;
+        }
+        await supabase.auth.signUp({
+          phone: user.phoneNumber as string,
+          password: dummyPassword,
+          options: {
+            data: {
+              full_name: `${firstName} ${lastName}`,
+              first_name: firstName,
+              last_name: lastName
+            }
+          }
+        });
+      } else if (!sbError) {
+        // The sign in succeeded, meaning the account ALREADY exists
+        // If they provided firstName and lastName, they are in the SIGN UP flow
+        if (firstName && lastName) {
+          setLoading(false);
+          Alert.alert('Account already exists', 'This phone number is already registered to an account. Please go back and select Sign In instead.');
+          await firebaseAuth.signOut();
+          await supabase.auth.signOut();
+          return;
+        }
+      } else if (sbError?.message.includes('Phone not confirmed')) {
+        setLoading(false);
+        Alert.alert(
+          'Account Stuck',
+          'This phone number was registered before the confirmation setting was disabled. Please delete this user from the Supabase Authentication dashboard and try again.'
+        );
+        return;
+      } else if (sbError) {
+        setLoading(false);
+        Alert.alert('Supabase Error', sbError.message);
+        return;
+      }
+      
+      setLoading(false);
+      // Verified — go to the app
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      setLoading(false);
+      Alert.alert('Verification failed', err.message);
       setOtp(Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
-      return;
     }
-
-    // Verified — go to the app
-    router.replace('/(tabs)');
   };
 
   const handleResend = async () => {
     if (resendCooldown > 0) return;
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOtp({ phone });
-    setLoading(false);
-    if (error) { Alert.alert('Resend failed', error.message); return; }
-    setResendCooldown(RESEND_COOLDOWN);
-    setOtp(Array(OTP_LENGTH).fill(''));
-    inputRefs.current[0]?.focus();
-    Alert.alert('Code sent', 'A new verification code has been sent to your phone.');
+    try {
+      const phoneProvider = new PhoneAuthProvider(firebaseAuth);
+      const newVerificationId = await phoneProvider.verifyPhoneNumber(
+        phone,
+        recaptchaVerifier.current as any
+      );
+      setVerificationId(newVerificationId);
+      setLoading(false);
+      setResendCooldown(RESEND_COOLDOWN);
+      setOtp(Array(OTP_LENGTH).fill(''));
+      inputRefs.current[0]?.focus();
+      Alert.alert('Code sent', 'A new verification code has been sent to your phone.');
+    } catch (err: any) {
+      setLoading(false);
+      Alert.alert('Resend failed', err.message);
+    }
   };
 
   const maskedPhone = phone ? `${phone.slice(0, 6)}****${phone.slice(-3)}` : '';
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View style={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]}>
+      <FirebaseRecaptchaVerifierModal
+        ref={recaptchaVerifier}
+        // @ts-ignore
+        innerRef={recaptchaVerifier}
+        firebaseConfig={app.options}
+        attemptInvisibleVerification={true}
+      />
+      <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Back button */}
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={Colors.text.primary} />
         </TouchableOpacity>
 
-        {/* Icon */}
-        <View style={styles.iconWrap}>
+        <View style={{ width: '100%', alignItems: 'center' }}>
+          {/* Icon */}
+          <View style={styles.iconWrap}>
           <Ionicons name="chatbubble-ellipses-outline" size={40} color={Colors.primary} />
         </View>
 
@@ -155,24 +230,25 @@ export default function VerifyScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Resend */}
-        <View style={styles.resendRow}>
-          <Text style={styles.resendLabel}>Didn&apos;t receive a code? </Text>
-          <TouchableOpacity onPress={handleResend} disabled={resendCooldown > 0 || loading}>
-            <Text style={[styles.resendBtn, resendCooldown > 0 && styles.resendBtnDisabled]}>
-              {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend'}
-            </Text>
-          </TouchableOpacity>
+          {/* Resend */}
+          <View style={styles.resendRow}>
+            <Text style={styles.resendLabel}>Didn&apos;t receive a code? </Text>
+            <TouchableOpacity onPress={handleResend} disabled={resendCooldown > 0 || loading}>
+              <Text style={[styles.resendBtn, resendCooldown > 0 && styles.resendBtnDisabled]}>
+                {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: Colors.background },
-  container: { flex: 1, paddingHorizontal: 24, alignItems: 'center' },
+  container: { flexGrow: 1, paddingHorizontal: 24 },
 
   backBtn: {
     alignSelf: 'flex-start',
