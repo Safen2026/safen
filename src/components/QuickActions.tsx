@@ -26,19 +26,22 @@ export const QuickActions = () => {
       label: 'Medical',
       color: colors.icon.medical,
       icon: (size: number, color: string) => <MaterialCommunityIcons name="medical-bag" size={size} color={color} />,
-      message: 'Request immediate medical assistance.',
+      message: 'Alert your emergency contacts about a medical situation.',
+      detail: 'Your contacts will receive your location and a medical alert.',
     },
     police: {
       label: 'Police',
       color: colors.icon.police,
       icon: (size: number, color: string) => <MaterialCommunityIcons name="police-badge-outline" size={size} color={color} />,
-      message: 'Request immediate police response.',
+      message: 'Alert your emergency contacts about a security situation.',
+      detail: 'Your contacts will receive your location and a security alert.',
     },
     fire: {
       label: 'Fire',
       color: colors.icon.fire,
       icon: (size: number, color: string) => <MaterialIcons name="local-fire-department" size={size} color={color} />,
-      message: 'Report a fire or request rescue services.',
+      message: 'Alert your emergency contacts about a fire situation.',
+      detail: 'Your contacts will receive your location and a fire alert.',
     },
   }), [colors]);
 
@@ -58,8 +61,8 @@ export const QuickActions = () => {
       setTimeout(() => {
         setConfirmModal({
           visible: true,
-          title: `${config.label} Request Sent`,
-          msg: `Your request for ${config.label.toLowerCase()} assistance has been sent. Responders will receive your live location shortly.`,
+          title: `${config.label} Alert Sent`,
+          msg: `Your emergency contacts have been notified of a ${config.label.toLowerCase()} situation and can see your current location.`,
           icon: 'checkmark-circle',
           color: config.color
         });
@@ -91,6 +94,7 @@ export const QuickActions = () => {
         visible={selectedAction !== null}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setSelectedAction(null)}
       >
         <View style={styles.modalOverlay}>
@@ -105,7 +109,7 @@ export const QuickActions = () => {
                 <View style={styles.modalBody}>
                   <Text style={styles.modalMessage}>{config.message}</Text>
                   <Text style={styles.modalWarning}>
-                    This will log your live location and notify emergency responders.
+                    {config.detail}
                   </Text>
                   <View style={styles.modalActions}>
                     <TouchableOpacity

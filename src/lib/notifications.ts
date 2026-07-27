@@ -102,3 +102,116 @@ export async function notifyContactAdded(recipientId: string, adderName: string)
     console.warn('notifyContactAdded error:', err);
   }
 }
+
+export async function sendContactRequest(recipientId: string, adderName: string, contactId: string): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase.from('notifications').insert({
+      recipient_id: recipientId,
+      sender_id: user.id,
+      sender_name: adderName,
+      type: 'contact_added',
+      title: 'Contact Request',
+      body: `${adderName} wants to add you as an emergency contact.`
+    });
+
+    if (error) console.warn('sendContactRequest failed:', error.message);
+  } catch (err) {
+    console.warn('sendContactRequest error:', err);
+  }
+}
+
+export async function notifyContactRequestResult(recipientId: string, myName: string, action: 'accepted' | 'rejected'): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const title = action === 'accepted' ? 'Request Accepted' : 'Request Declined';
+    const body = action === 'accepted' 
+      ? `${myName} accepted your emergency contact request.` 
+      : `${myName} declined your emergency contact request.`;
+
+    const { error } = await supabase.from('notifications').insert({
+      recipient_id: recipientId,
+      sender_id: user.id,
+      sender_name: myName,
+      type: 'contact_added',
+      title,
+      body,
+    });
+
+    if (error) console.warn('notifyContactRequestResult failed:', error.message);
+  } catch (err) {
+    console.warn('notifyContactRequestResult error:', err);
+  }
+}
+
+export async function sendPing(recipientId: string): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const senderName = profile?.full_name?.trim() || 'A Safen user';
+
+    const { error } = await supabase.from('notifications').insert({
+      recipient_id: recipientId,
+      sender_id: user.id,
+      sender_name: senderName,
+      type: 'ping',
+      title: 'Check-in Ping',
+      body: `${senderName} sent you a check-in ping to make sure you're safe.`
+    });
+
+    if (error) {
+      console.warn('sendPing failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('sendPing error:', err);
+    return false;
+  }
+}
+
+export async function sendPingAck(recipientId: string): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const myName = profile?.full_name?.trim() || 'A Safen user';
+
+    const { error } = await supabase.from('notifications').insert({
+      recipient_id: recipientId,
+      sender_id: user.id,
+      sender_name: myName,
+      type: 'ping_ack',
+      title: 'Ping Acknowledged',
+      body: `${myName} acknowledged your check-in ping and is safe.`
+    });
+
+    if (error) {
+      console.warn('sendPingAck failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('sendPingAck error:', err);
+    return false;
+  }
+}
+
+

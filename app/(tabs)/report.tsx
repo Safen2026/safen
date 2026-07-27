@@ -54,6 +54,7 @@ export default function ReportScreen() {
   const [mediaFiles, setMediaFiles] = useState<string[]>([]);
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isFullScreenMap, setIsFullScreenMap] = useState(false);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
   const mapRef = React.useRef<MapView>(null);
 
@@ -583,7 +584,54 @@ export default function ReportScreen() {
             <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#00875A" />
             <Text style={styles.currentLocationText}>Use Current Location</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={{ position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.9)', padding: 8, borderRadius: 8, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }} 
+            activeOpacity={0.8}
+            onPress={() => setIsFullScreenMap(true)}
+          >
+            <Ionicons name="expand" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
         </View>
+
+        <Modal visible={isFullScreenMap} animationType="slide" onRequestClose={() => setIsFullScreenMap(false)}>
+          <View style={{ flex: 1 }}>
+            <MapView
+              style={{ flex: 1 }}
+              provider={PROVIDER_DEFAULT}
+              initialRegion={location ? {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              } : undefined}
+              showsUserLocation={true}
+              onRegionChangeComplete={handleRegionChangeComplete}
+            />
+            <View style={styles.mapPinContainer} pointerEvents="none">
+              <View style={styles.mapPinRing}>
+                <View style={styles.mapPinCenter} />
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={{ position: 'absolute', top: 50, left: 20, backgroundColor: 'rgba(255,255,255,0.9)', padding: 10, borderRadius: 20, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }} 
+              activeOpacity={0.8}
+              onPress={() => setIsFullScreenMap(false)}
+            >
+              <Ionicons name="close" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+            <View style={{ position: 'absolute', bottom: 40, left: 20, right: 20 }}>
+              <TouchableOpacity 
+                style={[styles.nextButton, { width: '100%' }]}
+                activeOpacity={0.8}
+                onPress={() => setIsFullScreenMap(false)}
+              >
+                <Text style={styles.nextButtonText}>Confirm Location</Text>
+                <Ionicons name="checkmark" size={20} color={colors.white} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         <View style={{ marginTop: 20 }}>
           <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text.primary, marginBottom: 8 }}>
@@ -753,6 +801,7 @@ export default function ReportScreen() {
           visible={selectedPreview !== null}
           transparent={true}
           animationType="fade"
+          statusBarTranslucent
           onRequestClose={() => setSelectedPreview(null)}
         >
           <View style={styles.previewModalOverlay}>
@@ -792,6 +841,7 @@ export default function ReportScreen() {
           visible={recording !== null}
           transparent={true}
           animationType="slide"
+          statusBarTranslucent
           onRequestClose={stopRecording}
         >
           <View style={styles.recordingOverlay}>

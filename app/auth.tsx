@@ -90,14 +90,21 @@ const inputStyles = StyleSheet.create({
   eyeSlot: { marginLeft: 8 },
 });
 
-// Normalises Nigerian phone number to E.164 format (+234...)
+// Normalize to E.164 for Nigerian numbers so we match what's in profiles
 const toE164Nigeria = (raw: string): string => {
   const digits = raw.replace(/\D/g, '');
   if (digits.startsWith('234')) return `+${digits}`;
   if (digits.startsWith('0')) return `+234${digits.slice(1)}`;
-  return `+234${digits}`;
+  if (digits.length === 10) return `+234${digits}`;
+  return `+${digits}`;
 };
 
+const isValidPhone = (raw: string): boolean => {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('234')) return digits.length === 13;
+  if (digits.startsWith('0')) return digits.length === 11;
+  return digits.length === 10;
+};
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('login');
@@ -131,11 +138,12 @@ export default function AuthScreen() {
       return;
     }
 
-    const formattedPhone = toE164Nigeria(targetPhone);
-    if (formattedPhone.length < 10) {
+    if (!isValidPhone(targetPhone)) {
       Alert.alert('Invalid phone', 'Please enter a valid phone number.');
       return;
     }
+
+    const formattedPhone = toE164Nigeria(targetPhone);
 
     setLoading(true);
     try {

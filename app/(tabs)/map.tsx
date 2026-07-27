@@ -10,6 +10,7 @@ export default function MapScreen() {
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isMapReady, setIsMapReady] = useState(false);
 
   const { lat, lng } = useLocalSearchParams<{ lat?: string; lng?: string }>();
   
@@ -31,19 +32,22 @@ export default function MapScreen() {
   }, []);
 
   useEffect(() => {
-    if (lat && lng && mapRef.current) {
+    if (isMapReady && lat && lng && mapRef.current) {
       const targetLat = parseFloat(lat);
       const targetLng = parseFloat(lng);
       if (!isNaN(targetLat) && !isNaN(targetLng)) {
-        mapRef.current.animateToRegion({
-          latitude: targetLat,
-          longitude: targetLng,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 1000);
+        // Add a slight delay to ensure smooth transition after map is ready
+        setTimeout(() => {
+          mapRef.current?.animateToRegion({
+            latitude: targetLat,
+            longitude: targetLng,
+            latitudeDelta: 0.001,
+            longitudeDelta: 0.001,
+          }, 1500);
+        }, 500);
       }
     }
-  }, [lat, lng, location]);
+  }, [isMapReady, lat, lng]);
 
   if (errorMsg) {
     return (
@@ -76,6 +80,7 @@ export default function MapScreen() {
         }}
         showsUserLocation={true}
         showsMyLocationButton={true}
+        onMapReady={() => setIsMapReady(true)}
       >
         {lat && lng && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng)) && (
           <Marker

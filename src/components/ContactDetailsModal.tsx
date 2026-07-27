@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, Linking } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, Linking, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { sendPing } from '../lib/notifications';
 
 export type Contact = {
   id: string;
@@ -10,6 +11,9 @@ export type Contact = {
   relationship: string | null;
   is_on_app: boolean;
   contact_user_id: string | null;
+  status?: string;
+  avatar_url?: string;
+  is_protector?: boolean;
 };
 
 interface ContactDetailsModalProps {
@@ -23,6 +27,7 @@ interface ContactDetailsModalProps {
 export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelete }: ContactDetailsModalProps) => {
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const [imageViewerVisible, setImageViewerVisible] = useState(false);
 
   if (!contact) return null;
 
@@ -34,9 +39,17 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
     Linking.openURL(`sms:${contact.phone}`);
   };
 
-  const handlePing = () => {
-    Alert.alert('Ping Sent', `A test nudge was sent to ${contact.name}.`);
-    // This could integrate with a real Push Notification backend ping function later.
+  const handlePing = async () => {
+    if (!contact.contact_user_id) {
+      Alert.alert('Cannot Ping', 'This contact is not verified on Safen.');
+      return;
+    }
+    const success = await sendPing(contact.contact_user_id);
+    if (success) {
+      Alert.alert('Ping Sent', `A check-in ping was successfully sent to ${contact.name}.`);
+    } else {
+      Alert.alert('Error', 'Failed to send ping. Please try again later.');
+    }
   };
 
   const handleShareTrip = () => {
@@ -45,22 +58,32 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={styles.modalContent} activeOpacity={1}>
           
           <View style={styles.header}>
-            <View style={styles.avatar}>
-              <Ionicons name="person" size={32} color={colors.white} />
-            </View>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+              <Ionicons name="close" size={24} color={colors.text.secondary} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.avatar}
+              activeOpacity={contact.avatar_url ? 0.8 : 1}
+              onPress={() => {
+                if (contact.avatar_url) setImageViewerVisible(true);
+              }}
+            >
+              {contact.avatar_url ? (
+                <Image source={{ uri: contact.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <Ionicons name="person" size={40} color={colors.white} />
+              )}
+            </TouchableOpacity>
             <View style={styles.headerText}>
               <Text style={styles.name}>{contact.name}</Text>
               <Text style={styles.phone}>{contact.phone}</Text>
               {contact.relationship && <Text style={styles.relationship}>{contact.relationship}</Text>}
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Ionicons name="close" size={24} color={colors.text.secondary} />
-            </TouchableOpacity>
           </View>
 
           <View style={styles.statusRow}>
@@ -92,7 +115,7 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
               <Text style={styles.quickLabel}>Message</Text>
             </TouchableOpacity>
 
-            {contact.is_on_app && (
+            {contact.is_on_app && contact.is_protector && (
               <TouchableOpacity style={styles.quickBtn} onPress={handlePing}>
                 <View style={[styles.quickIcon, { backgroundColor: '#F59E0B15' }]}>
                   <Ionicons name="notifications" size={24} color="#F59E0B" />
@@ -115,19 +138,34 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
             </TouchableOpacity>
           )}
 
-          <View style={styles.managementActions}>
-            <TouchableOpacity style={styles.manageBtn} onPress={() => { onClose(); onEdit(); }}>
-              <Ionicons name="pencil" size={20} color={colors.text.primary} />
-              <Text style={styles.manageText}>Edit Contact</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.manageBtn, { borderBottomWidth: 0 }]} onPress={() => { onClose(); onDelete(); }}>
-              <Ionicons name="trash" size={20} color="#DC2626" />
-              <Text style={[styles.manageText, { color: '#DC2626' }]}>Remove Contact</Text>
-            </TouchableOpacity>
-          </View>
+          {!contact.is_protector && (
+            <View style={styles.manageSection}>
+              <TouchableOpacity style={styles.manageBtn} onPress={() => { onClose(); onEdit(); }}>
+                <Ionicons name="pencil" size={20} color={colors.text.secondary} />
+                <Text style={styles.manageText}>Edit Contact Details</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity style={[styles.manageBtn, { borderBottomWidth: 0 }]} onPress={() => { onClose(); onDelete(); }}>
+                <Ionicons name="trash" size={20} color="#DC2626" />
+                <Text style={[styles.manageText, { color: '#DC2626' }]}>Remove Contact</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
         </TouchableOpacity>
       </TouchableOpacity>
+
+      {/* Fullscreen Image Viewer Modal */}
+      <Modal visible={imageViewerVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setImageViewerVisible(false)}>
+        <TouchableOpacity style={styles.imageViewerOverlay} activeOpacity={1} onPress={() => setImageViewerVisible(false)}>
+          <TouchableOpacity style={styles.imageViewerCloseBtn} onPress={() => setImageViewerVisible(false)}>
+            <Ionicons name="close" size={32} color="#FFF" />
+          </TouchableOpacity>
+          {contact.avatar_url && (
+            <Image source={{ uri: contact.avatar_url }} style={styles.fullscreenImage} resizeMode="contain" />
+          )}
+        </TouchableOpacity>
+      </Modal>
     </Modal>
   );
 };
@@ -135,14 +173,27 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
 const getStyles = (colors: any) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
-  header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 16 },
-  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  headerText: { flex: 1, justifyContent: 'center' },
-  name: { fontSize: 22, fontWeight: 'bold', color: colors.text.primary, marginBottom: 4 },
-  phone: { fontSize: 16, color: colors.text.secondary, marginBottom: 2 },
-  relationship: { fontSize: 14, color: colors.primary, fontWeight: '500' },
-  closeBtn: { padding: 4 },
-  statusRow: { flexDirection: 'row', marginBottom: 24 },
+  header: { alignItems: 'center', marginBottom: 24, paddingTop: 12 },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#9CA3AF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  headerText: { alignItems: 'center' },
+  name: { fontSize: 24, fontWeight: 'bold', color: colors.text.primary, marginBottom: 4, textAlign: 'center' },
+  phone: { fontSize: 16, color: colors.text.secondary, marginBottom: 6, textAlign: 'center' },
+  relationship: { fontSize: 14, color: colors.primary, fontWeight: '600', backgroundColor: colors.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden' },
+  closeBtn: { position: 'absolute', top: 0, right: 0, padding: 4, zIndex: 10 },
+  statusRow: { flexDirection: 'row', justifyContent: 'center', marginBottom: 24 },
   badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 6 },
   badgeText: { fontSize: 14, fontWeight: '600' },
   quickActions: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 32, borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: 24 },
@@ -154,7 +205,10 @@ const getStyles = (colors: any) => StyleSheet.create({
   premiumText: { flex: 1 },
   premiumTitle: { fontSize: 16, fontWeight: 'bold', color: colors.text.primary, marginBottom: 2 },
   premiumSub: { fontSize: 13, color: colors.text.secondary },
-  managementActions: { backgroundColor: colors.background, borderRadius: 16, overflow: 'hidden' },
-  manageBtn: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 12 },
-  manageText: { fontSize: 16, fontWeight: '500', color: colors.text.primary },
+  manageSection: { backgroundColor: colors.background, borderRadius: 16, overflow: 'hidden' },
+  manageBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  manageText: { fontSize: 16, fontWeight: '600', color: colors.text.primary, marginLeft: 16 },
+  imageViewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
+  fullscreenImage: { width: '100%', height: '80%' },
+  imageViewerCloseBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8 },
 });

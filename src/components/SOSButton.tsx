@@ -93,7 +93,7 @@ export const SOSButton = () => {
         setConfirmModal({
           visible: true,
           title: "SOS CANCELLED",
-          msg: "Your SOS has been deactivated. Responders stood down.",
+          msg: "Your SOS has been deactivated. Your emergency contacts have been informed.",
           icon: "checkmark-circle",
           color: colors.status.safeText
         });

@@ -1,3 +1,8 @@
+// @ts-nocheck
+// Using expo-file-system/legacy for readAsStringAsync (new API doesn't expose it)
+import { readAsStringAsync, EncodingType, getInfoAsync } from 'expo-file-system/legacy';
+import { Alert } from 'react-native';
+
 // Derives a clean filename and MIME type from a local URI
 export const getFileInfo = (uri: string): { fileName: string; mimeType: string } => {
   const isVideo = uri.includes('video') || uri.endsWith('.mp4') || uri.endsWith('.mov');
@@ -9,13 +14,9 @@ export const getFileInfo = (uri: string): { fileName: string; mimeType: string }
   return { fileName: `photo_${timestamp}.jpg`, mimeType: 'image/jpeg' };
 };
 
-const UPLOAD_TIMEOUT_MS = 30000;
 const MAX_ATTEMPTS = 3;
-
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// A single upload attempt, hard-capped at UPLOAD_TIMEOUT_MS so a dead
-// connection can't hang the whole flow indefinitely.
 const attemptUpload = async (
   uri: string,
   options?: { public_id?: string; folder?: string }
@@ -24,69 +25,87 @@ const attemptUpload = async (
   const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
   if (!cloudName || !uploadPreset) {
-    console.warn('Cloudinary environment variables missing');
+    console.warn('[Cloudinary] Environment variables missing');
+    Alert.alert('Config Error', 'Cloudinary cloud name or upload preset is missing.');
     return null;
   }
 
-  const { fileName, mimeType } = getFileInfo(uri);
+  const { mimeType } = getFileInfo(uri);
   const isVideo = mimeType.startsWith('video') || mimeType.startsWith('audio');
-  const resourceType = isVideo ? 'video' : 'image'; // Cloudinary groups audio under 'video'
+  const resourceType = isVideo ? 'video' : 'image';
+  const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
 
+  // Read the file as base64 using the legacy API
+  console.log('[Cloudinary] Reading file as base64...');
+  const base64Data = await readAsStringAsync(uri, {
+    encoding: EncodingType.Base64,
+  });
+  console.log('[Cloudinary] Base64 data length:', base64Data.length);
+
+  if (!base64Data || base64Data.length === 0) {
+    throw new Error('File is empty or could not be read');
+  }
+
+  // Build the data URI that Cloudinary accepts directly
+  const dataUri = `data:${mimeType};base64,${base64Data}`;
+
+  // Build FormData with the base64 string
+  // React Native's FormData fully supports appending strings.
   const formData = new FormData();
-  formData.append('file', { uri, type: mimeType, name: fileName } as any);
+  formData.append('file', dataUri);
   formData.append('upload_preset', uploadPreset);
   if (options?.public_id) formData.append('public_id', options.public_id);
   if (options?.folder) formData.append('folder', options.folder);
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  console.log('[Cloudinary] Uploading to:', uploadUrl, '(payload base64 length:', base64Data.length, 'bytes)');
 
-  try {
-    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`, {
-      method: 'POST',
-      body: formData,
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    body: formData,
+  });
 
-    const data = await response.json();
-    if (data.secure_url) return data.secure_url;
+  const responseText = await response.text();
+  console.log('[Cloudinary] Response status:', response.status);
+  console.log('[Cloudinary] Response body:', responseText.substring(0, 300));
 
-    console.warn('Cloudinary upload rejected:', data);
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
+  if (response.ok) {
+    const data = JSON.parse(responseText);
+    if (data.secure_url) {
+      console.log('[Cloudinary] SUCCESS:', data.secure_url);
+      return data.secure_url;
+    }
   }
+
+  throw new Error(`Cloudinary rejected (status ${response.status}): ${responseText.substring(0, 300)}`);
 };
 
-// Uploads a single local file URI to Cloudinary and returns its secure
-// URL. Retries transient failures (timeouts, network errors) up to
-// MAX_ATTEMPTS times with a short backoff before giving up — a lot of
-// "media didn't upload" reports turn out to be a single dropped
-// request on a flaky connection, and this absorbs most of those.
 export const uploadToCloudinary = async (
   uri: string,
   options?: { public_id?: string; folder?: string }
 ): Promise<string | null> => {
   let lastError: unknown = null;
 
+  console.log('[Cloudinary] Starting upload for URI:', uri);
+  Alert.alert('Upload Starting', `Attempting to upload: ${uri.substring(uri.length - 30)}`);
+
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const url = await attemptUpload(uri, options);
       if (url) return url;
-      // A clean "no secure_url" response (e.g. bad preset) won't fix
-      // itself on retry — stop immediately instead of wasting attempts.
-      return null;
     } catch (err) {
       lastError = err;
       const isLastAttempt = attempt === MAX_ATTEMPTS;
-      console.warn(`Cloudinary upload attempt ${attempt}/${MAX_ATTEMPTS} failed for ${uri}:`, err);
+      console.warn(`[Cloudinary] Attempt ${attempt}/${MAX_ATTEMPTS} failed:`, err);
       if (!isLastAttempt) {
-        await sleep(attempt * 800); // 800ms, 1600ms backoff
+        await sleep(attempt * 800);
       }
     }
   }
 
-  console.warn('Cloudinary upload permanently failed after retries:', lastError);
+  Alert.alert(
+    'Image Upload Failed',
+    `Could not upload after ${MAX_ATTEMPTS} attempts.\n\nError: ${String(lastError || 'Unknown error')}`
+  );
+  console.error('[Cloudinary] Upload permanently failed:', lastError);
   return null;
 };

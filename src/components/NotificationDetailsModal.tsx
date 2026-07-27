@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ActivityIndicator, Alert, Image, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { AppNotification } from '../hooks/useNotifications';
 import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
+import { notifyContactRequestResult, sendPingAck } from '../lib/notifications';
 
 interface NotificationDetailsModalProps {
   visible: boolean;
@@ -17,7 +18,8 @@ export const NotificationDetailsModal = ({ visible, notification, onClose, onSta
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const [loading, setLoading] = useState(false);
-  const [details, setDetails] = useState<{ latitude?: number; longitude?: number; address?: string; details?: string } | null>(null);
+  const [details, setDetails] = useState<{ latitude?: number; longitude?: number; address?: string; details?: string; media_paths?: string[] } | null>(null);
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible && notification) {
@@ -32,8 +34,8 @@ export const NotificationDetailsModal = ({ visible, notification, onClose, onSta
     setLoading(true);
     try {
       if (notification.type === 'report' && notification.report_id) {
-        const { data } = await supabase.from('reports').select('latitude, longitude, address, description').eq('id', notification.report_id).single();
-        if (data) setDetails({ latitude: data.latitude, longitude: data.longitude, address: data.address, details: data.description });
+        const { data } = await supabase.from('reports').select('latitude, longitude, address, description, media_paths').eq('id', notification.report_id).single();
+        if (data) setDetails({ latitude: data.latitude, longitude: data.longitude, address: data.address, details: data.description, media_paths: data.media_paths });
       } else if (notification.alert_id) {
         const { data } = await supabase.from('alerts').select('latitude, longitude').eq('id', notification.alert_id).single();
         if (data) setDetails({ latitude: data.latitude, longitude: data.longitude });
@@ -45,7 +47,7 @@ export const NotificationDetailsModal = ({ visible, notification, onClose, onSta
   };
 
   const handleAction = async (action: 'accepted' | 'declined' | 'blocked') => {
-    if (!notification || notification.type !== 'contact_added') return;
+    if (!notification || notification.type !== 'contact_added' || notification.title !== 'Contact Request' || !notification.sender_id) return;
     setLoading(true);
     try {
       // notification.sender_id is the user who added them
@@ -54,9 +56,13 @@ export const NotificationDetailsModal = ({ visible, notification, onClose, onSta
         if (action === 'declined' || action === 'blocked') {
            // Delete the request
            await supabase.from('emergency_contacts').delete().eq('user_id', notification.sender_id).eq('contact_user_id', user.id);
+           const fullName = user.user_metadata?.full_name || user.user_metadata?.first_name || 'A user';
+           await notifyContactRequestResult(notification.sender_id, fullName, 'rejected');
         } else {
            // Accept request
            await supabase.from('emergency_contacts').update({ status: 'accepted' }).eq('user_id', notification.sender_id).eq('contact_user_id', user.id);
+           const fullName = user.user_metadata?.full_name || user.user_metadata?.first_name || 'A user';
+           await notifyContactRequestResult(notification.sender_id, fullName, 'accepted');
         }
         
         // Delete or mark notification as read
@@ -81,22 +87,38 @@ export const NotificationDetailsModal = ({ visible, notification, onClose, onSta
     }
   };
 
+  const handleAcknowledgePing = async () => {
+    if (!notification || !notification.sender_id) return;
+    setLoading(true);
+    try {
+      await sendPingAck(notification.sender_id);
+      await supabase.from('notifications').delete().eq('id', notification.id);
+      if (onStatusChange) onStatusChange();
+      onClose();
+    } catch (err) {
+      Alert.alert('Error', 'Could not send acknowledgement');
+    }
+    setLoading(false);
+  };
+
   if (!notification) return null;
 
-  const isContactAdded = notification.type === 'contact_added';
+  const isContactAdded = notification.type === 'contact_added' && notification.title === 'Contact Request';
+  const isPing = notification.type === 'ping';
+  const isPingAck = notification.type === 'ping_ack';
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.modalContent}>
           <View style={styles.header}>
-            <Text style={styles.title}>{isContactAdded ? 'Contact Request' : 'Emergency Details'}</Text>
+            <Text style={styles.title}>{isContactAdded ? 'Contact Request' : isPing ? 'Check-in Ping' : isPingAck ? 'Ping Acknowledged' : 'Emergency Details'}</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Ionicons name="close" size={24} color={colors.text.secondary} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.body}>
+          <ScrollView style={styles.body} contentContainerStyle={{ flexGrow: 1 }} bounces={false}>
             <View style={styles.senderRow}>
               <View style={styles.avatar}>
                 <Ionicons name="person" size={24} color={colors.white} />
@@ -114,28 +136,32 @@ export const NotificationDetailsModal = ({ visible, notification, onClose, onSta
                 <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
               )}
               
-              {!isContactAdded && !loading && details && (
+              {!isContactAdded && !loading && (details?.address || details?.details || (details?.media_paths && details.media_paths.length > 0)) && (
                 <View style={styles.extraDetails}>
-                  {details.address && (
+                  {details?.address && (
                     <View style={styles.detailRow}>
                       <Ionicons name="location" size={18} color={colors.text.secondary} />
                       <Text style={styles.detailText}>{details.address}</Text>
                     </View>
                   )}
-                  {details.details && (
+                  {details?.details && (
                     <View style={styles.detailRow}>
                       <Ionicons name="document-text" size={18} color={colors.text.secondary} />
                       <Text style={styles.detailText}>{details.details}</Text>
                     </View>
                   )}
-                  {(details.latitude || notification.latitude) ? (
-                    <View style={styles.detailRow}>
-                      <Ionicons name="compass" size={18} color={colors.text.secondary} />
-                      <Text style={styles.detailText}>
-                        Lat: {Number(details.latitude || notification.latitude).toFixed(4)}, Lng: {Number(details.longitude || notification.longitude).toFixed(4)}
-                      </Text>
+                  {details?.media_paths && details.media_paths.length > 0 && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text.secondary, marginBottom: 8 }}>Attached Media</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                        {details.media_paths.map((uri, index) => (
+                          <TouchableOpacity key={index} activeOpacity={0.8} onPress={() => setExpandedImage(uri)}>
+                            <Image source={{ uri }} style={{ width: 120, height: 120, borderRadius: 8, backgroundColor: colors.border }} />
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
                     </View>
-                  ) : null}
+                  )}
                 </View>
               )}
             </View>
@@ -151,28 +177,52 @@ export const NotificationDetailsModal = ({ visible, notification, onClose, onSta
                     <Ionicons name="close" size={20} color={colors.text.primary} />
                     <Text style={styles.btnTextDark}>Decline</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, styles.blockBtn]} onPress={() => handleAction('blocked')} disabled={loading}>
-                    <Ionicons name="ban" size={20} color={colors.white} />
-                    <Text style={styles.btnTextLight}>Block</Text>
-                  </TouchableOpacity>
                 </>
-              ) : (
-                <TouchableOpacity style={[styles.actionBtn, styles.mapBtn, !(details?.latitude || notification?.latitude) && styles.disabledBtn]} onPress={handleViewMap} disabled={!(details?.latitude || notification?.latitude)}>
-                  <Ionicons name="map" size={20} color={colors.white} />
-                  <Text style={styles.btnTextLight}>View on Map</Text>
+              ) : isPing ? (
+                <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={handleAcknowledgePing} disabled={loading}>
+                  {loading ? <ActivityIndicator color={colors.white} /> : <Ionicons name="checkmark-circle" size={20} color={colors.white} />}
+                  <Text style={styles.btnTextLight}>I'm Safe (Acknowledge)</Text>
                 </TouchableOpacity>
+              ) : isPingAck ? (
+                <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={onClose}>
+                  <Text style={styles.btnTextDark}>Dismiss</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ gap: 10, width: '100%', flexDirection: 'column' }}>
+                  <TouchableOpacity style={[styles.actionBtn, styles.mapBtn, !(details?.latitude || notification?.latitude) && styles.disabledBtn, { flex: 0 }]} onPress={handleViewMap} disabled={!(details?.latitude || notification?.latitude)}>
+                    <Ionicons name="map" size={20} color={colors.white} />
+                    <Text style={styles.btnTextLight}>View on Map</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
-          </View>
+          </ScrollView>
         </View>
       </View>
+
+      <Modal visible={!!expandedImage} transparent={true} animationType="fade" onRequestClose={() => setExpandedImage(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+          <TouchableOpacity 
+            style={{ position: 'absolute', top: 40, right: 20, zIndex: 1, padding: 10 }} 
+            onPress={() => setExpandedImage(null)}
+          >
+            <Ionicons name="close" size={32} color="#FFF" />
+          </TouchableOpacity>
+          {expandedImage && (
+            <Image 
+              source={{ uri: expandedImage }} 
+              style={{ width: '100%', height: '80%', resizeMode: 'contain' }} 
+            />
+          )}
+        </View>
+      </Modal>
     </Modal>
   );
 };
 
 const getStyles = (colors: any) => StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { width: '100%', backgroundColor: colors.white, borderRadius: 16, overflow: 'hidden' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', backgroundColor: colors.white, borderRadius: 20, overflow: 'hidden', maxHeight: '85%' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },
   title: { fontSize: 18, fontWeight: 'bold', color: colors.text.primary },
   closeBtn: { padding: 4 },

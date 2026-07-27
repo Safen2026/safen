@@ -294,6 +294,7 @@ export default function SettingsScreen() {
         visible={deleteModalVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setDeleteModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -325,6 +326,7 @@ export default function SettingsScreen() {
         visible={signOutModalVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setSignOutModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -356,6 +358,7 @@ export default function SettingsScreen() {
         visible={pushModalVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setPushModalVisible(false)}
       >
         <View style={styles.modalOverlay}>

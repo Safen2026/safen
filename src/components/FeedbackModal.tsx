@@ -32,11 +32,12 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
       visible={visible}
       transparent
       animationType="slide"
+      statusBarTranslucent
       onRequestClose={handleClose}
     >
       <KeyboardAvoidingView 
         style={styles.overlay} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
       >
         <View style={[styles.content, { backgroundColor: colors.white }]}>
           <View style={styles.header}>
@@ -97,6 +98,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+    paddingTop: Platform.OS === 'android' ? 60 : 40,
   },
   content: {
     borderTopLeftRadius: 24,

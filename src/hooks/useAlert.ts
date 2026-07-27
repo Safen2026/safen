@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
@@ -14,16 +14,51 @@ export function useAlert() {
   const [loading, setLoading] = useState(false);
   const [activeAlert, setActiveAlert] = useState<ActiveAlert | null>(null);
 
-  const getLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return null;
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
-    return {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
+  useEffect(() => {
+    let isMounted = true;
+    const fetchActiveAlert = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('alerts')
+        .select('id, type')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (isMounted && data) {
+        setActiveAlert({ id: data.id, type: data.type as AlertType });
+      }
     };
+    fetchActiveAlert();
+    return () => { isMounted = false; };
+  }, []);
+
+  const getLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return null;
+      
+      let location = await Location.getLastKnownPositionAsync();
+      if (!location) {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
+      
+      if (!location) return null;
+      
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+    } catch (e) {
+      console.warn('Location fetch failed:', e);
+      return null;
+    }
   };
 
   const triggerAlert = async (type: AlertType): Promise<boolean> => {
@@ -32,13 +67,19 @@ export function useAlert() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return false; }
 
-    // Fire the alert immediately for instant user feedback
+    // 1. Fetch location FIRST. Since we switched to getLastKnownPositionAsync, this is practically instant.
+    // This completely bypasses the Supabase RLS update block, as we can just INSERT the coordinates directly.
+    const coords = await getLocation();
+
+    // 2. Fire the alert with coordinates already attached
     const { data, error } = await supabase
       .from('alerts')
       .insert({
         user_id: user.id,
         type,
         status: 'active',
+        latitude: coords?.latitude || null,
+        longitude: coords?.longitude || null,
       })
       .select('id')
       .single();
@@ -48,28 +89,13 @@ export function useAlert() {
 
     setActiveAlert({ id: data.id, type });
 
-    // Let emergency contacts know immediately — don't make them wait on GPS.
-    notifyEmergencyContacts({ type, alertId: data.id });
-
-    // Fetch and update location in the background so it doesn't block the UI
-    (async () => {
-      const coords = await getLocation();
-      if (coords) {
-        await supabase
-          .from('alerts')
-          .update({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          })
-          .eq('id', data.id);
-
-        // Patch the notifications we already sent with the real location.
-        await supabase
-          .from('notifications')
-          .update({ latitude: coords.latitude, longitude: coords.longitude })
-          .eq('alert_id', data.id);
-      }
-    })();
+    // 3. Let emergency contacts know, sending the coordinates directly in the initial insert.
+    notifyEmergencyContacts({ 
+      type, 
+      alertId: data.id,
+      latitude: coords?.latitude || undefined,
+      longitude: coords?.longitude || undefined
+    });
 
     return true;
   };

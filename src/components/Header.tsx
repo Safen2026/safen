@@ -8,11 +8,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { SessionContext } from '../context/SessionContext';
 import * as ImagePicker from 'expo-image-picker';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { ConfirmationModal } from './ConfirmationModal';
 import { NotificationDetailsModal } from './NotificationDetailsModal';
 import { useAvatar } from '../hooks/useAvatar';
 import { useNotifications, AppNotification } from '../hooks/useNotifications';
+import { supabase } from '../lib/supabase';
+import { notifyContactRequestResult } from '../lib/notifications';
 
 
 
@@ -23,6 +25,8 @@ const NOTIFICATION_TYPE_META: Record<AppNotification['type'], { icon: string; co
   fire: { icon: 'flame', color: '#EA580C' },
   report: { icon: 'document-text', color: '#7C3AED' },
   contact_added: { icon: 'person-add', color: '#00875A' },
+  ping: { icon: 'chatbubbles', color: '#8B5CF6' },
+  ping_ack: { icon: 'checkmark-done-circle', color: '#10B981' },
 };
 
 function timeAgo(iso: string): string {
@@ -45,7 +49,49 @@ export const Header = () => {
   const { avatarUrl, uploading, uploadAvatar } = useAvatar();
 
 
-  const { notifications, loading: notificationsLoading, unreadCount, markAllRead } = useNotifications();
+  const { notifications, loading: notificationsLoading, unreadCount, markAllRead, refetch, removeNotification } = useNotifications();
+
+  const handleAcceptContact = async (notification: AppNotification) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !notification.sender_id) return;
+    removeNotification(notification.id);
+    // Use RPC to safely update the sender's contact row (bypasses cross-user RLS)
+    const { error } = await supabase.rpc('respond_to_contact_request', {
+      p_sender_id: notification.sender_id,
+      p_action: 'accepted'
+    });
+    if (error) console.warn('respond_to_contact_request (accept) failed:', error.message);
+    const fullName = user.user_metadata?.full_name || user.user_metadata?.first_name || 'A user';
+    await supabase.from('notifications').insert({
+      recipient_id: notification.sender_id,
+      sender_id: user.id,
+      sender_name: fullName,
+      type: 'contact_added',
+      title: 'Request Accepted',
+      body: `${fullName} accepted your emergency contact request.`
+    });
+  };
+
+  const handleRejectContact = async (notification: AppNotification) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !notification.sender_id) return;
+    removeNotification(notification.id);
+    // Use RPC to safely update the sender's contact row (bypasses cross-user RLS)
+    const { error } = await supabase.rpc('respond_to_contact_request', {
+      p_sender_id: notification.sender_id,
+      p_action: 'declined'
+    });
+    if (error) console.warn('respond_to_contact_request (decline) failed:', error.message);
+    const fullName = user.user_metadata?.full_name || user.user_metadata?.first_name || 'A user';
+    await supabase.from('notifications').insert({
+      recipient_id: notification.sender_id,
+      sender_id: user.id,
+      sender_name: fullName,
+      type: 'contact_added',
+      title: 'Request Declined',
+      body: `${fullName} declined your emergency contact request.`
+    });
+  };
 
   const [pickerVisible, setPickerVisible] = React.useState(false);
   const [notificationsVisible, setNotificationsVisible] = React.useState(false);
@@ -162,50 +208,150 @@ export const Header = () => {
         </Pressable>
       </Modal>
 
-      {/* Notifications modal */}
-      <Modal visible={notificationsVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setNotificationsVisible(false)}>
-        <Pressable style={[styles.modalOverlay, { justifyContent: 'center' }]} onPress={() => setNotificationsVisible(false)}>
-          <Pressable style={styles.notificationsModal} onPress={e => e.stopPropagation()}>
+      {/* Notifications panel */}
+      <Modal visible={notificationsVisible} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent onRequestClose={() => setNotificationsVisible(false)}>
+        <SafeAreaView style={styles.notificationsModalFull} edges={['top', 'bottom']}>
+
+            {/* Header */}
             <View style={styles.notificationsHeader}>
-              <Text style={styles.notificationsTitle}>Notifications</Text>
-              <TouchableOpacity onPress={() => setNotificationsVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.text.primary} />
+              <View>
+                <Text style={styles.notificationsTitle}>Notifications</Text>
+                {unreadCount > 0 && <Text style={styles.notificationsSubtitle}>{unreadCount} unread</Text>}
+              </View>
+              <TouchableOpacity onPress={() => setNotificationsVisible(false)} style={styles.notificationsCloseBtn}>
+                <Ionicons name="close" size={20} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
+
+            {/* Content */}
             {notificationsLoading ? (
               <View style={styles.notificationsEmpty}>
-                <ActivityIndicator color={colors.primary} />
+                <ActivityIndicator color={colors.primary} size="large" />
               </View>
             ) : notifications.length === 0 ? (
               <View style={styles.notificationsEmpty}>
-                <Ionicons name="notifications-off-outline" size={32} color={colors.text.secondary} />
-                <Text style={styles.notificationsEmptyText}>You&apos;re all caught up</Text>
+                <View style={[styles.emptyIconCircle, { backgroundColor: colors.border }]}>
+                  <Ionicons name="notifications-off-outline" size={28} color={colors.text.secondary} />
+                </View>
+                <Text style={styles.notificationsEmptyTitle}>All caught up!</Text>
+                <Text style={styles.notificationsEmptyText}>No new notifications</Text>
               </View>
             ) : (
-              <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
-                {notifications.map((n, i, arr) => {
-                  const meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+              <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
+                {(() => {
+                  const today: AppNotification[] = [];
+                  const yesterday: AppNotification[] = [];
+                  const last7Days: AppNotification[] = [];
+                  const last30Days: AppNotification[] = [];
+                  const earlier: AppNotification[] = [];
+
+                  const now = new Date();
+                  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                  
+                  const yesterdayDate = new Date(todayDate);
+                  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+
+                  const sevenDaysAgo = new Date(todayDate);
+                  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+                  const thirtyDaysAgo = new Date(todayDate);
+                  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+                  notifications.forEach(n => {
+                    const d = new Date(n.created_at);
+                    if (d >= todayDate) today.push(n);
+                    else if (d >= yesterdayDate) yesterday.push(n);
+                    else if (d >= sevenDaysAgo) last7Days.push(n);
+                    else if (d >= thirtyDaysAgo) last30Days.push(n);
+                    else earlier.push(n);
+                  });
+
+                  const renderCard = (n: AppNotification) => {
+                    const meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+                    const isRequest = n.type === 'contact_added' && n.title === 'Contact Request';
+                    return (
+                      <View key={n.id} style={[styles.notificationCard, !n.is_read && styles.notificationCardUnread]}>
+
+                        {/* Top row: icon, text */}
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                          <View style={[styles.notificationIcon, { backgroundColor: meta.color + '18' }]}>
+                            <Ionicons name={meta.icon as any} size={20} color={meta.color} />
+                          </View>
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={styles.notificationTextTitle} numberOfLines={1}>{n.title}</Text>
+                            <Text style={styles.notificationTextBody} numberOfLines={2}>{n.body}</Text>
+                            <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
+                          </View>
+                        </View>
+
+                        {/* Accept / Decline row for contact requests */}
+                        {isRequest && (
+                          <View style={styles.contactRequestActions}>
+                            <TouchableOpacity
+                              style={styles.acceptBtn}
+                              onPress={() => handleAcceptContact(n)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="checkmark" size={15} color="#fff" />
+                              <Text style={styles.acceptBtnText}>Accept</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.declineBtn}
+                              onPress={() => handleRejectContact(n)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="close" size={15} color="#EF4444" />
+                              <Text style={styles.declineBtnText}>Decline</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+
+                        {/* Tap whole card for details (non-request types) */}
+                        {!isRequest && (
+                          <TouchableOpacity
+                            style={styles.viewDetailsBtn}
+                            onPress={() => setSelectedNotification(n)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={styles.viewDetailsBtnText}>View details</Text>
+                            <Ionicons name="chevron-forward" size={13} color={colors.primary} />
+                          </TouchableOpacity>
+                        )}
+
+                      </View>
+                    );
+                  };
+
+                  const renderGroup = (title: string, group: AppNotification[]) => {
+                    if (group.length === 0) return null;
+                    return (
+                      <View key={title} style={{ marginBottom: 12 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text.secondary, marginBottom: 8, marginLeft: 4 }}>{title}</Text>
+                        {group.map(n => renderCard(n))}
+                      </View>
+                    );
+                  };
+
                   return (
-                    <TouchableOpacity 
-                      key={n.id} 
-                      style={[styles.notificationItem, i === arr.length - 1 && { borderBottomWidth: 0 }]}
-                      onPress={() => setSelectedNotification(n)}
-                    >
-                      <View style={[styles.notificationIcon, { backgroundColor: meta.color + '15' }]}>
-                        <Ionicons name={meta.icon as any} size={20} color={meta.color} />
-                      </View>
-                      <View style={styles.notificationContent}>
-                        <Text style={styles.notificationTextTitle}>{n.title}</Text>
-                        <Text style={styles.notificationTextBody}>{n.body}</Text>
-                        <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
-                      </View>
-                    </TouchableOpacity>
+                    <>
+                      {renderGroup('Today', today)}
+                      {renderGroup('Yesterday', yesterday)}
+                      {renderGroup('Last 7 Days', last7Days)}
+                      {renderGroup('Last 30 Days', last30Days)}
+                      {renderGroup('Earlier', earlier)}
+                    </>
                   );
-                })}
+                })()}
               </ScrollView>
             )}
-          </Pressable>
-        </Pressable>
+
+
+          <NotificationDetailsModal
+            visible={!!selectedNotification}
+            notification={notifications.find(n => n.id === selectedNotification?.id) || selectedNotification}
+            onClose={() => setSelectedNotification(null)}
+          />
+        </SafeAreaView>
       </Modal>
 
       <ConfirmationModal
@@ -223,12 +369,6 @@ export const Header = () => {
         iconName="checkmark-circle"
         iconColor="#00875A"
         onClose={() => setUploadSuccess(false)}
-      />
-
-      <NotificationDetailsModal
-        visible={!!selectedNotification}
-        notification={selectedNotification}
-        onClose={() => setSelectedNotification(null)}
       />
     </View>
   );
@@ -254,15 +394,27 @@ const getStyles = (colors: any) => StyleSheet.create({
   sheetOptionText: { fontSize: 16, fontWeight: '600', color: colors.text.primary },
   sheetCancel: { marginTop: 20, paddingVertical: 14, borderRadius: 16, backgroundColor: colors.border, alignItems: 'center' },
   sheetCancelText: { fontSize: 16, fontWeight: '700', color: colors.text.primary },
-  notificationsModal: { width: '90%', backgroundColor: colors.white, borderRadius: 20, padding: 24, alignSelf: 'center' },
-  notificationsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  notificationsTitle: { fontSize: 20, fontWeight: '700', color: colors.text.primary },
-  notificationsEmpty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 32, gap: 10 },
-  notificationsEmptyText: { fontSize: 14, color: colors.text.secondary },
-  notificationItem: { flexDirection: 'row', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  notificationIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
-  notificationContent: { flex: 1 },
-  notificationTextTitle: { fontSize: 16, fontWeight: '600', color: colors.text.primary, marginBottom: 4 },
-  notificationTextBody: { fontSize: 14, color: colors.text.secondary, lineHeight: 20, marginBottom: 6 },
-  notificationTime: { fontSize: 12, color: colors.text.secondary, opacity: 0.7 },
+  notificationsModalFull: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 20, paddingTop: 10 },
+  notificationsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  notificationsTitle: { fontSize: 18, fontWeight: '700', color: colors.text.primary },
+  notificationsSubtitle: { fontSize: 12, color: colors.primary, fontWeight: '500', marginTop: 2 },
+  notificationsCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  notificationsEmpty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 8 },
+  emptyIconCircle: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  notificationsEmptyTitle: { fontSize: 15, fontWeight: '600', color: colors.text.primary },
+  notificationsEmptyText: { fontSize: 13, color: colors.text.secondary },
+  notificationCard: { backgroundColor: colors.background, borderRadius: 12, padding: 12, marginBottom: 8 },
+  notificationCardUnread: { borderLeftWidth: 3, borderLeftColor: colors.primary },
+  notificationIcon: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  notificationTextTitle: { fontSize: 14, fontWeight: '600', color: colors.text.primary, marginBottom: 2 },
+  notificationTextBody: { fontSize: 13, color: colors.text.secondary, lineHeight: 18, marginBottom: 4 },
+  notificationTime: { fontSize: 11, color: colors.text.secondary, opacity: 0.7 },
+  notificationDismissBtn: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.border, justifyContent: 'center', alignItems: 'center' },
+  contactRequestActions: { flexDirection: 'row', gap: 8, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  acceptBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#00875A', paddingVertical: 9, borderRadius: 8 },
+  acceptBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  declineBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#FEE2E2', paddingVertical: 9, borderRadius: 8 },
+  declineBtnText: { color: '#EF4444', fontSize: 13, fontWeight: '700' },
+  viewDetailsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: 4 },
+  viewDetailsBtnText: { fontSize: 12, color: colors.primary, fontWeight: '500' },
 });
