@@ -46,3 +46,10 @@ yarn-error.*
 
 # documentation
 docs/
+*.docx
+~$*.docx
+
+# test & scratch scripts
+test*.js
+test*.ts
+test*.png

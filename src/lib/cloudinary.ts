@@ -86,7 +86,6 @@ export const uploadToCloudinary = async (
   let lastError: unknown = null;
 
   console.log('[Cloudinary] Starting upload for URI:', uri);
-  Alert.alert('Upload Starting', `Attempting to upload: ${uri.substring(uri.length - 30)}`);
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -102,10 +101,6 @@ export const uploadToCloudinary = async (
     }
   }
 
-  Alert.alert(
-    'Image Upload Failed',
-    `Could not upload after ${MAX_ATTEMPTS} attempts.\n\nError: ${String(lastError || 'Unknown error')}`
-  );
   console.error('[Cloudinary] Upload permanently failed:', lastError);
   return null;
 };

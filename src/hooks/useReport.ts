@@ -32,9 +32,7 @@ export function useReport() {
 
       // 1. Upload media to Cloudinary FIRST
       const uploadedUrls: string[] = [];
-      const { Alert: RNAlert } = require('react-native');
       console.log('[useReport] Media URIs received:', payload.media?.length ?? 0, payload.media);
-      RNAlert.alert('Report Debug', `Media files: ${payload.media?.length ?? 0}\nSession user: ${user.id.substring(0, 8)}...`);
       if (payload.media && payload.media.length > 0) {
         for (const uri of payload.media) {
           console.log('[useReport] Uploading URI:', uri);

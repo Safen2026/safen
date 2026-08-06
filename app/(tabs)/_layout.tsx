@@ -11,7 +11,7 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.icon.activeTab,
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.icon.inactiveTab,
         tabBarStyle: {
           borderTopWidth: 1,
@@ -24,52 +24,53 @@ export default function TabLayout() {
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: '500',
-        }
+        },
       }}>
+
       <Tabs.Screen
         name="index"
         options={{
           title: 'Home',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home-variant-outline" size={size} color={color} />
+            <Ionicons name="home-outline" size={size} color={color} />
           ),
         }}
       />
-      <Tabs.Screen
-        name="map"
-        options={{
-          title: 'Map',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="map-outline" size={size} color={color} />
-          ),
-        }}
-      />
+
       <Tabs.Screen
         name="report"
         options={{
           title: 'Report',
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="plus-circle" size={size + 4} color={colors.primary} />
+            <MaterialCommunityIcons name="clipboard-edit-outline" size={size} color={color} />
           ),
         }}
       />
+
       <Tabs.Screen
         name="contacts"
         options={{
-          title: 'Contacts',
+          title: 'Network',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people-outline" size={size} color={color} />
           ),
         }}
       />
+
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
+          title: 'Profile',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings-outline" size={size} color={color} />
+            <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
+      />
+
+      {/* Map is accessible via the sidebar drawer, not the tab bar */}
+      <Tabs.Screen
+        name="map"
+        options={{ href: null }}
       />
     </Tabs>
   );

@@ -61,40 +61,63 @@ export function useAlert() {
     }
   };
 
-  const triggerAlert = async (type: AlertType): Promise<boolean> => {
+  const triggerAlert = async (type: AlertType, description?: string): Promise<boolean> => {
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return false; }
 
-    // 1. Fetch location FIRST. Since we switched to getLastKnownPositionAsync, this is practically instant.
-    // This completely bypasses the Supabase RLS update block, as we can just INSERT the coordinates directly.
+    // 1. Fetch location FIRST — practically instant via getLastKnownPositionAsync.
     const coords = await getLocation();
 
-    // 2. Fire the alert with coordinates already attached
-    const { data, error } = await supabase
-      .from('alerts')
-      .insert({
-        user_id: user.id,
-        type,
-        status: 'active',
-        latitude: coords?.latitude || null,
-        longitude: coords?.longitude || null,
-      })
-      .select('id')
-      .single();
+    const basePayload = {
+      user_id: user.id,
+      type,
+      status: 'active',
+      latitude: coords?.latitude || null,
+      longitude: coords?.longitude || null,
+    };
+
+    // 2. Try inserting with description first. If the column doesn't exist yet
+    //    in the DB, gracefully fall back to inserting without it so the alert
+    //    still fires. The description column can be added via migration later.
+    let data: { id: string } | null = null;
+    let error: any = null;
+
+    if (description?.trim()) {
+      const res = await supabase
+        .from('alerts')
+        .insert({ ...basePayload, description: description.trim() })
+        .select('id')
+        .single();
+      data = res.data;
+      error = res.error;
+    }
+
+    // Fallback: insert without description (also the default path when no description given)
+    if (!data) {
+      const res = await supabase
+        .from('alerts')
+        .insert(basePayload)
+        .select('id')
+        .single();
+      data = res.data;
+      error = res.error;
+    }
 
     setLoading(false);
     if (error || !data) return false;
 
     setActiveAlert({ id: data.id, type });
 
-    // 3. Let emergency contacts know, sending the coordinates directly in the initial insert.
-    notifyEmergencyContacts({ 
-      type, 
+    // 3. Notify emergency contacts — pass description as detailsSnippet so
+    //    recipients see the user's context in the notification body.
+    notifyEmergencyContacts({
+      type,
       alertId: data.id,
       latitude: coords?.latitude || undefined,
-      longitude: coords?.longitude || undefined
+      longitude: coords?.longitude || undefined,
+      detailsSnippet: description?.trim() || undefined,
     });
 
     return true;

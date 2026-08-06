@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
   TextInput, ActivityIndicator, Alert, Modal, Pressable,
@@ -46,6 +46,10 @@ export default function ContactsScreen() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  // Read the ?openAdd=true param passed from the home screen Add button
+  const { openAdd } = useLocalSearchParams<{ openAdd?: string }>();
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [protectingContacts, setProtectingContacts] = useState<Contact[]>([]);
@@ -123,7 +127,16 @@ export default function ContactsScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchContacts();
-    }, [fetchContacts])
+
+      // If navigated here with ?openAdd=true, open the add-contact sheet immediately
+      if (openAdd === 'true') {
+        setForm(EMPTY_FORM);
+        setEditingContact(null);
+        setSheetVisible(true);
+        // Clear the param so back-navigation doesn't re-open the sheet
+        router.setParams({ openAdd: undefined });
+      }
+    }, [fetchContacts, openAdd, router])
   );
 
   // Instant refresh: fires the moment the sender's phone receives the accepted/declined notification
@@ -132,7 +145,10 @@ export default function ContactsScreen() {
   }, [fetchContacts]);
 
 
-  // Realtime: auto-refresh contact list when the other person accepts/rejects
+  // Realtime: auto-refresh when any row involving this user changes on either side.
+  // Two listeners are needed because Supabase row-level filters are column-specific:
+  //   - user_id listener    → catches changes to our own contacts
+  //   - contact_user_id listener → catches when someone else adds/removes/accepts us
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     (async () => {
@@ -145,6 +161,12 @@ export default function ContactsScreen() {
           schema: 'public',
           table: 'emergency_contacts',
           filter: `user_id=eq.${user.id}`,
+        }, () => fetchContacts())
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'emergency_contacts',
+          filter: `contact_user_id=eq.${user.id}`,
         }, () => fetchContacts())
         .subscribe();
     })();
@@ -338,21 +360,41 @@ export default function ContactsScreen() {
       setSaving(false);
       if (error) { Alert.alert('Error', error.message); return; }
     } else {
-      // Prevent duplicates: Check if we already have a contact row for this phone number (e.g. previously declined)
+      // Check if a contact with this phone already exists and what their status is.
+      // We only allow re-adding if they were previously declined; accepted/pending contacts
+      // must not be silently overwritten.
       const { data: existing } = await supabase
         .from('emergency_contacts')
-        .select('id')
+        .select('id, status')
         .eq('user_id', user.id)
         .eq('phone', payload.phone)
         .maybeSingle();
 
       if (existing) {
+        setSaving(false);
+
+        if (existing.status === 'accepted') {
+          Alert.alert(
+            'Already Added',
+            `${form.name.trim()} is already in your safety network.`
+          );
+          return;
+        }
+
+        if (existing.status === 'pending') {
+          Alert.alert(
+            'Request Pending',
+            `A request has already been sent to ${form.name.trim()}. They haven\'t responded yet.`
+          );
+          return;
+        }
+
+        // Status is 'declined' — allow them to re-add
         const { error } = await supabase
           .from('emergency_contacts')
           .update({ ...payload, status: 'pending' })
           .eq('id', existing.id);
 
-        setSaving(false);
         if (error) { Alert.alert('Error', error.message); return; }
         newContactId = existing.id;
       } else {
@@ -397,12 +439,33 @@ export default function ContactsScreen() {
 
   const handleDeleteConfirm = async () => {
     if (!deleteModal.contact) return;
-    const id = deleteModal.contact.id;
-    setDeleting(id);
+    const contact = deleteModal.contact;
+    setDeleting(contact.id);
     setDeleteModal({ visible: false, contact: null });
-    await supabase.from('emergency_contacts').delete().eq('id', id);
+
+    // 1. Delete the row on our side
+    await supabase.from('emergency_contacts').delete().eq('id', contact.id);
+
+    // 2. If this was a linked (on-app) contact, also delete the mirror row
+    //    on their side so they stop seeing "You are protecting" this person.
+    if (contact.contact_user_id) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('emergency_contacts')
+          .delete()
+          .eq('user_id', contact.contact_user_id)
+          .eq('contact_user_id', user.id);
+      }
+    }
+
     setDeleting(null);
     await fetchContacts();
+
+    // Broadcast to the home screen SafetyNetworkRow so it re-fetches immediately.
+    // Supabase realtime DELETE filters require REPLICA IDENTITY FULL to work reliably;
+    // the event bus is a guaranteed, zero-latency alternative.
+    contactEvents.emitRefresh();
   };
 
   const getInitials = (name: string) =>
