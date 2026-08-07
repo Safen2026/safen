@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "460082210195",
+    "project_id": "safen-ce1ea",
+    "storage_bucket": "safen-ce1ea.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:460082210195:android:762502a2ccf4e194b7f466",
+        "android_client_info": {
+          "package_name": "com.kingdave17.safen"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTrI8nQFta_9Kwx2hvvD6Uvm8raMmGEWw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

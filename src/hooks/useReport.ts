@@ -30,34 +30,50 @@ export function useReport() {
 
       const { user } = session;
 
-      // 1. Insert report row immediately — user sees success fast.
-      // user_id is always the reporting user (the FK/NOT NULL constraint
-      // requires it) — `is_anonymous` is what actually controls whether
-      // their identity is shown to responders, not this column.
+      // 1. Upload media to Cloudinary FIRST
+      const uploadedUrls: string[] = [];
+      console.log('[useReport] Media URIs received:', payload.media?.length ?? 0, payload.media);
+      if (payload.media && payload.media.length > 0) {
+        for (const uri of payload.media) {
+          console.log('[useReport] Uploading URI:', uri);
+          const url = await uploadToCloudinary(uri);
+          console.log('[useReport] Upload result for URI:', uri, '→', url);
+          if (url) uploadedUrls.push(url);
+        }
+      }
+      console.log('[useReport] All uploaded URLs:', uploadedUrls);
+
+      // 2. Insert report row with media_paths included
+      const insertPayload = {
+        user_id: user.id,
+        category: payload.category,
+        description: payload.details || null,
+        address: payload.address || null,
+        is_anonymous: payload.isAnonymous,
+        latitude: payload.latitude ?? null,
+        longitude: payload.longitude ?? null,
+        media_paths: uploadedUrls.length > 0 ? uploadedUrls : null,
+        status: 'open',
+      };
+      console.log('[useReport] Inserting into DB with media_paths:', insertPayload.media_paths);
+
       const { data: report, error: reportError } = await supabase
         .from('reports')
-        .insert({
-          user_id: user.id,
-          category: payload.category,
-          description: payload.details || null,
-          address: payload.address || null,
-          is_anonymous: payload.isAnonymous,
-          latitude: payload.latitude ?? null,
-          longitude: payload.longitude ?? null,
-          status: 'open',
-        })
+        .insert(insertPayload)
         .select('id')
         .single();
 
+      console.log('[useReport] DB insert result:', { report, error: reportError?.message });
+
       if (reportError || !report) {
-        console.error('Report insert failed:', reportError?.message);
+        console.error('[useReport] Report insert failed:', reportError?.message);
         setLoading(false);
         return false;
       }
 
       setLoading(false);
 
-      // 2. Let emergency contacts know right away — don't wait on media.
+      // 3. Let emergency contacts know
       notifyEmergencyContacts({
         type: 'report',
         reportId: report.id,
@@ -66,47 +82,21 @@ export function useReport() {
         detailsSnippet: payload.details ? payload.details.slice(0, 120) : null,
       });
 
-      // 3. Upload media to Cloudinary in background. Each file already
-      // retries internally (see lib/cloudinary.ts) — this loop only
-      // has to handle what's left after those retries are exhausted.
+      // 4. Notify if any media failed to attach
       if (payload.media && payload.media.length > 0) {
-        (async () => {
-          const uploadedUrls: string[] = [];
-          for (const uri of payload.media!) {
-            const url = await uploadToCloudinary(uri);
-            if (url) uploadedUrls.push(url);
-          }
-
-          if (uploadedUrls.length > 0) {
-            const { error: updateError } = await supabase
-              .from('reports')
-              .update({ media_paths: uploadedUrls })
-              .eq('id', report.id);
-            if (updateError) {
-              console.warn('Failed to attach media_paths to report:', updateError.message);
-            }
-          }
-
-          const failedCount = payload.media!.length - uploadedUrls.length;
-          console.log(`Uploaded ${uploadedUrls.length}/${payload.media!.length} media files to Cloudinary`);
-
-          // Don't leave the user thinking their evidence attached when
-          // it didn't — this fires even if the app has since been
-          // closed/backgrounded, since it's a local (not push) notification
-          // scheduled with trigger: null (immediate).
-          if (failedCount > 0) {
-            Notifications.scheduleNotificationAsync({
-              content: {
-                title: 'Some media failed to attach',
-                body: uploadedUrls.length > 0
-                  ? `${failedCount} of ${payload.media!.length} file(s) from your report couldn't be uploaded. The report itself was saved.`
-                  : `None of your ${payload.media!.length} attached file(s) could be uploaded, but the report itself was saved.`,
-                sound: 'default',
-              },
-              trigger: null,
-            }).catch(() => {});
-          }
-        })();
+        const failedCount = payload.media.length - uploadedUrls.length;
+        if (failedCount > 0) {
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'Some media failed to attach',
+              body: uploadedUrls.length > 0
+                ? `${failedCount} of ${payload.media.length} file(s) from your report couldn't be uploaded.`
+                : `None of your ${payload.media.length} attached file(s) could be uploaded.`,
+              sound: 'default',
+            },
+            trigger: null,
+          }).catch(() => {});
+        }
       }
 
       return true;

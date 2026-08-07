@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
@@ -14,62 +14,111 @@ export function useAlert() {
   const [loading, setLoading] = useState(false);
   const [activeAlert, setActiveAlert] = useState<ActiveAlert | null>(null);
 
-  const getLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return null;
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
-    return {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
+  useEffect(() => {
+    let isMounted = true;
+    const fetchActiveAlert = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('alerts')
+        .select('id, type')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (isMounted && data) {
+        setActiveAlert({ id: data.id, type: data.type as AlertType });
+      }
     };
+    fetchActiveAlert();
+    return () => { isMounted = false; };
+  }, []);
+
+  const getLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return null;
+      
+      let location = await Location.getLastKnownPositionAsync();
+      if (!location) {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      }
+      
+      if (!location) return null;
+      
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+    } catch (e) {
+      console.warn('Location fetch failed:', e);
+      return null;
+    }
   };
 
-  const triggerAlert = async (type: AlertType): Promise<boolean> => {
+  const triggerAlert = async (type: AlertType, description?: string): Promise<boolean> => {
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return false; }
 
-    // Fire the alert immediately for instant user feedback
-    const { data, error } = await supabase
-      .from('alerts')
-      .insert({
-        user_id: user.id,
-        type,
-        status: 'active',
-      })
-      .select('id')
-      .single();
+    // 1. Fetch location FIRST — practically instant via getLastKnownPositionAsync.
+    const coords = await getLocation();
+
+    const basePayload = {
+      user_id: user.id,
+      type,
+      status: 'active',
+      latitude: coords?.latitude || null,
+      longitude: coords?.longitude || null,
+    };
+
+    // 2. Try inserting with description first. If the column doesn't exist yet
+    //    in the DB, gracefully fall back to inserting without it so the alert
+    //    still fires. The description column can be added via migration later.
+    let data: { id: string } | null = null;
+    let error: any = null;
+
+    if (description?.trim()) {
+      const res = await supabase
+        .from('alerts')
+        .insert({ ...basePayload, description: description.trim() })
+        .select('id')
+        .single();
+      data = res.data;
+      error = res.error;
+    }
+
+    // Fallback: insert without description (also the default path when no description given)
+    if (!data) {
+      const res = await supabase
+        .from('alerts')
+        .insert(basePayload)
+        .select('id')
+        .single();
+      data = res.data;
+      error = res.error;
+    }
 
     setLoading(false);
     if (error || !data) return false;
 
     setActiveAlert({ id: data.id, type });
 
-    // Let emergency contacts know immediately — don't make them wait on GPS.
-    notifyEmergencyContacts({ type, alertId: data.id });
-
-    // Fetch and update location in the background so it doesn't block the UI
-    (async () => {
-      const coords = await getLocation();
-      if (coords) {
-        await supabase
-          .from('alerts')
-          .update({
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          })
-          .eq('id', data.id);
-
-        // Patch the notifications we already sent with the real location.
-        await supabase
-          .from('notifications')
-          .update({ latitude: coords.latitude, longitude: coords.longitude })
-          .eq('alert_id', data.id);
-      }
-    })();
+    // 3. Notify emergency contacts — pass description as detailsSnippet so
+    //    recipients see the user's context in the notification body.
+    notifyEmergencyContacts({
+      type,
+      alertId: data.id,
+      latitude: coords?.latitude || undefined,
+      longitude: coords?.longitude || undefined,
+      detailsSnippet: description?.trim() || undefined,
+    });
 
     return true;
   };

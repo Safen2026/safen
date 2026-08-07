@@ -44,6 +44,7 @@ export const ConfirmationModal = ({
       visible={visible}
       transparent={true}
       animationType="fade"
+      statusBarTranslucent
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>

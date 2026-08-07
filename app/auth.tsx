@@ -16,7 +16,9 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { supabase } from '../src/lib/supabase';
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
+import app, { firebaseAuth } from '../src/lib/firebase';
+import { PhoneAuthProvider } from 'firebase/auth';
 
 const Colors = {
   primary: '#0A2463',
@@ -88,14 +90,21 @@ const inputStyles = StyleSheet.create({
   eyeSlot: { marginLeft: 8 },
 });
 
-// Normalises Nigerian phone number to E.164 format (+234...)
+// Normalize to E.164 for Nigerian numbers so we match what's in profiles
 const toE164Nigeria = (raw: string): string => {
   const digits = raw.replace(/\D/g, '');
   if (digits.startsWith('234')) return `+${digits}`;
   if (digits.startsWith('0')) return `+234${digits.slice(1)}`;
-  return `+234${digits}`;
+  if (digits.length === 10) return `+234${digits}`;
+  return `+${digits}`;
 };
 
+const isValidPhone = (raw: string): boolean => {
+  const digits = raw.replace(/\D/g, '');
+  if (digits.startsWith('234')) return digits.length === 13;
+  if (digits.startsWith('0')) return digits.length === 11;
+  return digits.length === 10;
+};
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('login');
@@ -103,15 +112,14 @@ export default function AuthScreen() {
 
   // Login
   const [loginPhone, setLoginPhone] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
 
   // Signup
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
 
+  const recaptchaVerifier = useRef(null);
   const underlineX = useRef(new Animated.Value(0)).current;
 
   const switchMode = (next: Mode) => {
@@ -119,56 +127,67 @@ export default function AuthScreen() {
     setMode(next);
   };
 
-  const handleSignUp = async () => {
-    if (!fullName || !email || !phone || !password || !confirmPassword) {
-      Alert.alert('Missing fields', 'Please fill in all fields.');
+  const handleAuth = async () => {
+    const targetPhone = mode === 'signup' ? phone.trim() : loginPhone.trim();
+    if (!targetPhone) {
+      Alert.alert('Missing fields', 'Please enter your phone number.');
       return;
     }
-    if (password !== confirmPassword) {
-      Alert.alert('Password mismatch', 'Your passwords do not match.');
+    if (mode === 'signup' && (!firstName.trim() || !lastName.trim() || !email.trim())) {
+      Alert.alert('Missing fields', 'Please fill in your first name, last name, and email.');
       return;
     }
-    const formattedPhone = toE164Nigeria(phone);
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      phone: formattedPhone,
-      password,
-      options: { data: { full_name: fullName, email } },
-    });
-    setLoading(false);
-    if (error) { Alert.alert('Sign up failed', error.message); return; }
-    router.push({ pathname: '/verify', params: { phone: formattedPhone, fullName, email } });
-  };
 
-  const handleLogIn = async () => {
-    if (!loginPhone || !loginPassword) {
-      Alert.alert('Missing fields', 'Please enter your phone number and password.');
+    if (!isValidPhone(targetPhone)) {
+      Alert.alert('Invalid phone', 'Please enter a valid phone number.');
       return;
     }
-    const formattedPhone = toE164Nigeria(loginPhone);
+
+    const formattedPhone = toE164Nigeria(targetPhone);
+
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      phone: formattedPhone,
-      password: loginPassword,
-    });
-    setLoading(false);
-    if (error) { Alert.alert('Login failed', error.message); return; }
-    router.replace('/(tabs)');
+    try {
+      const phoneProvider = new PhoneAuthProvider(firebaseAuth);
+      const verificationId = await phoneProvider.verifyPhoneNumber(
+        formattedPhone,
+        recaptchaVerifier.current as any
+      );
+      setLoading(false);
+      router.push({ 
+        pathname: '/verify', 
+        params: { 
+          verificationId, 
+          phone: formattedPhone, 
+          firstName: mode === 'signup' ? firstName : undefined, 
+          lastName: mode === 'signup' ? lastName : undefined, 
+          email: mode === 'signup' ? email : undefined 
+        } 
+      });
+    } catch (err: any) {
+      setLoading(false);
+      Alert.alert('Authentication failed', err.message);
+    }
   };
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView style={styles.flex} contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <FirebaseRecaptchaVerifierModal
+        ref={recaptchaVerifier}
+        // @ts-ignore
+        innerRef={recaptchaVerifier}
+        firebaseConfig={app.options}
+        attemptInvisibleVerification={true}
+      />
+      <View style={[styles.brand, { marginTop: insets.top + 24 }]}>
+        <Image
+          source={require('../assets/images/logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.tagline}>Your personal safety companion</Text>
+      </View>
 
-        <View style={styles.brand}>
-          <Image
-            source={require('../assets/images/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.tagline}>Your personal safety companion</Text>
-        </View>
-
+      <ScrollView style={styles.flex} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.card}>
           <View style={styles.tabRow}>
             <TouchableOpacity style={styles.tab} onPress={() => switchMode('login')}>
@@ -183,43 +202,23 @@ export default function AuthScreen() {
           <View style={styles.fields}>
             {mode === 'signup' ? (
               <>
-                <InputField label="Full Name" placeholder="David Adeyemi" value={fullName} onChangeText={setFullName} autoCapitalize="words" icon={<Ionicons name="person-outline" size={18} color={Colors.text.secondary} />} />
+                <InputField label="First Name" placeholder="David" value={firstName} onChangeText={setFirstName} autoCapitalize="words" icon={<Ionicons name="person-outline" size={18} color={Colors.text.secondary} />} />
+                <InputField label="Last Name" placeholder="Adeyemi" value={lastName} onChangeText={setLastName} autoCapitalize="words" icon={<Ionicons name="people-outline" size={18} color={Colors.text.secondary} />} />
                 <InputField label="Email Address" placeholder="you@example.com" value={email} onChangeText={setEmail} keyboardType="email-address" icon={<Ionicons name="mail-outline" size={18} color={Colors.text.secondary} />} />
                 <InputField label="Phone Number" placeholder="08012345678" value={phone} onChangeText={setPhone} keyboardType="phone-pad" icon={<Ionicons name="call-outline" size={18} color={Colors.text.secondary} />} />
-                <InputField label="Password" placeholder="••••••••" value={password} onChangeText={setPassword} secureTextEntry icon={<Ionicons name="lock-closed-outline" size={18} color={Colors.text.secondary} />} />
-                <InputField label="Confirm Password" placeholder="••••••••" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry icon={<Ionicons name="lock-closed-outline" size={18} color={Colors.text.secondary} />} />
               </>
             ) : (
               <>
                 <InputField label="Phone Number" placeholder="08012345678" value={loginPhone} onChangeText={setLoginPhone} keyboardType="phone-pad" icon={<Ionicons name="call-outline" size={18} color={Colors.text.secondary} />} />
-                <InputField label="Password" placeholder="••••••••" value={loginPassword} onChangeText={setLoginPassword} secureTextEntry icon={<Ionicons name="lock-closed-outline" size={18} color={Colors.text.secondary} />} />
-                <TouchableOpacity style={styles.forgotRow}>
-                  <Text style={styles.forgotText}>Forgot password?</Text>
-                </TouchableOpacity>
               </>
             )}
           </View>
 
-          <TouchableOpacity style={[styles.cta, loading && styles.ctaDisabled]} activeOpacity={0.85} onPress={mode === 'signup' ? handleSignUp : handleLogIn} disabled={loading}>
+          <TouchableOpacity style={[styles.cta, loading && styles.ctaDisabled]} activeOpacity={0.85} onPress={handleAuth} disabled={loading}>
             {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.ctaText}>{mode === 'login' ? 'Sign In' : 'Create Account'}</Text>}
           </TouchableOpacity>
 
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or continue with</Text>
-            <View style={styles.dividerLine} />
-          </View>
 
-          <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.socialBtn}>
-              <MaterialCommunityIcons name="google" size={20} color="#DB4437" />
-              <Text style={styles.socialBtnText}>Google</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.socialBtn}>
-              <MaterialCommunityIcons name="apple" size={20} color={Colors.text.primary} />
-              <Text style={styles.socialBtnText}>Apple</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         <View style={styles.notice}>
@@ -250,12 +249,7 @@ const styles = StyleSheet.create({
   cta: { backgroundColor: Colors.primary, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginTop: 8, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 },
   ctaDisabled: { opacity: 0.7 },
   ctaText: { color: Colors.white, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { marginHorizontal: 12, fontSize: 12, color: Colors.text.secondary, fontWeight: '500' },
-  socialRow: { flexDirection: 'row', gap: 12 },
-  socialBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 48, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
-  socialBtnText: { fontSize: 14, fontWeight: '600', color: Colors.text.primary },
+
   notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24, gap: 6 },
   noticeText: { fontSize: 12, color: Colors.text.secondary, flexShrink: 1, lineHeight: 18 },
 });

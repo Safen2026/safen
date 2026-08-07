@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { AppState } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { contactEvents } from '../lib/events';
 
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
@@ -15,10 +17,13 @@ if (!isExpoGo) {
 
 export type AppNotification = {
   id: string;
-  type: 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'contact_added';
+  type: 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'contact_added' | 'ping' | 'ping_ack';
   title: string;
   body: string;
   sender_name: string | null;
+  sender_id: string | null;
+  alert_id: string | null;
+  report_id: string | null;
   latitude: number | null;
   longitude: number | null;
   is_read: boolean;
@@ -31,7 +36,6 @@ export function useNotifications() {
   const userIdRef = useRef<string | null>(null);
 
   const fetchNotifications = useCallback(async () => {
-    setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setNotifications([]);
@@ -51,24 +55,52 @@ export function useNotifications() {
     setLoading(false);
   }, []);
 
+
+  // Initial load
   useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
 
-  // Realtime: as soon as a row lands in `notifications` for this user,
-  // push it into the list immediately (no manual refresh needed) and
-  // fire a local banner + sound if the app is currently running
-  // (foreground or backgrounded-but-alive). This is separate from real
-  // push (see usePushNotifications + the send-push Edge Function),
-  // which is what covers the app being fully closed.
+  // Realtime subscription with reconnection + missed-event recovery
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
 
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       userIdRef.current = user.id;
 
+      const handleNewNotification = (payload: any) => {
+        const row = payload.new as AppNotification;
+
+        // Merge, avoiding duplicates if realtime fires multiple times
+        setNotifications(prev => {
+          if (payload.eventType === 'UPDATE') {
+            return prev.map(n => n.id === row.id ? { ...n, ...row } : n);
+          }
+          return prev.some(n => n.id === row.id) ? prev : [row, ...prev];
+        });
+
+        // Signal contacts screen to refresh when sender gets accept/decline response
+        if (row.title === 'Request Accepted' || row.title === 'Request Declined') {
+          contactEvents.emitRefresh();
+        }
+
+        // Fire local banner when app is in foreground
+        if (!isExpoGo && Notifications) {
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: row.title,
+              body: row.body,
+              sound: 'default',
+              data: { notificationId: row.id, type: row.type },
+            },
+            trigger: null,
+          }).catch(() => {});
+        }
+      };
+
       channel = supabase
-        .channel(`notifications:${user.id}`)
+        .channel(`notifications:user:${user.id}`)
         .on(
           'postgres_changes',
           {
@@ -77,47 +109,49 @@ export function useNotifications() {
             table: 'notifications',
             filter: `recipient_id=eq.${user.id}`,
           },
-          (payload) => {
-            const row = payload.new as AppNotification;
-            setNotifications(prev => [row, ...prev]);
-
-            if (!isExpoGo && Notifications) {
-              Notifications.scheduleNotificationAsync({
-                content: {
-                  title: row.title,
-                  body: row.body,
-                  sound: 'default',
-                  data: { notificationId: row.id, type: row.type },
-                },
-                trigger: null, // fire immediately
-              }).catch(() => {});
-            }
-          }
+          handleNewNotification
         )
-        .subscribe();
+        .subscribe((status) => {
+          // On every (re)connect, fetch to catch any missed events during the outage
+          if (status === 'SUBSCRIBED') {
+            fetchNotifications();
+          }
+        });
+
+      // 30-second polling fallback — catches any edge case realtime misses
+      pollTimer = setInterval(() => fetchNotifications(), 30_000);
     })();
+
+    // AppState: re-fetch the moment the app comes back to foreground
+    const appStateSub = AppState.addEventListener('change', (state: string) => {
+      if (state === 'active') fetchNotifications();
+    });
 
     return () => {
       if (channel) supabase.removeChannel(channel);
+      if (pollTimer) clearInterval(pollTimer);
+      appStateSub.remove();
     };
-  }, []);
+  }, [fetchNotifications]);
 
   const markAllRead = useCallback(async () => {
     const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
     if (unreadIds.length === 0) return;
-
-    // Optimistic update
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-
     const { error } = await supabase
       .from('notifications')
       .update({ is_read: true })
       .in('id', unreadIds);
-
     if (error) console.warn('markAllRead failed:', error.message);
   }, [notifications]);
 
+  const removeNotification = useCallback(async (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+    const { error } = await supabase.from('notifications').delete().eq('id', id);
+    if (error) console.warn('removeNotification failed:', error.message);
+  }, []);
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  return { notifications, loading, unreadCount, refetch: fetchNotifications, markAllRead };
+  return { notifications, loading, unreadCount, refetch: fetchNotifications, markAllRead, removeNotification };
 }

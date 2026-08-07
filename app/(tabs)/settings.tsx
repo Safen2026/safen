@@ -6,6 +6,8 @@ import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
+import { firebaseAuth } from '../../src/lib/firebase';
+import { signOut } from 'firebase/auth';
 import { SessionContext } from '../../src/context/SessionContext';
 import { FeedbackModal } from '../../src/components/FeedbackModal';
 import { useAvatar } from '../../src/hooks/useAvatar';
@@ -95,14 +97,16 @@ export default function SettingsScreen() {
 
   const confirmSignOut = async () => {
     setSigningOut(true);
-    const { error } = await supabase.auth.signOut();
-    setSigningOut(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-      return;
+    try {
+      await signOut(firebaseAuth);
+      await supabase.auth.signOut();
+      setSigningOut(false);
+      setSignOutModalVisible(false);
+      router.replace('/auth');
+    } catch (err: any) {
+      setSigningOut(false);
+      Alert.alert('Error', err.message);
     }
-    setSignOutModalVisible(false);
-    router.replace('/auth');
   };
 
   const confirmDeleteAccount = async () => {
@@ -117,7 +121,7 @@ export default function SettingsScreen() {
       return;
     }
     
-    await supabase.auth.signOut();
+    await signOut(firebaseAuth);
     setDeleting(false);
     setDeleteModalVisible(false);
     router.replace('/auth');
@@ -313,6 +317,7 @@ export default function SettingsScreen() {
         visible={deleteModalVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setDeleteModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -344,6 +349,7 @@ export default function SettingsScreen() {
         visible={signOutModalVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setSignOutModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
@@ -375,6 +381,7 @@ export default function SettingsScreen() {
         visible={pushModalVisible}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setPushModalVisible(false)}
       >
         <View style={styles.modalOverlay}>

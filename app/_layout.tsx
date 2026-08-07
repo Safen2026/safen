@@ -15,16 +15,15 @@ export default function RootLayout() {
   usePushNotifications(session?.user?.id);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Listen for Supabase auth state changes natively
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {
@@ -44,8 +43,7 @@ export default function RootLayout() {
           <Stack.Screen name="auth" options={{ headerShown: false }} />
           <Stack.Screen name="verify" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="medical-profile" options={{ headerShown: false }} />
-          <Stack.Screen name="safety-guidelines" options={{ headerShown: false }} />
+          <Stack.Screen name="history" options={{ headerShown: false }} />
         </Stack>
       </SessionContext.Provider>
     </ThemeProvider>

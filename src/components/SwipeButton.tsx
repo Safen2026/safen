@@ -21,17 +21,33 @@ export const SwipeButton = ({ onComplete, loading }: SwipeButtonProps) => {
   const [completed, setCompleted] = useState(false);
   const pan = useRef(new Animated.ValueXY()).current;
 
+  const onCompleteRef = useRef(onComplete);
+  const loadingRef = useRef(loading);
+  const completedRef = useRef(completed);
+
+  React.useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  React.useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+
+  React.useEffect(() => {
+    completedRef.current = completed;
+  }, [completed]);
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: (_, gestureState) => {
-        if (loading || completed) return;
+        if (loadingRef.current || completedRef.current) return;
         if (gestureState.dx > 0 && gestureState.dx <= SWIPE_RANGE) {
           pan.setValue({ x: gestureState.dx, y: 0 });
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (loading || completed) return;
+        if (loadingRef.current || completedRef.current) return;
         
         if (gestureState.dx > SWIPE_RANGE * 0.7) {
           // Snap to end and complete
@@ -40,7 +56,7 @@ export const SwipeButton = ({ onComplete, loading }: SwipeButtonProps) => {
             useNativeDriver: false,
           }).start(() => {
             setCompleted(true);
-            onComplete();
+            onCompleteRef.current();
           });
         } else {
           // Snap back

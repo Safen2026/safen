@@ -54,11 +54,13 @@ export default function ReportScreen() {
   const [mediaFiles, setMediaFiles] = useState<string[]>([]);
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isFullScreenMap, setIsFullScreenMap] = useState(false);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
   const mapRef = React.useRef<MapView>(null);
 
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [address, setAddress] = useState('Fetching location...');
+  const [locationDetails, setLocationDetails] = useState('');
 
   const handleRegionChangeComplete = async (region: any) => {
     try {
@@ -296,10 +298,14 @@ export default function ReportScreen() {
       });
       return;
     }
+    const combinedDetails = locationDetails.trim() 
+      ? `Location Note: ${locationDetails.trim()}\n\nIncident Details: ${detailsText}`
+      : detailsText;
+
     const success = await submitReport({
       category: selectedType,
       address: address,
-      details: detailsText,
+      details: combinedDetails,
       isAnonymous,
       media: mediaFiles,
       latitude: location?.coords.latitude,
@@ -356,7 +362,7 @@ export default function ReportScreen() {
 
   const renderStep1 = () => (
     <>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.titleCentered}>What type of emergency is{'\n'}this?</Text>
         <Text style={styles.subtitleCentered}>
           Select the category that best describes the situation.
@@ -474,9 +480,17 @@ export default function ReportScreen() {
 
   const renderStep2 = () => (
     <>
-      <View style={styles.step2Container}>
-        <Text style={styles.titleLeft}>Where is this happening?</Text>
+      <View style={[styles.step2Container, { paddingBottom: 0, paddingHorizontal: 0 }]}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <Text style={styles.titleLeft}>Where is this happening?</Text>
         
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', backgroundColor: 'rgba(217, 45, 32, 0.1)', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+          <Ionicons name="warning-outline" size={16} color="#D92D20" style={{ marginTop: 2, marginRight: 8 }} />
+          <Text style={{ flex: 1, fontSize: 13, color: '#D92D20', lineHeight: 18 }}>
+            GPS can be inaccurate indoors. Please verify the pin and provide exact details below if needed.
+          </Text>
+        </View>
+
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={colors.text.secondary} />
           <TextInput 
@@ -520,7 +534,7 @@ export default function ReportScreen() {
           )}
         </View>
 
-        <View style={[styles.mapContainer, { overflow: 'hidden' }]}>
+        <View style={[styles.mapContainer, { height: 350, overflow: 'hidden', marginBottom: 8 }]}>
           {location ? (
             <MapView
               ref={mapRef}
@@ -570,7 +584,79 @@ export default function ReportScreen() {
             <MaterialCommunityIcons name="crosshairs-gps" size={20} color="#00875A" />
             <Text style={styles.currentLocationText}>Use Current Location</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={{ position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.9)', padding: 8, borderRadius: 8, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }} 
+            activeOpacity={0.8}
+            onPress={() => setIsFullScreenMap(true)}
+          >
+            <Ionicons name="expand" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
         </View>
+
+        <Modal visible={isFullScreenMap} animationType="slide" onRequestClose={() => setIsFullScreenMap(false)}>
+          <View style={{ flex: 1 }}>
+            <MapView
+              style={{ flex: 1 }}
+              provider={PROVIDER_DEFAULT}
+              initialRegion={location ? {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.005,
+                longitudeDelta: 0.005,
+              } : undefined}
+              showsUserLocation={true}
+              onRegionChangeComplete={handleRegionChangeComplete}
+            />
+            <View style={styles.mapPinContainer} pointerEvents="none">
+              <View style={styles.mapPinRing}>
+                <View style={styles.mapPinCenter} />
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={{ position: 'absolute', top: 50, left: 20, backgroundColor: 'rgba(255,255,255,0.9)', padding: 10, borderRadius: 20, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }} 
+              activeOpacity={0.8}
+              onPress={() => setIsFullScreenMap(false)}
+            >
+              <Ionicons name="close" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+            <View style={{ position: 'absolute', bottom: 40, left: 20, right: 20 }}>
+              <TouchableOpacity 
+                style={[styles.nextButton, { width: '100%' }]}
+                activeOpacity={0.8}
+                onPress={() => setIsFullScreenMap(false)}
+              >
+                <Text style={styles.nextButtonText}>Confirm Location</Text>
+                <Ionicons name="checkmark" size={20} color={colors.white} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <View style={{ marginTop: 20 }}>
+          <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text.primary, marginBottom: 8 }}>
+            Exact Location Details (Optional)
+          </Text>
+          <TextInput
+            style={[styles.searchInput, { 
+              backgroundColor: colors.white, 
+              borderWidth: 1, 
+              borderColor: colors.border, 
+              borderRadius: 12, 
+              padding: 12, 
+              minHeight: 80, 
+              textAlignVertical: 'top',
+              marginLeft: 0,
+              marginRight: 0
+            }]}
+            multiline
+            placeholder="e.g., Floor 3, Room 402, or near the library entrance..."
+            placeholderTextColor={colors.text.secondary}
+            value={locationDetails}
+            onChangeText={setLocationDetails}
+          />
+        </View>
+        </ScrollView>
       </View>
 
       <View style={styles.footer}>
@@ -588,7 +674,7 @@ export default function ReportScreen() {
 
   const renderStep3 = () => (
     <>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.titleLeft}>Provide evidence (Optional)</Text>
         <Text style={styles.subtitleLeft}>
           Any media or description helps responders.
@@ -685,7 +771,7 @@ export default function ReportScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {renderHeader()}
         {step === 1 && renderStep1()}
@@ -715,6 +801,7 @@ export default function ReportScreen() {
           visible={selectedPreview !== null}
           transparent={true}
           animationType="fade"
+          statusBarTranslucent
           onRequestClose={() => setSelectedPreview(null)}
         >
           <View style={styles.previewModalOverlay}>
@@ -754,6 +841,7 @@ export default function ReportScreen() {
           visible={recording !== null}
           transparent={true}
           animationType="slide"
+          statusBarTranslucent
           onRequestClose={stopRecording}
         >
           <View style={styles.recordingOverlay}>

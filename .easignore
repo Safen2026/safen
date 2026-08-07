@@ -10,7 +10,6 @@ web-build/
 expo-env.d.ts
 
 # Secrets
-.env
 .note.md
 
 # Native
@@ -46,10 +45,3 @@ yarn-error.*
 
 # documentation
 docs/
-*.docx
-~$*.docx
-
-# test & scratch scripts
-test*.js
-test*.ts
-test*.png
