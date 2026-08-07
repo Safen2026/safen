@@ -184,6 +184,22 @@ export default function SettingsScreen() {
           <Text style={styles.heroPhone}>{session?.user?.phone ?? 'Unknown Number'}</Text>
         </View>
 
+        {/* Profile */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>PROFILE</Text>
+          <View style={styles.card}>
+            {renderRow(
+              "medical-outline",
+              "Medical Profile",
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 13, color: colors.text.secondary, fontWeight: '500' }}>ICE Info</Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
+              </View>,
+              () => router.push('/medical-profile')
+            )}
+          </View>
+        </View>
+
         {/* Preferences */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>PREFERENCES</Text>
@@ -230,6 +246,13 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>SUPPORT & ABOUT</Text>
           <View style={styles.card}>
+            {renderRow(
+              "book-outline",
+              "Safety Guidelines",
+              <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />,
+              () => router.push('/safety-guidelines')
+            )}
+            <View style={styles.divider} />
             {renderRow(
               "share-social-outline",
               "Share SAFEN",

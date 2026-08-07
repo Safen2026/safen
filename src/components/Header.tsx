@@ -2,6 +2,7 @@ import React, { useContext } from 'react';
 import {
   View, Text, StyleSheet, Platform, StatusBar as RNStatusBar,
   TouchableOpacity, Image, Modal, Pressable, ActivityIndicator,
+  ScrollView, Dimensions,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -180,21 +181,27 @@ export const Header = () => {
                 <Text style={styles.notificationsEmptyText}>You&apos;re all caught up</Text>
               </View>
             ) : (
-              notifications.map((n, i, arr) => {
-                const meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
-                return (
-                  <View key={n.id} style={[styles.notificationItem, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
-                    <View style={[styles.notificationIcon, { backgroundColor: meta.color + '15' }]}>
-                      <Ionicons name={meta.icon as any} size={20} color={meta.color} />
+              <ScrollView
+                style={styles.notificationsList}
+                showsVerticalScrollIndicator={false}
+                bounces={notifications.length > 4}
+              >
+                {notifications.map((n, i, arr) => {
+                  const meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+                  return (
+                    <View key={n.id} style={[styles.notificationItem, i === arr.length - 1 && { borderBottomWidth: 0 }]}>
+                      <View style={[styles.notificationIcon, { backgroundColor: meta.color + '15' }]}>
+                        <Ionicons name={meta.icon as any} size={20} color={meta.color} />
+                      </View>
+                      <View style={styles.notificationContent}>
+                        <Text style={styles.notificationTextTitle}>{n.title}</Text>
+                        <Text style={styles.notificationTextBody}>{n.body}</Text>
+                        <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
+                      </View>
                     </View>
-                    <View style={styles.notificationContent}>
-                      <Text style={styles.notificationTextTitle}>{n.title}</Text>
-                      <Text style={styles.notificationTextBody}>{n.body}</Text>
-                      <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
-                    </View>
-                  </View>
-                );
-              })
+                  );
+                })}
+              </ScrollView>
             )}
           </Pressable>
         </Pressable>
@@ -240,8 +247,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   sheetOptionText: { fontSize: 16, fontWeight: '600', color: colors.text.primary },
   sheetCancel: { marginTop: 20, paddingVertical: 14, borderRadius: 16, backgroundColor: colors.border, alignItems: 'center' },
   sheetCancelText: { fontSize: 16, fontWeight: '700', color: colors.text.primary },
-  notificationsModal: { width: '90%', backgroundColor: colors.white, borderRadius: 20, padding: 24, alignSelf: 'center' },
-  notificationsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+notificationsModal: { width: '90%', maxHeight: Dimensions.get('window').height * 0.7, backgroundColor: colors.white, borderRadius: 20, padding: 24, alignSelf: 'center', overflow: 'hidden' },  notificationsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  notificationsList: { flexGrow: 1 },
   notificationsTitle: { fontSize: 20, fontWeight: '700', color: colors.text.primary },
   notificationsEmpty: { alignItems: 'center', justifyContent: 'center', paddingVertical: 32, gap: 10 },
   notificationsEmptyText: { fontSize: 14, color: colors.text.secondary },
