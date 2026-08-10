@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { Shadows } from '../constants/Theme';
 
 interface SafeCheckInCardProps {
   onStart?: () => void;
@@ -24,6 +25,7 @@ export const SafeCheckInCard = ({
   isExpired = false,
 }: SafeCheckInCardProps) => {
   const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const isActive = !!activeCheckIn;
 
   // Expired state — urgent red pulse strip
@@ -138,22 +140,27 @@ export const SafeCheckInCard = ({
   );
 };
 
-const styles = StyleSheet.create({
-  // Flat row — no card bg, no border, no shadow. Matches WelcomeCard treatment.
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    backgroundColor: colors.white,
+    marginHorizontal: 16,
+    padding: 16,
     marginBottom: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...Shadows.sm,
     gap: 14,
   },
   expiredContainer: {
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginBottom: 16,
-    padding: 14,
-    borderRadius: 14,
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
+    ...Shadows.sm,
     gap: 12,
   },
   expiredRow: {

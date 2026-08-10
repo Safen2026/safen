@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
+import { Shadows } from '../constants/Theme';
 import { SessionContext } from '../context/SessionContext';
 import { useAvatar } from '../hooks/useAvatar';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -14,6 +15,7 @@ import { ConfirmationModal } from './ConfirmationModal';
 export const WelcomeCard = () => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const session = useContext(SessionContext);
   const { avatarUrl, uploading, uploadAvatar } = useAvatar();
 
@@ -192,13 +194,18 @@ export const WelcomeCard = () => {
 };
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 10,
+    backgroundColor: colors.white,
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...Shadows.sm,
     gap: 16,
   },
   avatarWrap: {

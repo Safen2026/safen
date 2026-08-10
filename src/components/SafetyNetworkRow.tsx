@@ -34,6 +34,7 @@ const getInitials = (name: string) =>
 
 export const SafetyNetworkRow = () => {
   const { colors } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors), [colors]);
   const router     = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const isMountedRef = useRef(true);
@@ -163,10 +164,16 @@ export const SafetyNetworkRow = () => {
 };
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
-    paddingTop: 14,
-    paddingBottom: 6,
+    backgroundColor: colors.white,
+    marginHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...Shadows.sm,
   },
   header: {
     flexDirection: 'row',
