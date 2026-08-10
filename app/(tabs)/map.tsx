@@ -4,6 +4,7 @@ import MapView, { Marker, PROVIDER_DEFAULT, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTheme } from '../../src/context/ThemeContext';
 import { useLocalSearchParams } from 'expo-router';
+import { JourneyCard } from '../../src/components/JourneyCard';
 
 export default function MapScreen() {
   const { colors } = useTheme();
@@ -103,6 +104,13 @@ export default function MapScreen() {
           description="Your current location"
         />
       </MapView>
+
+      {/* Floating Journey Tracking Card */}
+      <View style={styles.floatingJourneyWrapper}>
+        <View style={[styles.floatingJourneyCard, { backgroundColor: colors.white, borderColor: colors.border }]}>
+          <JourneyCard onStart={() => {}} />
+        </View>
+      </View>
     </View>
   );
 }
@@ -115,6 +123,22 @@ const getStyles = (colors: any) => StyleSheet.create({
   map: {
     width: '100%',
     height: '100%',
+  },
+  floatingJourneyWrapper: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+  },
+  floatingJourneyCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5,
   },
   centerContainer: {
     flex: 1,

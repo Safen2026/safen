@@ -27,7 +27,6 @@
     },
     "android": {
       "adaptiveIcon": {
-        "package": "com.safen.app",
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
@@ -63,10 +62,11 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/logo.png",
+          "icon": "./assets/android-icon-monochrome.png",
           "color": "#00875A"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "router": {},

@@ -22,6 +22,9 @@ const NOTIFICATION_TYPE_META: Record<AppNotification['type'], { icon: string; co
   contact_added: { icon: 'person-add', color: '#00875A' },
   ping: { icon: 'chatbubbles', color: '#8B5CF6' },
   ping_ack: { icon: 'checkmark-done-circle', color: '#10B981' },
+  check_in_missed: { icon: 'alert-circle', color: '#DC2626' },
+  check_in_reminder: { icon: 'alarm-outline', color: '#F59E0B' },
+  check_in_deadline: { icon: 'warning', color: '#EF4444' },
 };
 
 function timeAgo(iso: string): string {

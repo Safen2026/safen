@@ -75,7 +75,7 @@ export default function HistoryScreen() {
       // 1. Fetch user alerts
       const { data: alertsData } = await supabase
         .from('alerts')
-        .select('id, type, status, created_at, address')
+        .select('id, type, status, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(30);
@@ -96,7 +96,6 @@ export default function HistoryScreen() {
           source: 'alert',
           type: a.type || 'sos',
           title: TYPE_META[a.type]?.label || 'Emergency Alert',
-          address: a.address,
           status: a.status || 'resolved',
           created_at: a.created_at,
         });

@@ -14,39 +14,34 @@ interface JourneyCardProps {
 
 export const JourneyCard = ({ onStart, destination, timeLeft }: JourneyCardProps) => {
   const { colors } = useTheme();
-  const isActive = !!destination;
 
   return (
     <View style={styles.container}>
       {/* Icon */}
-      <View style={[styles.iconBox, { backgroundColor: `${isActive ? colors.primary : colors.text.secondary}14` }]}>
+      <View style={[styles.iconBox, { backgroundColor: `${colors.primary}10` }]}>
         <MaterialCommunityIcons
-          name={isActive ? 'navigation' : 'car-outline'}
+          name="rocket-launch-outline"
           size={19}
-          color={isActive ? colors.primary : colors.text.secondary}
+          color={colors.primary}
         />
       </View>
 
       {/* Text */}
       <View style={styles.textBlock}>
         <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
-          {isActive ? destination : 'No active journey'}
+          Journey Tracking
         </Text>
         <Text style={[styles.sub, { color: colors.text.secondary }]}>
-          {isActive ? timeLeft ?? 'In progress' : 'Start tracking your route'}
+          Live route sharing coming soon!
         </Text>
       </View>
 
-      {/* Quiet text-link CTA — intentionally low visual weight */}
-      <TouchableOpacity
-        onPress={onStart}
-        accessibilityLabel={isActive ? 'View journey' : 'Start a Journey'}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Text style={[styles.ctaText, { color: isActive ? colors.primary : colors.text.secondary }]}>
-          {isActive ? 'View' : 'Start'}
+      {/* Quiet text-link CTA */}
+      <View hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <Text style={[styles.ctaText, { color: colors.text.secondary, opacity: 0.6 }]}>
+          Soon
         </Text>
-      </TouchableOpacity>
+      </View>
     </View>
   );
 };

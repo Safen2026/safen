@@ -10,6 +10,8 @@ import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import app, { firebaseAuth } from '../src/lib/firebase';
 import { PhoneAuthProvider, signInWithCredential, updateProfile } from 'firebase/auth';
 import { supabase } from '../src/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PERMISSIONS_STORAGE_KEY } from './permissions';
 
 const Colors = {
   primary: '#2271EE',
@@ -137,8 +139,17 @@ export default function VerifyScreen() {
       }
       
       setLoading(false);
-      // Verified — go to the app
-      router.replace('/(tabs)');
+      // Check if permissions onboarding was completed
+      try {
+        const done = await AsyncStorage.getItem(PERMISSIONS_STORAGE_KEY);
+        if (done === 'true') {
+          router.replace('/(tabs)');
+        } else {
+          router.replace('/permissions');
+        }
+      } catch {
+        router.replace('/permissions');
+      }
     } catch (err: any) {
       setLoading(false);
       Alert.alert('Verification failed', err.message);
