@@ -5,6 +5,8 @@ import * as Location from 'expo-location';
 import { useTheme } from '../../src/context/ThemeContext';
 import { useLocalSearchParams } from 'expo-router';
 import { JourneyCard } from '../../src/components/JourneyCard';
+import { JourneySetupModal } from '../../src/components/JourneySetupModal';
+import { ActiveJourneyTracker } from '../../src/components/ActiveJourneyTracker';
 
 export default function MapScreen() {
   const { colors } = useTheme();
@@ -12,6 +14,10 @@ export default function MapScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  
+  // Journey state
+  const [showJourneyModal, setShowJourneyModal] = useState(false);
+  const [activeJourney, setActiveJourney] = useState<{ destination: string; mode: string } | null>(null);
 
   const { lat, lng } = useLocalSearchParams<{ lat?: string; lng?: string }>();
   
@@ -107,10 +113,26 @@ export default function MapScreen() {
 
       {/* Floating Journey Tracking Card */}
       <View style={styles.floatingJourneyWrapper}>
-        <View style={[styles.floatingJourneyCard, { backgroundColor: colors.white, borderColor: colors.border }]}>
-          <JourneyCard onStart={() => {}} />
-        </View>
+        {activeJourney ? (
+          <ActiveJourneyTracker
+            destination={activeJourney.destination}
+            mode={activeJourney.mode}
+            onEndJourney={() => setActiveJourney(null)}
+          />
+        ) : (
+          <JourneyCard onStart={() => setShowJourneyModal(true)} />
+        )}
       </View>
+
+      {/* Journey Setup Modal */}
+      <JourneySetupModal
+        visible={showJourneyModal}
+        onClose={() => setShowJourneyModal(false)}
+        onStart={(destination, mode) => {
+          setActiveJourney({ destination, mode });
+          setShowJourneyModal(false);
+        }}
+      />
     </View>
   );
 }
@@ -127,18 +149,8 @@ const getStyles = (colors: any) => StyleSheet.create({
   floatingJourneyWrapper: {
     position: 'absolute',
     bottom: 16,
-    left: 16,
-    right: 16,
-  },
-  floatingJourneyCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 5,
+    left: 0,
+    right: 0,
   },
   centerContainer: {
     flex: 1,

@@ -1,66 +1,64 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { Shadows } from '../constants/Theme';
 
 interface JourneyCardProps {
-  /** Called when the user taps "Start a Journey". Wire up Journey Tracking here. */
   onStart?: () => void;
-  /** Destination label shown when a journey is active. */
-  destination?: string;
-  /** Remaining time string shown when a journey is active, e.g. "14 min left". */
-  timeLeft?: string;
 }
 
-export const JourneyCard = ({ onStart, destination, timeLeft }: JourneyCardProps) => {
+export const JourneyCard = ({ onStart }: JourneyCardProps) => {
   const { colors } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
 
   return (
-    <View style={styles.container}>
-      {/* Icon */}
-      <View style={[styles.iconBox, { backgroundColor: `${colors.primary}10` }]}>
+    <TouchableOpacity 
+      style={styles.container} 
+      onPress={onStart}
+      activeOpacity={0.8}
+    >
+      <View style={[styles.iconBox, { backgroundColor: `${colors.primary}15` }]}>
         <MaterialCommunityIcons
-          name="rocket-launch-outline"
-          size={19}
+          name="navigation-variant-outline"
+          size={22}
           color={colors.primary}
         />
       </View>
 
-      {/* Text */}
       <View style={styles.textBlock}>
         <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
-          Journey Tracking
+          Start a Safe Journey
         </Text>
         <Text style={[styles.sub, { color: colors.text.secondary }]}>
-          Live route sharing coming soon!
+          Share your live route with contacts
         </Text>
       </View>
 
-      {/* Quiet text-link CTA */}
-      <View hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Text style={[styles.ctaText, { color: colors.text.secondary, opacity: 0.6 }]}>
-          Soon
-        </Text>
+      <View style={[styles.actionBadge, { backgroundColor: colors.primary }]}>
+        <MaterialCommunityIcons name="chevron-right" size={20} color="#fff" />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  // Flat row — no card bg, no border, no shadow. Matches WelcomeCard's treatment.
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    marginBottom: 16,
+    backgroundColor: colors.white,
+    marginHorizontal: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...Shadows.sm,
     gap: 14,
   },
   iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -68,16 +66,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 2,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
   },
   sub: {
-    fontSize: 12,
-  },
-  // Text-only CTA — minimal visual footprint
-  ctaText: {
     fontSize: 13,
-    fontWeight: '700',
+  },
+  actionBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

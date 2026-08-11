@@ -11,6 +11,7 @@
       "url": "https://u.expo.dev/91afa9ad-f350-4ac7-b9f9-255bc59225c7"
     },
     "orientation": "portrait",
+    "platforms": ["ios", "android"],
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
