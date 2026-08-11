@@ -17,7 +17,7 @@ if (!isExpoGo) {
 
 export type AppNotification = {
   id: string;
-  type: 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'contact_added' | 'ping' | 'ping_ack';
+  type: 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'contact_added' | 'ping' | 'ping_ack' | 'check_in_missed' | 'check_in_reminder' | 'check_in_deadline';
   title: string;
   body: string;
   sender_name: string | null;

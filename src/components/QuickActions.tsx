@@ -203,10 +203,14 @@ export const QuickActions = () => {
 
 const getStyles = (colors: any) => StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 4,
-    backgroundColor: colors.background,
+    backgroundColor: colors.white,
+    marginHorizontal: 16,
+    padding: 16,
+    marginBottom: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...Shadows.sm,
   },
   sectionTitle: {
     fontSize: 16,
@@ -217,7 +221,6 @@ const getStyles = (colors: any) => StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 16,
   },
   actionCard: {
     flex: 1,
@@ -227,6 +230,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 8,
     alignItems: 'center',
     gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
     ...Shadows.sm,
   },
   iconCircle: {

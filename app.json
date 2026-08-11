@@ -11,6 +11,7 @@
       "url": "https://u.expo.dev/91afa9ad-f350-4ac7-b9f9-255bc59225c7"
     },
     "orientation": "portrait",
+    "platforms": ["ios", "android"],
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "splash": {
@@ -27,7 +28,6 @@
     },
     "android": {
       "adaptiveIcon": {
-        "package": "com.safen.app",
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
@@ -63,10 +63,11 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/logo.png",
+          "icon": "./assets/android-icon-monochrome.png",
           "color": "#00875A"
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "router": {},

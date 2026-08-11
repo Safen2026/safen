@@ -1,0 +1,49 @@
+﻿{
+  "id": "c90c9f5c-36bc-4a83-b6a3-6e4b6fd10af0",
+  "status": "ERRORED",
+  "platform": "ANDROID",
+  "error": {
+    "errorCode": "EAS_BUILD_UNKNOWN_GRADLE_ERROR",
+    "message": "Gradle build failed with unknown error. See logs for the \"Run gradlew\" phase for more information."
+  },
+  "artifacts": {},
+  "fingerprint": {
+    "id": "019fe81f-ca81-7768-b1e9-f0f17e15b440",
+    "hash": "2e79057b1a4cc6bfa5f8b3113d6810556484eb4f"
+  },
+  "initiatingActor": {
+    "id": "97c3611c-cf34-48e4-8b11-44fff18c53c5",
+    "displayName": "kingdave17"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/91afa9ad-f350-4ac7-b9f9-255bc59225c7/c90c9f5c-36bc-4a83-b6a3-6e4b6fd10af0/2026-08-09T20%3A03%3A47Z-c7bca5a8-89e7-4108-bfd4-59a1ff35124d.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260809%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260809T201346Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=8c34424521740067a79df9b7c508f974b30d466c71394f199caf84da2f225d077451adb40d492b2e4b3bdebeadc89ae05ee1a3efc0b6b296380fd947e66e37baeee5b764efde3455a78448b5e9e792be862983694f7dc174f0efe8f5ed8e785ddde92a89499b1a4aae9674ceee65a6bb33cc98881bd658e0d02d75857f66ee7acdd6f71647e78ebf389b4eb5a9b979f6610a8d377e78fab1a4396ee888b57a39a6c2b8ba2c1538861c8ae2b1e4acadb6165de2cbd626988a3d1bf7cda22682c20e701f5034a8a3fe8b3a3f4ed05a80c1d6a082f3caef5cef1f284360daf77edcd8eebbbb42da63107d06a86d8166cd42c893b8b9239fb68eff34a55532f94f46"
+  ],
+  "project": {
+    "id": "91afa9ad-f350-4ac7-b9f9-255bc59225c7",
+    "name": "safen",
+    "slug": "safen",
+    "ownerAccount": {
+      "id": "8f528e49-635f-4955-9d23-a0c75b2b986e",
+      "name": "kingdave17"
+    }
+  },
+  "distribution": "INTERNAL",
+  "buildProfile": "preview",
+  "sdkVersion": "54.0.0",
+  "appVersion": "1.0.0",
+  "appBuildVersion": "1",
+  "runtimeVersion": "1.0.0",
+  "gitCommitHash": "62918aa1732b6ed3ddda3267b5421fb6a3620c26",
+  "gitCommitMessage": "Polish home screen, improve SOS slider and fix contact sync",
+  "priority": "NORMAL",
+  "createdAt": "2026-08-09T20:03:45.366Z",
+  "updatedAt": "2026-08-09T20:06:44.530Z",
+  "completedAt": "2026-08-09T20:06:44.359Z",
+  "expirationDate": "2026-08-23T20:03:45.399Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 1778,
+    "buildQueueTime": 5010,
+    "buildDuration": 172205
+  }
+}

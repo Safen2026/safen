@@ -38,6 +38,16 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+        name="map"
+        options={{
+          title: 'Map',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="map-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
         name="report"
         options={{
           title: 'Report',
@@ -65,12 +75,6 @@ export default function TabLayout() {
             <Ionicons name="person-outline" size={size} color={color} />
           ),
         }}
-      />
-
-      {/* Map is accessible via the sidebar drawer, not the tab bar */}
-      <Tabs.Screen
-        name="map"
-        options={{ href: null }}
       />
     </Tabs>
   );
