@@ -198,14 +198,9 @@ const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.white,
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...Shadows.sm,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 10,
     gap: 16,
   },
   avatarWrap: {

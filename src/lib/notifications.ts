@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export type NotifyType = 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'check_in_missed' | 'check_in_reminder' | 'check_in_deadline';
+export type NotifyType = 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'check_in_missed' | 'check_in_reminder' | 'check_in_deadline' | 'journey_started' | 'journey_arrived';
 
 const TYPE_LABEL: Record<NotifyType, string> = {
   sos: 'SOS Emergency',
@@ -11,6 +11,8 @@ const TYPE_LABEL: Record<NotifyType, string> = {
   check_in_missed: 'Missed Safe Check-In',
   check_in_reminder: 'Safe Check-In Reminder',
   check_in_deadline: 'Safe Check-In Deadline',
+  journey_started: 'Journey Started',
+  journey_arrived: 'Journey Complete',
 };
 
 type NotifyParams = {
@@ -378,4 +380,136 @@ export async function sendPingAck(recipientId: string): Promise<boolean> {
   }
 }
 
+// Notifies all emergency contacts when the user starts a journey.
+export async function notifyJourneyStarted(params: {
+  destination: string;
+  mode: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const senderName = profile?.full_name?.trim() || 'A Safen contact';
+    const modeLabel = params.mode === 'walking' ? 'walking' : 'driving';
+    const title = `🗺️ ${senderName} started a journey`;
+    const body = `${senderName} is ${modeLabel} to ${params.destination}. You'll be notified when they arrive.`;
+
+    const { data: contacts } = await supabase
+      .from('emergency_contacts')
+      .select('contact_user_id')
+      .eq('user_id', user.id)
+      .eq('is_on_app', true)
+      .not('contact_user_id', 'is', null);
+
+    if (!contacts || contacts.length === 0) return;
+
+    const rows = contacts.map(c => ({
+      recipient_id: c.contact_user_id as string,
+      sender_id: user.id,
+      sender_name: senderName,
+      type: 'journey_started' as NotifyType,
+      title,
+      body,
+      latitude: params.latitude ?? null,
+      longitude: params.longitude ?? null,
+    }));
+
+    await supabase.from('notifications').insert(rows);
+
+    const contactIds = contacts.map(c => c.contact_user_id as string);
+    const { data: contactProfiles } = await supabase
+      .from('profiles')
+      .select('expo_push_token')
+      .in('id', contactIds)
+      .not('expo_push_token', 'is', null);
+
+    if (contactProfiles && contactProfiles.length > 0) {
+      const pushMessages = contactProfiles
+        .filter(p => p.expo_push_token?.startsWith('ExponentPushToken'))
+        .map(p => ({ to: p.expo_push_token, sound: 'default', title, body, data: { type: 'journey_started' } }));
+
+      if (pushMessages.length > 0) {
+        fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(pushMessages),
+        }).catch(err => console.warn('Push send failed:', err));
+      }
+    }
+  } catch (err) {
+    console.warn('notifyJourneyStarted error:', err);
+  }
+}
+
+// Notifies all emergency contacts when the user marks their journey as complete.
+export async function notifyJourneyArrived(params: {
+  destination: string;
+}): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const senderName = profile?.full_name?.trim() || 'A Safen contact';
+    const title = `✅ ${senderName} arrived safely`;
+    const body = `${senderName} has arrived at ${params.destination} and marked their journey complete.`;
+
+    const { data: contacts } = await supabase
+      .from('emergency_contacts')
+      .select('contact_user_id')
+      .eq('user_id', user.id)
+      .eq('is_on_app', true)
+      .not('contact_user_id', 'is', null);
+
+    if (!contacts || contacts.length === 0) return;
+
+    const rows = contacts.map(c => ({
+      recipient_id: c.contact_user_id as string,
+      sender_id: user.id,
+      sender_name: senderName,
+      type: 'journey_arrived' as NotifyType,
+      title,
+      body,
+      latitude: null,
+      longitude: null,
+    }));
+
+    await supabase.from('notifications').insert(rows);
+
+    const contactIds = contacts.map(c => c.contact_user_id as string);
+    const { data: contactProfiles } = await supabase
+      .from('profiles')
+      .select('expo_push_token')
+      .in('id', contactIds)
+      .not('expo_push_token', 'is', null);
+
+    if (contactProfiles && contactProfiles.length > 0) {
+      const pushMessages = contactProfiles
+        .filter(p => p.expo_push_token?.startsWith('ExponentPushToken'))
+        .map(p => ({ to: p.expo_push_token, sound: 'default', title, body, data: { type: 'journey_arrived' } }));
+
+      if (pushMessages.length > 0) {
+        fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(pushMessages),
+        }).catch(err => console.warn('Push send failed:', err));
+      }
+    }
+  } catch (err) {
+    console.warn('notifyJourneyArrived error:', err);
+  }
+}

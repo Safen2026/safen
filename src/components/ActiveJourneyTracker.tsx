@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { Shadows } from '../constants/Theme';
@@ -7,45 +7,76 @@ import { Shadows } from '../constants/Theme';
 interface ActiveJourneyTrackerProps {
   destination: string;
   mode: string;
+  elapsedStr: string;
+  isEnding: boolean;
   onEndJourney: () => void;
+  onCancelJourney: () => void;
 }
 
-export const ActiveJourneyTracker = ({ destination, mode, onEndJourney }: ActiveJourneyTrackerProps) => {
+export const ActiveJourneyTracker = ({
+  destination,
+  mode,
+  elapsedStr,
+  isEnding,
+  onEndJourney,
+  onCancelJourney,
+}: ActiveJourneyTrackerProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
 
   return (
     <View style={styles.container}>
+      {/* Header — Live badge + elapsed time */}
       <View style={styles.header}>
         <View style={styles.liveBadge}>
           <View style={styles.liveDot} />
           <Text style={styles.liveText}>LIVE</Text>
         </View>
-        <Text style={styles.etaText}>
-          <Text style={styles.etaTime}>15</Text> min away
-        </Text>
+        <View style={styles.elapsedWrap}>
+          <MaterialCommunityIcons name="timer-outline" size={14} color={colors.text.secondary} />
+          <Text style={styles.elapsedText}>{elapsedStr}</Text>
+        </View>
       </View>
 
+      {/* Journey info row */}
       <View style={styles.infoRow}>
         <View style={[styles.iconBox, { backgroundColor: `${colors.primary}15` }]}>
-          <MaterialCommunityIcons 
-            name={mode === 'walking' ? 'walk' : 'car-outline'} 
-            size={20} 
-            color={colors.primary} 
+          <MaterialCommunityIcons
+            name={mode === 'walking' ? 'walk' : 'car-outline'}
+            size={22}
+            color={colors.primary}
           />
         </View>
         <View style={styles.textBlock}>
           <Text style={styles.label}>Heading to</Text>
-          <Text style={styles.destination}>{destination}</Text>
+          <Text style={styles.destination} numberOfLines={1}>{destination}</Text>
         </View>
       </View>
 
-      <TouchableOpacity 
-        style={[styles.arrivedBtn, { backgroundColor: '#10B981' }]} 
-        onPress={onEndJourney}
-      >
-        <Text style={styles.arrivedText}>Arrived Safely</Text>
-      </TouchableOpacity>
+      {/* Actions */}
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.cancelBtn, { borderColor: colors.border }]}
+          onPress={onCancelJourney}
+          disabled={isEnding}
+        >
+          <Text style={[styles.cancelText, { color: colors.text.secondary }]}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.arrivedBtn, { backgroundColor: '#10B981' }, isEnding && { opacity: 0.7 }]}
+          onPress={onEndJourney}
+          disabled={isEnding}
+        >
+          {isEnding ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="check-circle-outline" size={18} color="#fff" />
+              <Text style={styles.arrivedText}>Arrived Safely</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -55,6 +86,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: 20,
     padding: 16,
+    marginHorizontal: 16,
     borderWidth: 1,
     borderColor: colors.border,
     ...Shadows.lg,
@@ -63,7 +95,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   liveBadge: {
     flexDirection: 'row',
@@ -72,7 +104,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    gap: 6,
+    gap: 5,
   },
   liveDot: {
     width: 6,
@@ -82,25 +114,25 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   liveText: {
     color: '#EF4444',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
-  etaText: {
+  elapsedWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  elapsedText: {
     color: colors.text.secondary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-  },
-  etaTime: {
-    color: colors.text.primary,
-    fontSize: 20,
-    fontWeight: '800',
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   iconBox: {
     width: 44,
@@ -113,25 +145,44 @@ const getStyles = (colors: any) => StyleSheet.create({
     flex: 1,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     color: colors.text.secondary,
     marginBottom: 2,
   },
   destination: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text.primary,
   },
-  arrivedBtn: {
-    paddingVertical: 16,
-    borderRadius: 14,
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cancelText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  arrivedBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     ...Shadows.sm,
   },
   arrivedText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
   },
 });

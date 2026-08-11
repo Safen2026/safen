@@ -1,14 +1,15 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { Shadows } from '../constants/Theme';
 
 interface JourneyCardProps {
   onStart?: () => void;
+  isLoading?: boolean;
 }
 
-export const JourneyCard = ({ onStart }: JourneyCardProps) => {
+export const JourneyCard = ({ onStart, isLoading = false }: JourneyCardProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
 
@@ -19,16 +20,20 @@ export const JourneyCard = ({ onStart }: JourneyCardProps) => {
       activeOpacity={0.8}
     >
       <View style={[styles.iconBox, { backgroundColor: `${colors.primary}15` }]}>
-        <MaterialCommunityIcons
-          name="navigation-variant-outline"
-          size={22}
-          color={colors.primary}
-        />
+        {isLoading ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <MaterialCommunityIcons
+            name="navigation-variant-outline"
+            size={22}
+            color={colors.primary}
+          />
+        )}
       </View>
 
       <View style={styles.textBlock}>
         <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
-          Start a Safe Journey
+          {isLoading ? 'Starting journey...' : 'Start a Safe Journey'}
         </Text>
         <Text style={[styles.sub, { color: colors.text.secondary }]}>
           Share your live route with contacts
