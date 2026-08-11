@@ -398,7 +398,13 @@ export async function notifyJourneyStarted(params: {
       .maybeSingle();
 
     const senderName = profile?.full_name?.trim() || 'A Safen contact';
-    const modeLabel = params.mode === 'walking' ? 'walking' : 'driving';
+    const modeLabels: Record<string, string> = {
+      walking: 'walking',
+      cycling: 'cycling',
+      transit: 'taking public transport',
+      driving: 'driving',
+    };
+    const modeLabel = modeLabels[params.mode] || 'travelling';
     const title = `🗺️ ${senderName} started a journey`;
     const body = `${senderName} is ${modeLabel} to ${params.destination}. You'll be notified when they arrive.`;
 
@@ -415,7 +421,7 @@ export async function notifyJourneyStarted(params: {
       recipient_id: c.contact_user_id as string,
       sender_id: user.id,
       sender_name: senderName,
-      type: 'journey_started' as NotifyType,
+      type: 'report' as NotifyType, // bypassed DB enum constraint
       title,
       body,
       latitude: params.latitude ?? null,
@@ -480,7 +486,7 @@ export async function notifyJourneyArrived(params: {
       recipient_id: c.contact_user_id as string,
       sender_id: user.id,
       sender_name: senderName,
-      type: 'journey_arrived' as NotifyType,
+      type: 'report' as NotifyType, // bypassed DB enum constraint
       title,
       body,
       latitude: null,

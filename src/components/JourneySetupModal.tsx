@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
-  KeyboardAvoidingView, Platform, TouchableWithoutFeedback 
+  KeyboardAvoidingView, Platform, TouchableWithoutFeedback, TextInput 
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -20,18 +20,23 @@ const PRESETS = [
 ];
 
 const MODES = [
-  { id: 'walking', label: 'Walking', icon: 'walk' },
-  { id: 'driving', label: 'Driving', icon: 'car-outline' },
+  { id: 'walking', label: 'Walk', icon: 'walk' },
+  { id: 'cycling', label: 'Cycle', icon: 'bike' },
+  { id: 'transit', label: 'Public Transport', icon: 'bus' },
+  { id: 'driving', label: 'Drive', icon: 'car-outline' },
 ];
 
 export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupModalProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const [destination, setDestination] = useState('Home');
+  const [customDest, setCustomDest] = useState('');
   const [mode, setMode] = useState('driving');
 
   const handleStart = () => {
-    onStart(destination, mode);
+    const finalDest = customDest.trim() || destination;
+    if (!finalDest) return;
+    onStart(finalDest, mode);
   };
 
   return (
@@ -53,12 +58,12 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
           <View style={styles.handle} />
           
           <Text style={styles.title}>Start a Journey</Text>
-          <Text style={styles.subtitle}>Share your live ETA with your safety network.</Text>
+          <Text style={styles.subtitle}>Share your progress with your emergency contacts in real time.</Text>
 
           <Text style={styles.sectionLabel}>Where are you going?</Text>
           <View style={styles.presetRow}>
             {PRESETS.map(p => {
-              const isSelected = destination === p.label;
+              const isSelected = destination === p.label && !customDest;
               return (
                 <TouchableOpacity
                   key={p.id}
@@ -67,7 +72,10 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
                     { borderColor: isSelected ? colors.primary : colors.border },
                     isSelected && { backgroundColor: `${colors.primary}10` }
                   ]}
-                  onPress={() => setDestination(p.label)}
+                  onPress={() => {
+                    setDestination(p.label);
+                    setCustomDest('');
+                  }}
                 >
                   <MaterialCommunityIcons 
                     name={p.icon as any} 
@@ -84,6 +92,20 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
               );
             })}
           </View>
+          
+          <TextInput
+            style={[
+              styles.input,
+              { borderColor: customDest ? colors.primary : colors.border, color: colors.text.primary }
+            ]}
+            placeholder="Or type a custom destination..."
+            placeholderTextColor={colors.text.secondary}
+            value={customDest}
+            onChangeText={(t) => {
+              setCustomDest(t);
+              setDestination('');
+            }}
+          />
 
           <Text style={styles.sectionLabel}>How are you getting there?</Text>
           <View style={styles.modeRow}>
@@ -196,23 +218,32 @@ const getStyles = (colors: any) => StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  input: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 15,
+    marginBottom: 24,
+  },
   modeRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginBottom: 32,
   },
   modeCard: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderRadius: 12,
     borderWidth: 1,
-    gap: 8,
+    gap: 6,
   },
   modeText: {
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: '600',
+    textAlign: 'center',
   },
   actions: {
     flexDirection: 'row',

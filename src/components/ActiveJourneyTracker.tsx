@@ -42,7 +42,11 @@ export const ActiveJourneyTracker = ({
       <View style={styles.infoRow}>
         <View style={[styles.iconBox, { backgroundColor: `${colors.primary}15` }]}>
           <MaterialCommunityIcons
-            name={mode === 'walking' ? 'walk' : 'car-outline'}
+            name={
+              mode === 'walking' ? 'walk' :
+              mode === 'cycling' ? 'bike' :
+              mode === 'transit' ? 'bus' : 'car-outline'
+            }
             size={22}
             color={colors.primary}
           />

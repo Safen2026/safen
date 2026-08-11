@@ -186,7 +186,15 @@ export const Header = () => {
                   });
 
                   const renderCard = (n: AppNotification) => {
-                    const meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+                    let meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+                    
+                    // Intercept journey notifications (bypassed DB enum as 'report')
+                    if (n.title.includes('started a journey')) {
+                      meta = { icon: 'map', color: '#10B981' };
+                    } else if (n.title.includes('arrived safely')) {
+                      meta = { icon: 'checkmark-circle', color: '#10B981' };
+                    }
+
                     const isRequest = n.type === 'contact_added' && n.title === 'Contact Request';
                     return (
                       <View key={n.id} style={[styles.notificationCard, !n.is_read && styles.notificationCardUnread]}>
