@@ -45,7 +45,10 @@ yarn-error.*
 /android
 
 # documentation
-docs/
+# `docs/*` rather than `docs/` so the negation below works — git cannot
+# re-include a path whose parent directory is itself excluded.
+docs/*
+!docs/superpowers/
 *.docx
 ~$*.docx
 
