@@ -5,7 +5,13 @@
  * JS \s matches Unicode spaces (e.g. U+00A0) that Postgres [[:space:]] does not.
  */
 export function normalise(s: string): string {
-  return s.replace(/[ \t\n\r\f\v]+/g, " ").trim().toLowerCase();
+  return s
+    .replace(/[ \t\n\r\f\v]+/g, " ")
+    // JS trim() strips Unicode spaces (U+00A0 and friends) that Postgres btrim() does not,
+    // so we trim only ASCII space to maintain byte-identical normalisation
+    .replace(/^ /, "")
+    .replace(/ $/, "")
+    .toLowerCase();
 }
 
 export async function fingerprint(category: string, description: string): Promise<string> {

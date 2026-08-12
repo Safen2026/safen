@@ -10,7 +10,7 @@ const sql = postgres(url, { prepare: false, onnotice: () => {} });
 
 const proc = new Deno.Command("npx", {
   args: ["deno@2", "run", "supabase/functions/_shared/emit_fingerprint.ts",
-         "security", "Man  took   my  BAG"],
+         "security", "Man\ttook\nmy   BAG"],
   stdout: "piped",
 });
 const expectedFp = new TextDecoder().decode((await proc.output()).stdout).trim();
