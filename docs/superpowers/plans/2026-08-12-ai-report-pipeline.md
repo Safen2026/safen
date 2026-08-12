@@ -1125,6 +1125,16 @@ begin
   assert v_count = 3,         format('expected 3 strikes, got %s', v_count);
   assert v_until > now(),     'three strikes inside the window must ban';
 
+  -- The ban must OUTLIVE the counting window. With window=15 and ban=30,
+  -- strikes aged 20 minutes have left the window (so the visible count drops
+  -- to zero) but the ban still has 10 minutes to run. Without this assertion
+  -- a ban that silently expired at the window boundary would look correct.
+  update public.report_strikes set created_at = now() - interval '20 minutes'
+   where user_id = v_user;
+  select strike_count, banned_until into v_count, v_until from public.strike_state(v_user);
+  assert v_count = 0,     'strikes outside the window must not be counted';
+  assert v_until > now(), 'ban must last ban_minutes even after its strikes age out of the window';
+
   -- Strikes older than the window do not count.
   update public.report_strikes set created_at = now() - interval '48 hours'
    where user_id = v_user;
@@ -1179,21 +1189,41 @@ security definer
 set search_path = public
 as $$
 declare
-  s public.app_settings;
+  s         public.app_settings;
+  v_last    timestamptz;
+  v_at_last integer;
 begin
   s := public.current_settings();
 
-  select count(*)::int, max(created_at)
-    into strike_count, banned_until
+  -- What the user is shown ("2 of 3"): strikes still inside the rolling
+  -- window relative to now. This decays as strikes age out.
+  select count(*)::int into strike_count
     from public.report_strikes
    where user_id = p_user
      and created_at > now() - make_interval(mins => s.strike_window_minutes);
 
-  if strike_count >= s.strike_threshold then
-    banned_until := banned_until + make_interval(mins => s.ban_minutes);
-    if banned_until <= now() then banned_until := null; end if;
-  else
-    banned_until := null;
+  select max(created_at) into v_last
+    from public.report_strikes
+   where user_id = p_user;
+
+  banned_until := null;
+
+  if v_last is not null then
+    -- Was the threshold met AT THE MOMENT of the most recent strike?
+    -- Deriving the ban from the live window instead would let it expire as
+    -- soon as the triggering strikes aged out — capping every ban at
+    -- strike_window_minutes and silently ignoring ban_minutes entirely
+    -- (with the defaults, a "30 minute" ban really lasted about 15).
+    select count(*)::int into v_at_last
+      from public.report_strikes
+     where user_id = p_user
+       and created_at <= v_last
+       and created_at >  v_last - make_interval(mins => s.strike_window_minutes);
+
+    if v_at_last >= s.strike_threshold
+       and v_last + make_interval(mins => s.ban_minutes) > now() then
+      banned_until := v_last + make_interval(mins => s.ban_minutes);
+    end if;
   end if;
 
   return next;
