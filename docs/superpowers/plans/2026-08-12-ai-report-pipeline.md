@@ -22,7 +22,7 @@
 - **RLS is enabled on every new table in the same migration that creates it.** `report_quality_tokens` and `ai_usage_log` get no client-facing policy at all.
 - **The gate trigger is `SECURITY DEFINER` with `set search_path = public, extensions`.** A definer function with a mutable search_path is a privilege-escalation vector.
 - **Tunables live in `app_settings`, not env vars** — the trigger cannot read function secrets.
-- Fingerprint normalisation is: collapse `[ \t\n\r\f\v]+` to a single space → trim → lowercase. The TS and SQL implementations must agree byte for byte.
+- Fingerprint normalisation is: collapse `[ \t\n\r\f\v]+` to a single space → strip one leading and one trailing ASCII space → lowercase. The TS and SQL implementations must agree byte for byte. **Never use JS `.trim()`** — it strips Unicode whitespace (U+00A0 and friends) that Postgres `btrim()` does not, which silently breaks the invariant on text pasted from Word or WhatsApp.
 
 ---
 
@@ -162,6 +162,12 @@ Deno.test("fingerprint changes when meaning changes", async () => {
 Deno.test("fingerprint is 64 lowercase hex chars", async () => {
   assertMatch(await fingerprint("fire", "smoke on allen avenue"), /^[0-9a-f]{64}$/);
 });
+
+Deno.test("a non-breaking space is NOT treated as whitespace", () => {
+  // Postgres btrim() does not strip U+00A0, so JS must not either, or the
+  // TS and SQL fingerprints diverge on text pasted from Word or WhatsApp.
+  assertEquals(normalise(" hello "), " hello ");
+});
 ```
 
 - [ ] **Step 4: Run it and watch it fail**
@@ -184,7 +190,15 @@ Expected: FAIL — `Module not found "./fingerprint.ts"`.
  * JS \s matches Unicode spaces (e.g. U+00A0) that Postgres [[:space:]] does not.
  */
 export function normalise(s: string): string {
-  return s.replace(/[ \t\n\r\f\v]+/g, " ").trim().toLowerCase();
+  return s
+    .replace(/[ \t\n\r\f\v]+/g, " ")
+    // NOT .trim(): JS trim() strips the full Unicode whitespace set, including
+    // U+00A0, which Postgres btrim() (ASCII space only) leaves in place. Using
+    // it reintroduces TS/SQL drift on text pasted from Word or WhatsApp.
+    // After the collapse above, at most one leading/trailing space remains.
+    .replace(/^ /, "")
+    .replace(/ $/, "")
+    .toLowerCase();
 }
 
 export async function fingerprint(category: string, description: string): Promise<string> {
@@ -200,7 +214,7 @@ export async function fingerprint(category: string, description: string): Promis
 npx deno@2 test -A supabase/functions/_shared/fingerprint_test.ts
 ```
 
-Expected: `ok | 5 passed | 0 failed`.
+Expected: `ok | 6 passed | 0 failed`.
 
 - [ ] **Step 7: Write the emitter**
 
@@ -269,12 +283,23 @@ begin
   assert public.report_payload_fingerprint('fire', 'smoke') ~ '^[0-9a-f]{64}$',
     'fingerprint is not 64 lowercase hex chars';
 
-  -- Agreement with the TypeScript implementation. Regenerate with:
-  --   npx deno@2 run supabase/functions/_shared/emit_fingerprint.ts "security" "Man  took   my  BAG"
-  assert public.report_payload_fingerprint('security', 'Man  took   my  BAG')
+  -- Vertical tab must collapse, which proves the E'[ \\t\\n\\r\\f\\v]+'
+  -- double-backslash escaping survived the E-string decoder. Postgres does not
+  -- recognise \v as a string escape, so a single backslash would silently
+  -- decode to the letter "v" and break the class without any error.
+  assert public.report_payload_fingerprint('security', E'a\vb')
+       = public.report_payload_fingerprint('security', 'a b'),
+    'vertical tab is not being collapsed — check the E-string escaping';
+
+  -- Agreement with the TypeScript implementation. The input carries a tab AND
+  -- a newline deliberately: an all-spaces input would pass even with naive
+  -- whitespace handling, proving nothing about the two engines agreeing.
+  -- Regenerate with:
+  --   npx deno@2 run supabase/functions/_shared/emit_fingerprint.ts "security" $'Man\ttook\nmy   BAG'
+  assert public.report_payload_fingerprint('security', E'Man\ttook\nmy   BAG')
        = current_setting('safen.expected_fp', true),
     format('SQL/TS fingerprint drift: sql=%s ts=%s',
-           public.report_payload_fingerprint('security', 'Man  took   my  BAG'),
+           public.report_payload_fingerprint('security', E'Man\ttook\nmy   BAG'),
            current_setting('safen.expected_fp', true));
 end $$;
 ```
@@ -286,7 +311,7 @@ Add to `run_sql_tests.ts`, immediately after the `sql` client is constructed:
 ```ts
 const proc = new Deno.Command("npx", {
   args: ["deno@2", "run", "supabase/functions/_shared/emit_fingerprint.ts",
-         "security", "Man  took   my  BAG"],
+         "security", "Man\ttook\nmy   BAG"],
   stdout: "piped",
 });
 const expectedFp = new TextDecoder().decode((await proc.output()).stdout).trim();
