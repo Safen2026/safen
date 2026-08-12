@@ -32,21 +32,41 @@ security definer
 set search_path = public
 as $$
 declare
-  s public.app_settings;
+  s         public.app_settings;
+  v_last    timestamptz;
+  v_at_last integer;
 begin
-  s := current_settings();
+  s := public.current_settings();
 
-  select count(*)::int, max(created_at)
-    into strike_count, banned_until
+  -- What the user is shown ("2 of 3"): strikes still inside the rolling
+  -- window relative to now. This decays as strikes age out.
+  select count(*)::int into strike_count
     from public.report_strikes
    where user_id = p_user
      and created_at > now() - make_interval(mins => s.strike_window_minutes);
 
-  if strike_count >= s.strike_threshold then
-    banned_until := banned_until + make_interval(mins => s.ban_minutes);
-    if banned_until <= now() then banned_until := null; end if;
-  else
-    banned_until := null;
+  select max(created_at) into v_last
+    from public.report_strikes
+   where user_id = p_user;
+
+  banned_until := null;
+
+  if v_last is not null then
+    -- Was the threshold met AT THE MOMENT of the most recent strike?
+    -- Deriving the ban from the live window instead would let it expire as
+    -- soon as the triggering strikes aged out — capping every ban at
+    -- strike_window_minutes and silently ignoring ban_minutes entirely
+    -- (with the defaults, a "30 minute" ban really lasted about 15).
+    select count(*)::int into v_at_last
+      from public.report_strikes
+     where user_id = p_user
+       and created_at <= v_last
+       and created_at >  v_last - make_interval(mins => s.strike_window_minutes);
+
+    if v_at_last >= s.strike_threshold
+       and v_last + make_interval(mins => s.ban_minutes) > now() then
+      banned_until := v_last + make_interval(mins => s.ban_minutes);
+    end if;
   end if;
 
   return next;

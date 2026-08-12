@@ -20,6 +20,16 @@ begin
   assert v_count = 3,         format('expected 3 strikes, got %s', v_count);
   assert v_until > now(),     'three strikes inside the window must ban';
 
+  -- The ban must OUTLIVE the counting window. With window=15 and ban=30,
+  -- strikes aged 20 minutes have left the window (so the visible count drops
+  -- to zero) but the ban still has 10 minutes to run. Without this assertion
+  -- a ban that silently expired at the window boundary would look correct.
+  update public.report_strikes set created_at = now() - interval '20 minutes'
+   where user_id = v_user;
+  select strike_count, banned_until into v_count, v_until from public.strike_state(v_user);
+  assert v_count = 0,     'strikes outside the window must not be counted';
+  assert v_until > now(), 'ban must last ban_minutes even after its strikes age out of the window';
+
   -- Strikes older than the window do not count.
   update public.report_strikes set created_at = now() - interval '48 hours'
    where user_id = v_user;
