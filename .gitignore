@@ -52,6 +52,9 @@ docs/*
 *.docx
 ~$*.docx
 
+# subagent-driven-development scratch (ledger, briefs, review packages)
+.superpowers/
+
 # test & scratch scripts
 test*.js
 test*.ts
