@@ -536,6 +536,7 @@ do $$
 declare
   v_user uuid;
   v_token text := 'tok_test_' || gen_random_uuid()::text;
+  v_token2 text;
   v_id uuid;
   v_status text;
   v_reason text;
@@ -572,15 +573,37 @@ begin
     'token was not marked used';
   delete from public.reports where id = v_id;
 
-  -- Enforcing: altered text after approval must be rejected.
+  -- Enforcing: an already-spent token is rejected as USED.
   update public.app_settings set quality_gate_mode = 'enforcing';
   begin
     insert into public.reports (user_id, category, description, status, quality_token)
-    values (v_user, 'security', 'COMPLETELY different text', 'open', v_token);
+    values (v_user, 'security', 'a real description here', 'open', v_token);
+    assert false, 'enforcing mode admitted an already-used token';
+  exception when others then
+    assert sqlerrm like '%QUALITY_GATE_TOKEN_USED%',
+      format('expected TOKEN_USED, got: %s', sqlerrm);
+  end;
+
+  -- Enforcing: a FRESH token whose text changed after approval is rejected
+  -- as PAYLOAD_MISMATCH. This needs its own unspent token: reusing the one
+  -- above short-circuits on TOKEN_USED and never reaches the fingerprint
+  -- comparison, which would leave that branch entirely untested.
+  v_token2 := 'tok_test_' || gen_random_uuid()::text;
+  insert into public.report_quality_tokens
+    (user_id, token_sha256, payload_fingerprint, verdict, expires_at)
+  values (v_user, public.sha256_hex(v_token2),
+          public.report_payload_fingerprint('security', 'the approved text'),
+          'passed', now() + interval '15 minutes');
+  begin
+    insert into public.reports (user_id, category, description, status, quality_token)
+    values (v_user, 'security', 'COMPLETELY different text', 'open', v_token2);
     assert false, 'enforcing mode admitted a payload mismatch';
   exception when others then
-    assert sqlerrm like '%QUALITY_GATE%', format('unexpected error: %s', sqlerrm);
+    assert sqlerrm like '%QUALITY_GATE_PAYLOAD_MISMATCH%',
+      format('expected PAYLOAD_MISMATCH, got: %s', sqlerrm);
   end;
+  delete from public.report_quality_tokens
+   where token_sha256 = public.sha256_hex(v_token2);
 
   update public.app_settings set quality_gate_mode = 'advisory';
   delete from public.report_quality_tokens where token_sha256 = public.sha256_hex(v_token);
@@ -622,7 +645,12 @@ begin
     reason := 'QUALITY_GATE_TOKEN_MISSING';
   else
     select * into tok from public.report_quality_tokens
-     where token_sha256 = public.sha256_hex(new.quality_token);
+     where token_sha256 = public.sha256_hex(new.quality_token)
+     -- FOR UPDATE is load-bearing: without the row lock two concurrent
+     -- inserts carrying the same token both read used_at as null, both
+     -- pass, and a single-use token admits two reports. The lock makes the
+     -- second transaction wait, then re-read the committed used_at.
+     for update;
 
     if not found then                                   reason := 'QUALITY_GATE_TOKEN_UNKNOWN';
     elsif tok.used_at is not null then                  reason := 'QUALITY_GATE_TOKEN_USED';
@@ -635,7 +663,8 @@ begin
   end if;
 
   if reason is null then
-    update public.report_quality_tokens set used_at = now() where id = tok.id;
+    update public.report_quality_tokens set used_at = now()
+     where id = tok.id and used_at is null;
     new.quality_status     := tok.verdict;
     new.quality_checked_at := now();
     new.gate_reason        := null;
@@ -643,7 +672,10 @@ begin
     if s.quality_gate_mode = 'enforcing' then
       raise exception '%', reason using errcode = 'P0001';
     end if;
-    new.quality_status := coalesce(new.quality_status, 'advisory_failed');
+    -- Unconditional, not coalesce: this trigger owns the column outright.
+    -- A coalesce would let a client that supplied quality_status='passed'
+    -- in its own INSERT keep that forged value on a failed gate.
+    new.quality_status := 'advisory_failed';
     new.gate_reason    := reason;
   end if;
 
@@ -785,7 +817,12 @@ begin
     reason := 'QUALITY_GATE_TOKEN_MISSING';
   else
     select * into tok from public.report_quality_tokens
-     where token_sha256 = public.sha256_hex(new.quality_token);
+     where token_sha256 = public.sha256_hex(new.quality_token)
+     -- FOR UPDATE is load-bearing: without the row lock two concurrent
+     -- inserts carrying the same token both read used_at as null, both
+     -- pass, and a single-use token admits two reports. The lock makes the
+     -- second transaction wait, then re-read the committed used_at.
+     for update;
 
     if not found then                                   reason := 'QUALITY_GATE_TOKEN_UNKNOWN';
     elsif tok.used_at is not null then                  reason := 'QUALITY_GATE_TOKEN_USED';
@@ -798,7 +835,8 @@ begin
   end if;
 
   if reason is null then
-    update public.report_quality_tokens set used_at = now() where id = tok.id;
+    update public.report_quality_tokens set used_at = now()
+     where id = tok.id and used_at is null;
     new.quality_status     := tok.verdict;
     new.quality_checked_at := now();
     new.gate_reason        := null;
@@ -817,10 +855,13 @@ begin
     if s.quality_gate_mode = 'enforcing' then
       raise exception '%', reason using errcode = 'P0001';
     end if;
-    new.quality_status := coalesce(new.quality_status, 'advisory_failed');
+    -- Unconditional, not coalesce: this trigger owns the column outright.
+    -- A coalesce would let a client that supplied quality_status='passed'
+    -- in its own INSERT keep that forged value on a failed gate.
+    new.quality_status := 'advisory_failed';
     new.gate_reason    := reason;
-    new.priority       := coalesce(new.priority, 'medium');
-    new.priority_rank  := coalesce(new.priority_rank, 2);
+    new.priority       := 'medium';
+    new.priority_rank  := 2;
   end if;
 
   new.quality_token := null;
@@ -974,7 +1015,12 @@ begin
     reason := 'QUALITY_GATE_TOKEN_MISSING';
   else
     select * into tok from public.report_quality_tokens
-     where token_sha256 = public.sha256_hex(new.quality_token);
+     where token_sha256 = public.sha256_hex(new.quality_token)
+     -- FOR UPDATE is load-bearing: without the row lock two concurrent
+     -- inserts carrying the same token both read used_at as null, both
+     -- pass, and a single-use token admits two reports. The lock makes the
+     -- second transaction wait, then re-read the committed used_at.
+     for update;
 
     if not found then                                   reason := 'QUALITY_GATE_TOKEN_UNKNOWN';
     elsif tok.used_at is not null then                  reason := 'QUALITY_GATE_TOKEN_USED';
@@ -987,7 +1033,8 @@ begin
   end if;
 
   if reason is null then
-    update public.report_quality_tokens set used_at = now() where id = tok.id;
+    update public.report_quality_tokens set used_at = now()
+     where id = tok.id and used_at is null;
     new.quality_status     := tok.verdict;
     new.quality_checked_at := now();
     new.gate_reason        := null;
@@ -1006,10 +1053,13 @@ begin
     if s.quality_gate_mode = 'enforcing' then
       raise exception '%', reason using errcode = 'P0001';
     end if;
-    new.quality_status := coalesce(new.quality_status, 'advisory_failed');
+    -- Unconditional, not coalesce: this trigger owns the column outright.
+    -- A coalesce would let a client that supplied quality_status='passed'
+    -- in its own INSERT keep that forged value on a failed gate.
+    new.quality_status := 'advisory_failed';
     new.gate_reason    := reason;
-    new.priority       := coalesce(new.priority, 'medium');
-    new.priority_rank  := coalesce(new.priority_rank, 2);
+    new.priority       := 'medium';
+    new.priority_rank  := 2;
   end if;
 
   new.quality_token := null;
