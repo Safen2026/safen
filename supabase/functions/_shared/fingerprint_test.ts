@@ -26,7 +26,8 @@ Deno.test("fingerprint is 64 lowercase hex chars", async () => {
 });
 
 Deno.test("a non-breaking space is NOT treated as whitespace", () => {
-  // Postgres btrim() does not strip U+00A0, so JS must not either, or the
-  // TS and SQL fingerprints diverge on text pasted from Word or WhatsApp.
-  assertEquals(normalise(" "), " ");
+  // Postgres btrim() strips only ASCII space, so JS must not strip U+00A0
+  // either, or the two fingerprints diverge on text pasted from Word/WhatsApp.
+  const nbsp = "\u00A0";
+  assertEquals(normalise(`${nbsp}hello${nbsp}`), `${nbsp}hello${nbsp}`);
 });

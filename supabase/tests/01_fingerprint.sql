@@ -22,7 +22,9 @@ begin
            public.report_payload_fingerprint('security', E'Man\ttook\nmy   BAG'),
            current_setting('safen.expected_fp', true));
 
-  assert public.report_payload_fingerprint('security', E'a\vb')
+  -- chr(11) rather than E'\v': Postgres escape strings do not recognise \v,
+  -- so E'a\vb' silently decodes to "avb" and the assertion would test nothing.
+  assert public.report_payload_fingerprint('security', 'a' || chr(11) || 'b')
        = public.report_payload_fingerprint('security', 'a b'),
-    'vertical tab is not being collapsed — check the E-string escaping';
+    'vertical tab is not being collapsed — check the E-string escaping in the migration';
 end $$;
