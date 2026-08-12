@@ -2,6 +2,7 @@ do $$
 declare
   v_user uuid;
   v_token text := 'tok_test_' || gen_random_uuid()::text;
+  v_token2 text;
   v_id uuid;
   v_status text;
   v_reason text;
@@ -38,15 +39,37 @@ begin
     'token was not marked used';
   delete from public.reports where id = v_id;
 
-  -- Enforcing: altered text after approval must be rejected.
+  -- Enforcing: an already-spent token is rejected as USED.
   update public.app_settings set quality_gate_mode = 'enforcing';
   begin
     insert into public.reports (user_id, category, description, status, quality_token)
-    values (v_user, 'security', 'COMPLETELY different text', 'open', v_token);
+    values (v_user, 'security', 'a real description here', 'open', v_token);
+    assert false, 'enforcing mode admitted an already-used token';
+  exception when others then
+    assert sqlerrm like '%QUALITY_GATE_TOKEN_USED%',
+      format('expected TOKEN_USED, got: %s', sqlerrm);
+  end;
+
+  -- Enforcing: a FRESH token whose text changed after approval is rejected
+  -- as PAYLOAD_MISMATCH. This needs its own unspent token: reusing the one
+  -- above short-circuits on TOKEN_USED and never reaches the fingerprint
+  -- comparison, which would leave that branch entirely untested.
+  v_token2 := 'tok_test_' || gen_random_uuid()::text;
+  insert into public.report_quality_tokens
+    (user_id, token_sha256, payload_fingerprint, verdict, expires_at)
+  values (v_user, public.sha256_hex(v_token2),
+          public.report_payload_fingerprint('security', 'the approved text'),
+          'passed', now() + interval '15 minutes');
+  begin
+    insert into public.reports (user_id, category, description, status, quality_token)
+    values (v_user, 'security', 'COMPLETELY different text', 'open', v_token2);
     assert false, 'enforcing mode admitted a payload mismatch';
   exception when others then
-    assert sqlerrm like '%QUALITY_GATE%', format('unexpected error: %s', sqlerrm);
+    assert sqlerrm like '%QUALITY_GATE_PAYLOAD_MISMATCH%',
+      format('expected PAYLOAD_MISMATCH, got: %s', sqlerrm);
   end;
+  delete from public.report_quality_tokens
+   where token_sha256 = public.sha256_hex(v_token2);
 
   update public.app_settings set quality_gate_mode = 'advisory';
   delete from public.report_quality_tokens where token_sha256 = public.sha256_hex(v_token);
