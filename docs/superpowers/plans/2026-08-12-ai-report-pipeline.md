@@ -164,9 +164,11 @@ Deno.test("fingerprint is 64 lowercase hex chars", async () => {
 });
 
 Deno.test("a non-breaking space is NOT treated as whitespace", () => {
-  // Postgres btrim() does not strip U+00A0, so JS must not either, or the
-  // TS and SQL fingerprints diverge on text pasted from Word or WhatsApp.
-  assertEquals(normalise(" hello "), " hello ");
+  // Postgres btrim() strips only ASCII space, so JS must not strip U+00A0
+  // either, or the two fingerprints diverge on text pasted from Word/WhatsApp.
+  // Always the \u00A0 escape — never a literal NBSP, which no reviewer can see.
+  const nbsp = "\u00A0";
+  assertEquals(normalise(`${nbsp}hello${nbsp}`), `${nbsp}hello${nbsp}`);
 });
 ```
 
@@ -283,11 +285,12 @@ begin
   assert public.report_payload_fingerprint('fire', 'smoke') ~ '^[0-9a-f]{64}$',
     'fingerprint is not 64 lowercase hex chars';
 
-  -- Vertical tab must collapse, which proves the E'[ \\t\\n\\r\\f\\v]+'
-  -- double-backslash escaping survived the E-string decoder. Postgres does not
-  -- recognise \v as a string escape, so a single backslash would silently
-  -- decode to the letter "v" and break the class without any error.
-  assert public.report_payload_fingerprint('security', E'a\vb')
+  -- Vertical tab must collapse, proving the E'[ \\t\\n\\r\\f\\v]+' pattern's
+  -- doubled backslashes reach the regex engine intact.
+  -- chr(11) rather than E'a\vb': Postgres escape strings recognise only
+  -- \b \f \n \r \t plus octal/hex, so E'a\vb' silently decodes to "avb"
+  -- and the assertion would compare two unrelated strings and fail.
+  assert public.report_payload_fingerprint('security', 'a' || chr(11) || 'b')
        = public.report_payload_fingerprint('security', 'a b'),
     'vertical tab is not being collapsed — check the E-string escaping';
 
