@@ -32,8 +32,8 @@ This repo has **no test framework, no Docker, and no `psql`** — so before any 
 
 | Layer | Tool | Command |
 |---|---|---|
-| Edge Function pure logic | Deno's built-in runner (zero install) | `npx deno@2 test -A supabase/functions/` |
-| Edge Function types | `deno check` | `npx deno@2 check supabase/functions/check-report-quality/index.ts` |
+| Edge Function pure logic | Deno's built-in runner (zero install) | `npx deno@2 test -A --config supabase/functions/deno.json supabase/functions/` |
+| Edge Function types | `deno check` | `npx deno@2 check --config supabase/functions/deno.json supabase/functions/check-report-quality/index.ts` |
 | SQL / migrations | Custom Deno harness using `npm:postgres` | `npx deno@2 run -A supabase/tests/run_sql_tests.ts` |
 | Client TypeScript | tsc + eslint | `npx tsc --noEmit` && `npx expo lint` |
 | End to end | Manual, against the deployed function | Task 12 |
@@ -1870,7 +1870,7 @@ Deno.test("a report with no coordinates flags location", () => {
 - [ ] **Step 2: Run it and watch it fail**
 
 ```bash
-npx deno@2 test -A supabase/functions/check-report-quality/prefilter_test.ts
+npx deno@2 test -A --config supabase/functions/deno.json supabase/functions/check-report-quality/prefilter_test.ts
 ```
 
 Expected: FAIL — `Module not found "./prefilter.ts"`.
@@ -1938,7 +1938,7 @@ export function prefilter(input: CheckInput, minWords: number): PrefilterResult 
 - [ ] **Step 4: Run the tests and watch them pass**
 
 ```bash
-npx deno@2 test -A supabase/functions/check-report-quality/prefilter_test.ts
+npx deno@2 test -A --config supabase/functions/deno.json supabase/functions/check-report-quality/prefilter_test.ts
 ```
 
 Expected: `ok | 7 passed | 0 failed`.
@@ -2035,7 +2035,7 @@ Deno.test("a missing API key fails open rather than throwing", async () => {
 - [ ] **Step 2: Run it and watch it fail**
 
 ```bash
-npx deno@2 test -A supabase/functions/check-report-quality/claude_test.ts
+npx deno@2 test -A --config supabase/functions/deno.json supabase/functions/check-report-quality/claude_test.ts
 ```
 
 Expected: FAIL — `Module not found "./claude.ts"`.
@@ -2188,7 +2188,7 @@ export async function assessQuality(
 - [ ] **Step 4: Run the tests and watch them pass**
 
 ```bash
-npx deno@2 test -A supabase/functions/check-report-quality/claude_test.ts
+npx deno@2 test -A --config supabase/functions/deno.json supabase/functions/check-report-quality/claude_test.ts
 ```
 
 Expected: `ok | 6 passed | 0 failed`. The last test proves fail-open works with no key present.
@@ -2326,7 +2326,7 @@ Deno.test("over the daily ceiling fails OPEN without a model call", async () => 
 - [ ] **Step 2: Run it and watch it fail**
 
 ```bash
-npx deno@2 test -A supabase/functions/check-report-quality/index_test.ts
+npx deno@2 test -A --config supabase/functions/deno.json supabase/functions/check-report-quality/index_test.ts
 ```
 
 Expected: FAIL — `Module not found "./index.ts"`.
@@ -2526,8 +2526,8 @@ Deno.serve(async (req) => {
 - [ ] **Step 5: Run the tests and the type check**
 
 ```bash
-npx deno@2 test -A supabase/functions/check-report-quality/index_test.ts
-npx deno@2 check supabase/functions/check-report-quality/index.ts
+npx deno@2 test -A --config supabase/functions/deno.json supabase/functions/check-report-quality/index_test.ts
+npx deno@2 check --config supabase/functions/deno.json supabase/functions/check-report-quality/index.ts
 ```
 
 Expected: `ok | 6 passed | 0 failed`, and a clean `check`.
@@ -3014,8 +3014,8 @@ git commit -m "feat(ai): wire report screen to the quality check, add missing-pe
 - [ ] **Step 1: Run the full verification suite**
 
 ```bash
-npx deno@2 test -A supabase/functions/
-npx deno@2 check supabase/functions/check-report-quality/index.ts
+npx deno@2 test -A --config supabase/functions/deno.json supabase/functions/
+npx deno@2 check --config supabase/functions/deno.json supabase/functions/check-report-quality/index.ts
 npx tsc --noEmit
 npx expo lint
 npx deno@2 run -A supabase/tests/run_sql_tests.ts    # still against REHEARSAL
