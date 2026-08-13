@@ -1,0 +1,55 @@
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { fingerprint } from "../_shared/fingerprint.ts";
+import type { CheckInput } from "./prefilter.ts";
+
+export function serviceClient(): SupabaseClient {
+  return createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    { auth: { persistSession: false } },
+  );
+}
+
+export async function loadSettings(db: SupabaseClient) {
+  const { data } = await db.from("app_settings").select("*").limit(1).maybeSingle();
+  return data;
+}
+
+export async function strikeState(db: SupabaseClient, userId: string) {
+  const { data } = await db.rpc("strike_state", { p_user: userId });
+  const row = Array.isArray(data) ? data[0] : data;
+  return { strike_count: row?.strike_count ?? 0, banned_until: row?.banned_until ?? null };
+}
+
+export async function callsToday(db: SupabaseClient, userId: string): Promise<number> {
+  const { data } = await db.rpc("ai_calls_today", { p_user: userId });
+  return typeof data === "number" ? data : 0;
+}
+
+export async function recordStrike(db: SupabaseClient, userId: string, reason: string) {
+  await db.rpc("record_strike", { p_user: userId, p_reason: reason });
+}
+
+export async function logUsage(db: SupabaseClient, row: Record<string, unknown>) {
+  await db.from("ai_usage_log").insert(row);
+}
+
+export async function mintToken(
+  db: SupabaseClient, userId: string, input: CheckInput,
+  verdict: "passed" | "skipped_ai_unavailable" | "skipped_quota",
+  priority: string | null,
+) {
+  const token = `sq_${crypto.randomUUID()}${crypto.randomUUID()}`.replace(/-/g, "");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  const tokenSha = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const expires = new Date(Date.now() + 15 * 60_000).toISOString();
+
+  await db.from("report_quality_tokens").insert({
+    user_id: userId,
+    token_sha256: tokenSha,
+    payload_fingerprint: await fingerprint(input.category, input.description),
+    verdict, priority, expires_at: expires,
+  });
+
+  return { token, expires_at: expires };
+}
