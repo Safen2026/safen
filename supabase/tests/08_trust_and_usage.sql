@@ -55,4 +55,45 @@ begin
   assert v_calls = 1, format('expected 1 call today, got %s', v_calls);
 
   delete from public.ai_usage_log where user_id = v_user;
+
+  -- Drive the REAL path: cluster_report() reaching the threshold. The earlier
+  -- block hand-sets cluster_id before confirmed_at, so it can never catch the
+  -- ordering bug this exercises.
+  declare
+    v_u1 uuid; v_u2 uuid; v_ra uuid; v_rb uuid; v_c uuid;
+    v_cbefore int; v_cafter int; v_old_confirm int;
+  begin
+    select id into v_u1 from public.profiles limit 1;
+    select id into v_u2 from public.profiles where id <> v_u1 limit 1;
+    assert v_u2 is not null, 'seed at least two profiles in the rehearsal project';
+
+    select cluster_confirm_count into v_old_confirm from public.app_settings;
+    update public.app_settings set cluster_confirm_count = 2;
+    select reports_confirmed into v_cbefore from public.profiles where id = v_u2;
+
+    insert into public.reports (user_id, category, description, status, latitude, longitude)
+    values (v_u1, 'security', 'tipping test first reporter', 'open', 6.9000, 3.9000)
+    returning id into v_ra;
+
+    insert into public.reports (user_id, category, description, status, latitude, longitude)
+    values (v_u2, 'security', 'tipping test second reporter', 'open', 6.9001, 3.9000)
+    returning id into v_rb;
+
+    select cluster_id into v_c from public.reports where id = v_rb;
+    assert v_c is not null, 'the second report did not cluster';
+    assert (select confirmed_at from public.incident_clusters where id = v_c) is not null,
+      'cluster did not confirm on reaching the threshold';
+
+    assert (select verification_status from public.reports where id = v_rb) = 'confirmed',
+      'the report that TIPPED the cluster was left pending';
+    assert (select verification_status from public.reports where id = v_ra) = 'confirmed',
+      'an earlier report in the cluster was left pending';
+
+    select reports_confirmed into v_cafter from public.profiles where id = v_u2;
+    assert v_cafter = v_cbefore + 1, 'the tipping reporter was not credited';
+
+    delete from public.reports where id in (v_ra, v_rb);
+    delete from public.incident_clusters where id = v_c;
+    update public.app_settings set cluster_confirm_count = v_old_confirm;
+  end;
 end $$;

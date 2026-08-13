@@ -98,3 +98,98 @@ drop trigger if exists trg_record_cluster_confirmation on public.incident_cluste
 create trigger trg_record_cluster_confirmation
   after update on public.incident_clusters
   for each row execute function public.record_cluster_confirmation();
+
+-- Replaces Task 7's cluster_report(). Two ordering defects made the trust
+-- signals systematically wrong, and neither is visible from either migration
+-- alone — they only exist in the interaction:
+--   1. reports.cluster_id was written AFTER confirmed_at, so the report that
+--      tipped a cluster over the threshold was invisible to the confirmation
+--      sweep and its author was never credited.
+--   2. record_cluster_confirmation fires only on the confirmed_at
+--      null -> not null transition, i.e. once per cluster ever, so every
+--      report joining an ALREADY confirmed cluster stayed 'pending' forever.
+create or replace function public.cluster_report()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  s public.app_settings;
+  c uuid;
+  v_confirmed timestamptz;
+begin
+  if new.latitude is null or new.longitude is null then return new; end if;
+  s := public.current_settings();
+
+  select ic.id into c
+    from public.incident_clusters ic
+   where ic.category = new.category
+     and ic.last_reported_at > now() - make_interval(mins => s.dupe_window_minutes)
+     and ic.centroid_lat between new.latitude  - (s.dupe_radius_meters / 111320.0)
+                             and new.latitude  + (s.dupe_radius_meters / 111320.0)
+     and ic.centroid_lng between new.longitude - (s.dupe_radius_meters / (111320.0 * cos(radians(new.latitude))))
+                             and new.longitude + (s.dupe_radius_meters / (111320.0 * cos(radians(new.latitude))))
+     and public.haversine_meters(ic.centroid_lat, ic.centroid_lng, new.latitude, new.longitude)
+         <= s.dupe_radius_meters
+   order by ic.last_reported_at desc
+   limit 1;
+
+  if c is null then
+    insert into public.incident_clusters (category, centroid_lat, centroid_lng,
+                                          report_count, distinct_reporter_count)
+    values (new.category, new.latitude, new.longitude, 1, 1)
+    returning id into c;
+    update public.reports set cluster_id = c where id = new.id;
+    return new;
+  end if;
+
+  -- Claim membership BEFORE the cluster is evaluated, so a report that tips
+  -- the threshold is included in the confirmation sweep it causes.
+  update public.reports set cluster_id = c where id = new.id;
+
+  update public.incident_clusters ic
+     set report_count     = ic.report_count + 1,
+         last_reported_at = now(),
+         centroid_lat     = (ic.centroid_lat * ic.report_count + new.latitude)  / (ic.report_count + 1),
+         centroid_lng     = (ic.centroid_lng * ic.report_count + new.longitude) / (ic.report_count + 1),
+         -- cluster_id is already set above, so the new row is counted here and
+         -- no "+ 1" fudge is needed.
+         distinct_reporter_count = (
+           select count(distinct r.user_id)
+             from public.reports r
+            where r.cluster_id = ic.id
+         )
+   where ic.id = c;
+
+  update public.incident_clusters ic
+     set confirmed_at = now()
+   where ic.id = c
+     and ic.confirmed_at is null
+     and ic.distinct_reporter_count >= s.cluster_confirm_count;
+
+  -- Late joiners inherit confirmation. Re-read the row rather than trusting
+  -- NEW: if the sweep above already confirmed this report, NEW still shows the
+  -- stale 'pending' and we would credit the author twice.
+  select ic.confirmed_at into v_confirmed
+    from public.incident_clusters ic where ic.id = c;
+
+  if v_confirmed is not null
+     and exists (select 1 from public.reports r
+                  where r.id = new.id and r.verification_status = 'pending') then
+
+    update public.reports set verification_status = 'confirmed' where id = new.id;
+
+    if new.user_id is not null
+       and not exists (select 1 from public.reports r2
+                        where r2.cluster_id = c
+                          and r2.id <> new.id
+                          and r2.user_id = new.user_id) then
+      update public.profiles p
+         set reports_confirmed = p.reports_confirmed + 1
+       where p.id = new.user_id;
+    end if;
+  end if;
+
+  return new;
+end $$;
