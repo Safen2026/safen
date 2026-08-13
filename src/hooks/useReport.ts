@@ -3,6 +3,21 @@ import * as Notifications from 'expo-notifications';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
 import { uploadToCloudinary } from '../lib/cloudinary';
+import { checkReportQuality } from '../lib/reportQuality';
+
+export type SubmitResult =
+  | { ok: true; degraded: boolean }
+  | { ok: false; reason: 'quality'; missing: string[]; feedback: string; strikesLeft: number }
+  | { ok: false; reason: 'paused'; retryAt: string }
+  | { ok: false; reason: 'gate'; code: string; message: string }
+  | { ok: false; reason: 'error' };
+
+const GATE_MESSAGES: Record<string, string> = {
+  QUALITY_GATE_MISSING_PERSON_PHOTO: 'A missing-person report needs a recent photo.',
+  QUALITY_GATE_MISSING_PERSON_LAST_SEEN: 'Please add when the person was last seen.',
+  QUALITY_GATE_MISSING_PERSON_POLICE_REF: 'Please add the police station and case reference.',
+  QUALITY_GATE_MISSING_PERSON_LOCATION: 'We need the location where they were last seen.',
+};
 
 export type ReportPayload = {
   category: string;
@@ -12,12 +27,14 @@ export type ReportPayload = {
   media?: string[];
   latitude?: number | null;
   longitude?: number | null;
+  lastSeenAt?: string | null;
+  policeReference?: string | null;
 };
 
 export function useReport() {
   const [loading, setLoading] = useState(false);
 
-  const submitReport = async (payload: ReportPayload): Promise<boolean> => {
+  const submitReport = async (payload: ReportPayload): Promise<SubmitResult> => {
     setLoading(true);
 
     try {
@@ -25,10 +42,35 @@ export function useReport() {
       if (!session?.user) {
         console.warn('No session found');
         setLoading(false);
-        return false;
+        return { ok: false, reason: 'error' };
       }
 
       const { user } = session;
+
+      // Quality check runs on TEXT ONLY, before the upload — a rejected report
+      // should not cost the user a video upload first.
+      const verdict = await checkReportQuality({
+        category: payload.category,
+        description: payload.details,
+        address: payload.address,
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+        hasMedia: (payload.media?.length ?? 0) > 0,
+        lastSeenAt: payload.lastSeenAt,
+        policeReference: payload.policeReference,
+      });
+
+      if (verdict.status === 'paused') {
+        setLoading(false);
+        return { ok: false, reason: 'paused', retryAt: verdict.retryAt };
+      }
+      if (verdict.status === 'needs_detail') {
+        setLoading(false);
+        return {
+          ok: false, reason: 'quality', missing: verdict.missing,
+          feedback: verdict.feedback, strikesLeft: verdict.strikesLeft,
+        };
+      }
 
       // 1. Upload media to Cloudinary FIRST
       const uploadedUrls: string[] = [];
@@ -54,6 +96,9 @@ export function useReport() {
         longitude: payload.longitude ?? null,
         media_paths: uploadedUrls.length > 0 ? uploadedUrls : null,
         status: 'open',
+        quality_token: verdict.token,
+        last_seen_at: payload.lastSeenAt ?? null,
+        police_reference: payload.policeReference ?? null,
       };
       console.log('[useReport] Inserting into DB with media_paths:', insertPayload.media_paths);
 
@@ -66,9 +111,14 @@ export function useReport() {
       console.log('[useReport] DB insert result:', { report, error: reportError?.message });
 
       if (reportError || !report) {
-        console.error('[useReport] Report insert failed:', reportError?.message);
         setLoading(false);
-        return false;
+        const code = Object.keys(GATE_MESSAGES).find((k) =>
+          (reportError?.message ?? '').includes(k));
+        if (code) {
+          return { ok: false, reason: 'gate', code, message: GATE_MESSAGES[code] };
+        }
+        console.error('[useReport] Report insert failed:', reportError?.message);
+        return { ok: false, reason: 'error' };
       }
 
       setLoading(false);
@@ -99,11 +149,11 @@ export function useReport() {
         }
       }
 
-      return true;
+      return { ok: true, degraded: verdict.degraded };
     } catch (err) {
       console.error('submitReport error:', err);
       setLoading(false);
-      return false;
+      return { ok: false, reason: 'error' };
     }
   };
 
