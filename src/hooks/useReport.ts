@@ -17,6 +17,12 @@ const GATE_MESSAGES: Record<string, string> = {
   QUALITY_GATE_MISSING_PERSON_LAST_SEEN: 'Please add when the person was last seen.',
   QUALITY_GATE_MISSING_PERSON_POLICE_REF: 'Please add the police station and case reference.',
   QUALITY_GATE_MISSING_PERSON_LOCATION: 'We need the location where they were last seen.',
+  QUALITY_GATE_TOKEN_MISSING: 'Your report could not be verified. Please try submitting again.',
+  QUALITY_GATE_TOKEN_UNKNOWN: 'Your report could not be verified. Please try submitting again.',
+  QUALITY_GATE_TOKEN_USED: 'This report was already submitted.',
+  QUALITY_GATE_TOKEN_EXPIRED: 'Your report took too long to upload. Please submit it again.',
+  QUALITY_GATE_TOKEN_WRONG_USER: 'Your report could not be verified. Please try submitting again.',
+  QUALITY_GATE_PAYLOAD_MISMATCH: 'Your report changed after it was checked. Please submit it again.',
 };
 
 export type ReportPayload = {

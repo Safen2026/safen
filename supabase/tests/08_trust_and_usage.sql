@@ -92,6 +92,26 @@ begin
     select reports_confirmed into v_cafter from public.profiles where id = v_u2;
     assert v_cafter = v_cbefore + 1, 'the tipping reporter was not credited';
 
+    -- A report joining an ALREADY confirmed cluster must inherit confirmation.
+    -- record_cluster_confirmation fires only on the null -> not null edge, so
+    -- without the late-joiner block in cluster_report() this stays 'pending'.
+    declare v_u3 uuid; v_rc uuid; v_c3before int; v_c3after int;
+    begin
+      select id into v_u3 from public.profiles
+       where id not in (v_u1, v_u2) limit 1;
+      if v_u3 is not null then
+        select reports_confirmed into v_c3before from public.profiles where id = v_u3;
+        insert into public.reports (user_id, category, description, status, latitude, longitude)
+        values (v_u3, 'security', 'late joiner to confirmed cluster', 'open', 6.9002, 3.9000)
+        returning id into v_rc;
+        assert (select verification_status from public.reports where id = v_rc) = 'confirmed',
+          'a report joining a confirmed cluster was left pending';
+        select reports_confirmed into v_c3after from public.profiles where id = v_u3;
+        assert v_c3after = v_c3before + 1, 'the late joiner was not credited';
+        delete from public.reports where id = v_rc;
+      end if;
+    end;
+
     delete from public.reports where id in (v_ra, v_rb);
     delete from public.incident_clusters where id = v_c;
     update public.app_settings set cluster_confirm_count = v_old_confirm;

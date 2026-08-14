@@ -35,9 +35,13 @@ export function prefilter(input: CheckInput, minWords: number): PrefilterResult 
   const missing: string[] = [];
 
   if (wordCount(input.description) < minWords) missing.push("description");
-  if (input.latitude == null || input.longitude == null) missing.push("location");
 
+  // Coordinates are only mandatory for missing-person reports, because that is
+  // the only category the database requires them for. Making them mandatory
+  // everywhere permanently locks out any user who declined the location
+  // permission, since the app offers no way to supply coordinates by hand.
   if (input.category === "missing_person") {
+    if (input.latitude == null || input.longitude == null) missing.push("location");
     if (!input.has_media) missing.push("photo");
     if (!input.last_seen_at) missing.push("last_seen_at");
     if (!input.police_reference || input.police_reference.trim() === "") {

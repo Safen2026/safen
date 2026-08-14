@@ -44,12 +44,18 @@ export async function mintToken(
   const tokenSha = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   const expires = new Date(Date.now() + 15 * 60_000).toISOString();
 
-  await db.from("report_quality_tokens").insert({
+  const { error } = await db.from("report_quality_tokens").insert({
     user_id: userId,
     token_sha256: tokenSha,
     payload_fingerprint: await fingerprint(input.category, input.description),
     verdict, priority, expires_at: expires,
   });
+  if (error) {
+    // Returning a token that was never persisted makes the DB gate reject the
+    // insert with TOKEN_UNKNOWN and leaves nothing in the logs explaining why.
+    console.error("[mintToken] token insert failed:", error.message);
+    throw new Error(`token insert failed: ${error.message}`);
+  }
 
   return { token, expires_at: expires };
 }

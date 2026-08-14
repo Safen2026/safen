@@ -46,8 +46,18 @@ Deno.test("missing_person with all four passes the prefilter", () => {
   assertEquals(r.missing, []);
 });
 
-Deno.test("a report with no coordinates flags location", () => {
+Deno.test("a security report with no coordinates still passes", () => {
+  // A denied location permission must never block an emergency report.
   const r = prefilter({ ...base, latitude: null, longitude: null }, 5);
+  assertEquals(r.ok, true);
+});
+
+Deno.test("a missing_person report with no coordinates flags location", () => {
+  const r = prefilter({
+    ...base, category: "missing_person", has_media: true,
+    last_seen_at: "2026-08-11T19:30:00Z", police_reference: "Ikeja/CR/1123",
+    latitude: null, longitude: null,
+  }, 5);
   assertEquals(r.ok, false);
   assert(r.missing.includes("location"));
 });

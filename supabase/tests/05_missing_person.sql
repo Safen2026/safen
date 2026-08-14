@@ -1,6 +1,6 @@
 do $$
 declare
-  v_user uuid; v_reason text;
+  v_user uuid;
 begin
   select id into v_user from public.profiles limit 1;
   update public.app_settings set quality_gate_mode = 'enforcing';
@@ -47,5 +47,18 @@ begin
   end;
 
   -- Other categories are unaffected by these rules.
+
+  -- The four missing-person requirements raise in BOTH modes, because they
+  -- never depended on the AI. This is the one property that makes this clause
+  -- different from every other gate check, and it had no coverage.
   update public.app_settings set quality_gate_mode = 'advisory';
+  begin
+    insert into public.reports (user_id, category, description, status, media_paths,
+                                last_seen_at, police_reference, latitude, longitude)
+    values (v_user, 'missing_person', 'still missing', 'open', null,
+            now(), 'Ikeja/CR/1123', 6.6, 3.35);
+    assert false, 'advisory mode admitted an incomplete missing-person report';
+  exception when others then
+    assert sqlerrm like '%MISSING_PERSON_PHOTO%', format('wrong error: %s', sqlerrm);
+  end;
 end $$;

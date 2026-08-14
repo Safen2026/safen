@@ -33,6 +33,7 @@ function deps(over: Partial<DecideDeps> = {}): DecideDeps {
 Deno.test("a banned user is paused and no model call is made", async () => {
   let called = false;
   const out = await decide(input, "user-1", deps({
+    settings: { ...settings, quality_gate_mode: "enforcing" },
     strikeState: () => Promise.resolve({
       strike_count: 3, banned_until: "2026-08-12T18:05:00Z",
     }),
@@ -41,6 +42,16 @@ Deno.test("a banned user is paused and no model call is made", async () => {
   assertEquals(out.status, 429);
   assertEquals(out.body.status, "paused");
   assertEquals(called, false);
+});
+
+Deno.test("a banned user is NOT paused while the gate is advisory", async () => {
+  const out = await decide(input, "user-1", deps({
+    strikeState: () => Promise.resolve({
+      strike_count: 3, banned_until: "2026-08-12T18:05:00Z",
+    }),
+  }));
+  assertEquals(out.status, 200);
+  assertEquals(out.body.status, "pass");
 });
 
 Deno.test("the pre-filter rejects without a model call and records a strike", async () => {

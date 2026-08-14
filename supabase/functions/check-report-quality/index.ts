@@ -27,7 +27,11 @@ export async function decide(
   input: CheckInput, userId: string, d: DecideDeps,
 ): Promise<Decision> {
   const ban = await d.strikeState(userId);
-  if (ban.banned_until) {
+  // Strikes are always RECORDED (they are the signal), but the pause is only
+  // ENFORCED in enforcing mode — otherwise flipping quality_gate_mode back to
+  // 'advisory' would not restore pre-launch behaviour and users would still be
+  // walled out by a mechanism the kill switch does not reach.
+  if (ban.banned_until && d.settings.quality_gate_mode === 'enforcing') {
     return { status: 429, body: {
       status: "paused", retry_at: ban.banned_until,
       message: "Too many incomplete reports. Please try again shortly.",

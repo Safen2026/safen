@@ -38,6 +38,21 @@ export async function checkReportQuality(input: QualityInput): Promise<QualityVe
     });
 
     if (error || !data) {
+      // functions.invoke rejects on any non-2xx, so the 429 "paused" verdict
+      // arrives here rather than as data. It is a verdict, not a transport
+      // failure, and must not be turned into a fail-open pass.
+      const ctx = (error as { context?: Response })?.context;
+      if (ctx?.status === 429) {
+        try {
+          const body = await ctx.json();
+          if (body?.status === 'paused') {
+            return { status: 'paused', retryAt: body.retry_at };
+          }
+        } catch {
+          // fall through to the degraded pass below
+        }
+      }
+
       console.warn('[reportQuality] invoke failed, failing open:', error?.message);
       return { status: 'pass', token: null, priority: 'medium', degraded: true };
     }
