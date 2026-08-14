@@ -80,6 +80,7 @@ export default function VerifyScreen() {
     setLoading(true);
     try {
       const credential = PhoneAuthProvider.credential(verificationId, token);
+      if (!firebaseAuth) throw new Error('Firebase not configured');
       const { user } = await signInWithCredential(firebaseAuth, credential);
       
       if (firstName && lastName) {
@@ -101,7 +102,7 @@ export default function VerifyScreen() {
           setLoading(false);
           Alert.alert('Account not found', 'This phone number is not registered. Please go back and select Sign Up.');
           // Sign out of Firebase so they can restart fresh
-          await firebaseAuth.signOut();
+          await firebaseAuth?.signOut();
           return;
         }
         await supabase.auth.signUp({
@@ -121,7 +122,7 @@ export default function VerifyScreen() {
         if (firstName && lastName) {
           setLoading(false);
           Alert.alert('Account already exists', 'This phone number is already registered to an account. Please go back and select Sign In instead.');
-          await firebaseAuth.signOut();
+          await firebaseAuth?.signOut();
           await supabase.auth.signOut();
           return;
         }
@@ -162,6 +163,7 @@ export default function VerifyScreen() {
     if (resendCooldown > 0) return;
     setLoading(true);
     try {
+      if (!firebaseAuth) throw new Error('Firebase not configured');
       const phoneProvider = new PhoneAuthProvider(firebaseAuth);
       const newVerificationId = await phoneProvider.verifyPhoneNumber(
         phone,
@@ -187,7 +189,7 @@ export default function VerifyScreen() {
         ref={recaptchaVerifier}
         // @ts-ignore
         innerRef={recaptchaVerifier}
-        firebaseConfig={app.options}
+        firebaseConfig={app?.options}
         attemptInvisibleVerification={true}
       />
       <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>

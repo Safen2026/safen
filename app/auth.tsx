@@ -147,6 +147,7 @@ export default function AuthScreen() {
 
     setLoading(true);
     try {
+      if (!firebaseAuth) throw new Error('Firebase not configured');
       const phoneProvider = new PhoneAuthProvider(firebaseAuth);
       const verificationId = await phoneProvider.verifyPhoneNumber(
         formattedPhone,
@@ -175,7 +176,7 @@ export default function AuthScreen() {
         ref={recaptchaVerifier}
         // @ts-ignore
         innerRef={recaptchaVerifier}
-        firebaseConfig={app.options}
+        firebaseConfig={app?.options}
         attemptInvisibleVerification={true}
       />
       <View style={[styles.brand, { marginTop: insets.top + 24 }]}>
