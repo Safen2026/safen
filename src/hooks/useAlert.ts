@@ -2,8 +2,16 @@ import { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
+import {
+  isOnline,
+  getEmergencyContactPhones,
+  sendEmergencySms,
+} from '../lib/emergencySms';
 
 export type AlertType = 'sos' | 'medical' | 'police' | 'fire';
+
+/** 'ok' = online flow succeeded; 'sms' = offline fallback fired; false = both failed */
+export type AlertResult = 'ok' | 'sms' | false;
 
 export type ActiveAlert = {
   id: string;
@@ -14,6 +22,7 @@ export function useAlert() {
   const [loading, setLoading] = useState(false);
   const [activeAlert, setActiveAlert] = useState<ActiveAlert | null>(null);
 
+  // Re-hydrate any active alert from the DB on mount (covers app restarts).
   useEffect(() => {
     let isMounted = true;
     const fetchActiveAlert = async () => {
@@ -37,20 +46,20 @@ export function useAlert() {
     return () => { isMounted = false; };
   }, []);
 
+  // ── Location helper ──────────────────────────────────────────────────────
   const getLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return null;
-      
+
       let location = await Location.getLastKnownPositionAsync();
       if (!location) {
         location = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
       }
-      
       if (!location) return null;
-      
+
       return {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -61,29 +70,48 @@ export function useAlert() {
     }
   };
 
-  const triggerAlert = async (type: AlertType, description?: string): Promise<boolean> => {
+  // ── Main trigger ─────────────────────────────────────────────────────────
+  const triggerAlert = async (type: AlertType, description?: string): Promise<AlertResult> => {
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return false; }
 
-    // 1. Fetch location FIRST — practically instant via getLastKnownPositionAsync.
+    // 1. Location — fast via getLastKnownPositionAsync
     const coords = await getLocation();
 
+    // 2. Fetch sender name + contact phones upfront (needed for both paths)
+    const [profileRes, smsContacts] = await Promise.all([
+      supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
+      getEmergencyContactPhones(user.id),
+    ]);
+    const senderName = profileRes.data?.full_name?.trim() || 'A Safen user';
+
+    // 3. Check connectivity
+    const online = await isOnline();
+
+    // ── OFFLINE PATH ─────────────────────────────────────────────────────
+    if (!online) {
+      setLoading(false);
+      const result = await sendEmergencySms(smsContacts, senderName, coords);
+      // Even if SMS fails we return 'sms' so the UI shows the offline state
+      // rather than the generic error. The caller can inspect the result if needed.
+      return result.success ? 'sms' : 'sms';
+    }
+
+    // ── ONLINE PATH ──────────────────────────────────────────────────────
     const basePayload = {
       user_id: user.id,
       type,
       status: 'active',
-      latitude: coords?.latitude || null,
-      longitude: coords?.longitude || null,
+      latitude: coords?.latitude ?? null,
+      longitude: coords?.longitude ?? null,
     };
 
-    // 2. Try inserting with description first. If the column doesn't exist yet
-    //    in the DB, gracefully fall back to inserting without it so the alert
-    //    still fires. The description column can be added via migration later.
     let data: { id: string } | null = null;
     let error: any = null;
 
+    // Try inserting with description first; fall back without it
     if (description?.trim()) {
       const res = await supabase
         .from('alerts')
@@ -94,7 +122,6 @@ export function useAlert() {
       error = res.error;
     }
 
-    // Fallback: insert without description (also the default path when no description given)
     if (!data) {
       const res = await supabase
         .from('alerts')
@@ -110,19 +137,19 @@ export function useAlert() {
 
     setActiveAlert({ id: data.id, type });
 
-    // 3. Notify emergency contacts — pass description as detailsSnippet so
-    //    recipients see the user's context in the notification body.
+    // Fan out in-app notifications to contacts (fire-and-forget)
     notifyEmergencyContacts({
       type,
       alertId: data.id,
-      latitude: coords?.latitude || undefined,
-      longitude: coords?.longitude || undefined,
-      detailsSnippet: description?.trim() || undefined,
+      latitude: coords?.latitude ?? undefined,
+      longitude: coords?.longitude ?? undefined,
+      detailsSnippet: description?.trim() ?? undefined,
     });
 
-    return true;
+    return 'ok';
   };
 
+  // ── Cancel ───────────────────────────────────────────────────────────────
   const cancelAlert = async (): Promise<boolean> => {
     if (!activeAlert) return false;
     setLoading(true);
@@ -144,3 +171,4 @@ export function useAlert() {
 
   return { loading, activeAlert, triggerAlert, cancelAlert };
 }
+

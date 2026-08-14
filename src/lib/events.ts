@@ -19,3 +19,26 @@ export const contactEvents = {
     contactRefreshListeners.forEach(cb => cb());
   },
 };
+
+// ─── Trip Share Event Bus ─────────────────────────────────────────────────────
+// Lets the contacts tab tell the map tab to open the Share Trip modal
+// for a specific contact, without needing a global store.
+
+export interface TripSharePayload {
+  contactUserId: string;
+  contactName: string;
+  contactId: string;
+}
+
+type TripListener = (payload: TripSharePayload) => void;
+const tripShareListeners = new Set<TripListener>();
+
+export const tripEvents = {
+  onShareTrip: (cb: TripListener): (() => void) => {
+    tripShareListeners.add(cb);
+    return () => tripShareListeners.delete(cb);
+  },
+  emitShareTrip: (payload: TripSharePayload): void => {
+    tripShareListeners.forEach(cb => cb(payload));
+  },
+};

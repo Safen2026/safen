@@ -520,25 +520,6 @@ export default function ContactsScreen() {
           </View>
         </View>
 
-        <View style={styles.contactActions}>
-          {!item.is_protector && (
-            <TouchableOpacity style={styles.actionBtn} onPress={() => openEditSheet(item)} disabled={isBeingDeleted}>
-              <Ionicons name="pencil-outline" size={18} color={colors.text.secondary} />
-            </TouchableOpacity>
-          )}
-          {!item.is_protector && (
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.deleteBtn]}
-              onPress={() => setDeleteModal({ visible: true, contact: item })}
-              disabled={isBeingDeleted}
-            >
-              {isBeingDeleted
-                ? <ActivityIndicator size="small" color="#EF4444" />
-                : <Ionicons name="trash-outline" size={18} color="#EF4444" />
-              }
-            </TouchableOpacity>
-          )}
-        </View>
       </TouchableOpacity>
     );
   };

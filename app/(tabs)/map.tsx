@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -7,7 +7,11 @@ import { useLocalSearchParams } from 'expo-router';
 import { JourneyCard } from '../../src/components/JourneyCard';
 import { JourneySetupModal } from '../../src/components/JourneySetupModal';
 import { ActiveJourneyTracker } from '../../src/components/ActiveJourneyTracker';
+import { ShareTripModal } from '../../src/components/ShareTripModal';
+import { ActiveTripShareCard } from '../../src/components/ActiveTripShareCard';
 import { useJourneyTracking } from '../../src/hooks/useJourneyTracking';
+import { useShareLiveTrip, TripShareContact } from '../../src/hooks/useShareLiveTrip';
+import { tripEvents, TripSharePayload } from '../../src/lib/events';
 
 export default function MapScreen() {
   const { colors } = useTheme();
@@ -16,21 +20,39 @@ export default function MapScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
+
+  // Journey Tracking state
   const [showJourneyModal, setShowJourneyModal] = useState(false);
+
+  // Share Live Trip state
+  const [shareTripContact, setShareTripContact] = useState<TripShareContact | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const { lat, lng } = useLocalSearchParams<{ lat?: string; lng?: string }>();
   const mapRef = React.useRef<MapView>(null);
 
+  // Hooks
   const {
     session: journeySession,
     elapsedStr,
     isActive: isJourneyActive,
-    isStarting,
-    isEnding,
+    isStarting: isJourneyStarting,
+    isEnding: isJourneyEnding,
     startJourney,
     endJourney,
     cancelJourney,
   } = useJourneyTracking();
+
+  const {
+    session: shareSession,
+    remainingStr,
+    isActive: isShareActive,
+    isStarting: isShareStarting,
+    isEnding: isShareEnding,
+    startSharing,
+    stopSharing,
+    extendSharing,
+  } = useShareLiveTrip();
 
   // ── Initial device location ────────────────────────────────────────────────
   useEffect(() => {
@@ -45,7 +67,20 @@ export default function MapScreen() {
     })();
   }, []);
 
-  // ── Jump to pin coords when navigated from an alert ───────────────────────
+  // ── Listen for "Share Live Trip" event from contacts tab ───────────────────
+  useEffect(() => {
+    const unsub = tripEvents.onShareTrip((payload: TripSharePayload) => {
+      setShareTripContact({
+        id: payload.contactId,
+        contactUserId: payload.contactUserId,
+        name: payload.contactName,
+      });
+      setShowShareModal(true);
+    });
+    return unsub;
+  }, []);
+
+  // ── Jump to pin when navigated from alert notification ─────────────────────
   useEffect(() => {
     if (isMapReady && lat && lng && mapRef.current) {
       const targetLat = parseFloat(lat);
@@ -63,11 +98,18 @@ export default function MapScreen() {
     }
   }, [isMapReady, lat, lng]);
 
-  // ── Handle journey start from modal ───────────────────────────────────────
-  const handleJourneyStart = async (destination: string, mode: string) => {
+  // ── Journey handlers ───────────────────────────────────────────────────────
+  const handleJourneyStart = useCallback(async (destination: string, mode: string) => {
     setShowJourneyModal(false);
     await startJourney(destination, mode);
-  };
+  }, [startJourney]);
+
+  // ── Share trip handlers ────────────────────────────────────────────────────
+  const handleShareStart = useCallback(async (durationMinutes: number) => {
+    if (!shareTripContact) return;
+    setShowShareModal(false);
+    await startSharing(shareTripContact.contactUserId, shareTripContact.name, durationMinutes);
+  }, [shareTripContact, startSharing]);
 
   if (errorMsg) {
     return (
@@ -129,21 +171,29 @@ export default function MapScreen() {
         )}
       </MapView>
 
-      {/* Floating bottom panel */}
+      {/* Floating bottom panel — priority: share > journey > idle */}
       <View style={styles.floatingPanel}>
-        {isJourneyActive && journeySession ? (
+        {isShareActive && shareSession ? (
+          <ActiveTripShareCard
+            contactName={shareSession.contactName}
+            remainingStr={remainingStr}
+            isEnding={isShareEnding}
+            onStopSharing={() => stopSharing(false)}
+            onExtend={extendSharing}
+          />
+        ) : isJourneyActive && journeySession ? (
           <ActiveJourneyTracker
             destination={journeySession.destination}
             mode={journeySession.mode}
             elapsedStr={elapsedStr}
-            isEnding={isEnding}
+            isEnding={isJourneyEnding}
             onEndJourney={endJourney}
             onCancelJourney={cancelJourney}
           />
         ) : (
           <JourneyCard
             onStart={() => setShowJourneyModal(true)}
-            isLoading={isStarting}
+            isLoading={isJourneyStarting || isShareStarting}
           />
         )}
       </View>
@@ -153,6 +203,15 @@ export default function MapScreen() {
         visible={showJourneyModal}
         onClose={() => setShowJourneyModal(false)}
         onStart={handleJourneyStart}
+      />
+
+      {/* Share Live Trip Modal */}
+      <ShareTripModal
+        visible={showShareModal}
+        contact={shareTripContact}
+        isStarting={isShareStarting}
+        onClose={() => setShowShareModal(false)}
+        onStart={handleShareStart}
       />
     </View>
   );

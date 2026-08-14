@@ -17,7 +17,7 @@ import {
 import { CameraView } from 'expo-camera';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAlert } from '../hooks/useAlert';
+import { useAlert, AlertResult } from '../hooks/useAlert';
 import { useEmergencyRecording } from '../hooks/useEmergencyRecording';
 import { useTheme } from '../context/ThemeContext';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -91,6 +91,9 @@ export const SOSButton = () => {
     icon    : 'warning',
     color   : '#E02B2B',
   });
+
+  // True when SOS was fired via SMS fallback (no internet)
+  const [smsMode, setSmsMode] = useState(false);
 
   // ── Sonar Pulse animation while SOS is ACTIVE ──────────────────────────────────
   useEffect(() => {
@@ -234,8 +237,10 @@ export const SOSButton = () => {
   // ── Handlers ────────────────────────────────────────────────────────────
   const handleTrigger = async () => {
     Vibration.vibrate([0, 300, 100, 300]);
-    const triggered = await triggerAlert('sos');
-    if (triggered) {
+    const result: AlertResult = await triggerAlert('sos');
+
+    if (result === 'ok') {
+      setSmsMode(false);
       setConfirmModal({
         visible : true,
         title   : 'SOS TRIGGERED',
@@ -243,8 +248,21 @@ export const SOSButton = () => {
         icon    : 'warning',
         color   : '#E02B2B',
       });
+    } else if (result === 'sms') {
+      // Offline fallback — native SMS composer has opened
+      setSmsMode(true);
+      setConfirmModal({
+        visible : true,
+        title   : 'SMS SENT (OFFLINE)',
+        msg     : 'No internet detected. A pre-filled SOS message has been opened in your SMS app for your emergency contacts.',
+        icon    : 'chatbubble-ellipses',
+        color   : '#D97706',
+      });
     } else {
-      Alert.alert('Error', 'Could not send SOS. Please check your connection and try again.');
+      Alert.alert(
+        'Could not send SOS',
+        'Please check your connection and try again, or call emergency services directly.',
+      );
     }
   };
 
@@ -429,14 +447,21 @@ export const SOSButton = () => {
                 }]
               }
             ]}>
-              <View style={[styles.checklistIconWrapper, { backgroundColor: '#2980B9' }]}>
-                <Ionicons name="chatbubble" size={16} color="#fff" />
+              <View style={[styles.checklistIconWrapper, { backgroundColor: smsMode ? '#D97706' : '#2980B9' }]}>
+                <Ionicons name={smsMode ? 'chatbubble-ellipses' : 'chatbubble'} size={16} color="#fff" />
               </View>
               <View style={styles.checklistTextContainer}>
-                <Text style={styles.checklistTitle}>SMS Alerts Sent</Text>
-                <Text style={styles.checklistSub}>To your trusted contacts</Text>
+                <Text style={styles.checklistTitle}>
+                  {smsMode ? 'SMS Fallback Opened' : 'SMS Alerts Sent'}
+                </Text>
+                <Text style={styles.checklistSub}>
+                  {smsMode ? 'No internet — SMS composer opened' : 'To your trusted contacts'}
+                </Text>
               </View>
-              <Ionicons name="checkmark" size={24} color="#27AE60" />
+              {smsMode
+                ? <Ionicons name="warning" size={22} color="#D97706" />
+                : <Ionicons name="checkmark" size={24} color="#27AE60" />
+              }
             </Animated.View>
 
             {/* Authorities */}
