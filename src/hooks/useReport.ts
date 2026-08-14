@@ -1,9 +1,23 @@
 import { useState } from 'react';
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
 import { uploadToCloudinary } from '../lib/cloudinary';
 import { checkReportQuality } from '../lib/reportQuality';
+
+// Lazy-loaded, matching useNotifications / usePushNotifications / useSafeCheckIn.
+// A static `import * as Notifications from 'expo-notifications'` throws on load
+// in Expo Go since SDK 53, which took down the whole report screen — the module
+// registers a push-token listener at import time.
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+
+let Notifications: typeof import('expo-notifications') | null = null;
+if (!isExpoGo) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Notifications = require('expo-notifications');
+  } catch {}
+}
 
 export type SubmitResult =
   | { ok: true; degraded: boolean }
@@ -141,7 +155,7 @@ export function useReport() {
       // 4. Notify if any media failed to attach
       if (payload.media && payload.media.length > 0) {
         const failedCount = payload.media.length - uploadedUrls.length;
-        if (failedCount > 0) {
+        if (failedCount > 0 && Notifications) {
           Notifications.scheduleNotificationAsync({
             content: {
               title: 'Some media failed to attach',
