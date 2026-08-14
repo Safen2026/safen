@@ -15,10 +15,15 @@ export default function RootLayout() {
   usePushNotifications(session?.user?.id);
 
   useEffect(() => {
-    // Listen for Supabase auth state changes natively
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Get current session immediately on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
+    });
+
+    // Also listen for future auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
     });
 
     return () => {
@@ -45,6 +50,8 @@ export default function RootLayout() {
           <Stack.Screen name="permissions" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="history" options={{ headerShown: false }} />
+          <Stack.Screen name="medical-profile" options={{ headerShown: false }} />
+          <Stack.Screen name="safety-guidelines" options={{ headerShown: false }} />
         </Stack>
       </SessionContext.Provider>
     </ThemeProvider>
