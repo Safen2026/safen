@@ -12,8 +12,9 @@ import * as Haptics from 'expo-haptics';
 import { Video, Audio, ResizeMode } from 'expo-av';
 import * as Location from 'expo-location';
 import MapView, { PROVIDER_DEFAULT } from 'react-native-maps';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
-type IncidentType = 'medical' | 'fire' | 'security';
+type IncidentType = 'medical' | 'fire' | 'security' | 'missing_person';
 
 const INCIDENT_CATEGORIES = [
   {
@@ -40,6 +41,14 @@ const INCIDENT_CATEGORIES = [
     bgColor: '#EFF8FF',
     darkBgColor: '#172B4D',
   },
+  {
+    id: 'missing_person',
+    label: 'Missing Person',
+    icon: 'account-search-outline',
+    color: '#7A5AF8',
+    bgColor: '#F4F3FF',
+    darkBgColor: '#2A2342',
+  },
 ];
 
 export default function ReportScreen() {
@@ -61,6 +70,8 @@ export default function ReportScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [address, setAddress] = useState('Fetching location...');
   const [locationDetails, setLocationDetails] = useState('');
+  const [lastSeenAt, setLastSeenAt] = useState<Date | null>(null);
+  const [policeReference, setPoliceReference] = useState('');
 
   const handleRegionChangeComplete = async (region: any) => {
     try {
@@ -291,35 +302,49 @@ export default function ReportScreen() {
 
   const handleSubmit = async () => {
     if (!selectedType) {
-      setErrorModal({
-        visible: true,
-        title: 'Missing Info',
-        message: 'Please select an incident type.'
-      });
+      setErrorModal({ visible: true, title: 'Missing Info',
+        message: 'Please select an incident type.' });
       return;
     }
-    const combinedDetails = locationDetails.trim() 
+    const combinedDetails = locationDetails.trim()
       ? `Location Note: ${locationDetails.trim()}\n\nIncident Details: ${detailsText}`
       : detailsText;
 
-    const success = await submitReport({
+    const result = await submitReport({
       category: selectedType,
       address: address,
       details: combinedDetails,
       isAnonymous,
       media: mediaFiles,
       latitude: location?.coords.latitude,
-      longitude: location?.coords.longitude
+      longitude: location?.coords.longitude,
+      lastSeenAt: selectedType === 'missing_person' ? lastSeenAt?.toISOString() ?? null : null,
+      policeReference: selectedType === 'missing_person' ? policeReference.trim() : null,
     });
-    
-    if (success) {
+
+    if (result.ok) {
       setSuccessModalVisible(true);
-    } else {
-      setErrorModal({
-        visible: true,
-        title: 'Error',
-        message: 'Failed to submit report. Please try again.'
-      });
+      return;
+    }
+
+    switch (result.reason) {
+      case 'quality':
+        setErrorModal({ visible: true, title: 'A bit more detail, please',
+          message: result.strikesLeft <= 1
+            ? `${result.feedback}\n\nOne more incomplete report will pause submissions for a short while.`
+            : result.feedback });
+        break;
+      case 'paused':
+        setErrorModal({ visible: true, title: 'Submissions paused',
+          message: 'Too many incomplete reports. Please try again in a little while. SOS still works normally.' });
+        break;
+      case 'gate':
+        setErrorModal({ visible: true, title: 'Missing required information',
+          message: result.message });
+        break;
+      default:
+        setErrorModal({ visible: true, title: 'Error',
+          message: 'Failed to submit report. Please try again.' });
     }
   };
 
@@ -330,6 +355,8 @@ export default function ReportScreen() {
     setIsAnonymous(false);
     setSelectedType('security');
     setMediaFiles([]);
+    setLastSeenAt(null);
+    setPoliceReference('');
   };
 
   const renderHeader = () => (
@@ -759,6 +786,33 @@ export default function ReportScreen() {
             value={isAnonymous}
           />
         </View>
+
+        {selectedType === 'missing_person' && (
+          <View style={{ marginTop: 16, gap: 12 }}>
+            <Text style={styles.stepText}>When were they last seen?</Text>
+            <DateTimePicker
+              value={lastSeenAt ?? new Date()}
+              mode="datetime"
+              maximumDate={new Date()}
+              onChange={(_e, d) => d && setLastSeenAt(d)}
+            />
+            <Text style={styles.stepText}>Police station and case reference</Text>
+            <TextInput
+              value={policeReference}
+              onChangeText={setPoliceReference}
+              placeholder="e.g. Ikeja Division / CR-1123"
+              placeholderTextColor={colors.text.secondary}
+              style={{
+                borderWidth: 1, borderColor: colors.border, borderRadius: 12,
+                padding: 12, color: colors.text.primary, backgroundColor: colors.white,
+              }}
+            />
+            <Text style={{ fontSize: 12, color: colors.text.secondary }}>
+              A photo, the time last seen, the location, and a police reference are all
+              required before a missing-person report can be filed.
+            </Text>
+          </View>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
