@@ -59,3 +59,5 @@ docs/*
 test*.js
 test*.ts
 test*.png
+# rehearsal schema dump (generated from production, not source)
+supabase/rehearsal/baseline.sql
