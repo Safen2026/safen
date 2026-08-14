@@ -13,7 +13,7 @@ if (!url) {
 const sql = postgres(url, { max: 1, prepare: false, onnotice: () => {} });
 
 const proc = new Deno.Command("npx", {
-  args: ["deno@2", "run", "supabase/functions/_shared/emit_fingerprint.ts",
+  args: ["deno@2", "run", "supabase/functions/check-report-quality/emit_fingerprint.ts",
          "security", "Man\ttook\nmy   BAG"],
   stdout: "piped",
 });

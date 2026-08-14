@@ -1,5 +1,10 @@
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
-import { fingerprint } from "../_shared/fingerprint.ts";
+// Lives inside this function folder rather than a sibling _shared/ directory:
+// the Dashboard's Edge Function bundler only accepts files within the function
+// root, and a second copy of this module is not an option — its normalisation
+// must stay byte-identical to public.report_payload_fingerprint in the
+// database, or every report is rejected as a payload mismatch.
+import { fingerprint } from "./fingerprint.ts";
 import type { CheckInput } from "./prefilter.ts";
 
 export function serviceClient(): SupabaseClient {
