@@ -61,3 +61,8 @@ test*.ts
 test*.png
 # rehearsal schema dump (generated from production, not source)
 supabase/rehearsal/baseline.sql
+
+# incidental root deno.lock from running tests at the repo root.
+# supabase/functions/deno.lock IS tracked — it pins the Anthropic SDK version
+# so edge deploys are reproducible.
+/deno.lock
