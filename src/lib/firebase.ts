@@ -1,4 +1,4 @@
-import { FirebaseApp, initializeApp, getApps, getApp } from 'firebase/app';
+﻿import { FirebaseApp, initializeApp, getApps, getApp } from 'firebase/app';
 import { Auth, getAuth, initializeAuth } from 'firebase/auth';
 // @ts-ignore
 import { getReactNativePersistence } from 'firebase/auth';
@@ -19,7 +19,7 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 
 // Only initialize Firebase if a valid API key is present.
-// The app uses Supabase for auth — Firebase is optional.
+// The app uses Supabase for auth ΓÇö Firebase is optional.
 if (apiKey && apiKey.length > 10) {
   try {
     if (!getApps().length) {

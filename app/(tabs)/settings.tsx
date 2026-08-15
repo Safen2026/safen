@@ -98,7 +98,7 @@ export default function SettingsScreen() {
   const confirmSignOut = async () => {
     setSigningOut(true);
     try {
-      await signOut(firebaseAuth);
+      if (firebaseAuth) await signOut(firebaseAuth);
       await supabase.auth.signOut();
       setSigningOut(false);
       setSignOutModalVisible(false);
@@ -121,7 +121,7 @@ export default function SettingsScreen() {
       return;
     }
     
-    await signOut(firebaseAuth);
+    if (firebaseAuth) await signOut(firebaseAuth);
     setDeleting(false);
     setDeleteModalVisible(false);
     router.replace('/auth');

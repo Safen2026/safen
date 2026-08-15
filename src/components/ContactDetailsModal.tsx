@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, Linking, Image 
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { sendPing } from '../lib/notifications';
+import { tripEvents } from '../lib/events';
+import { useRouter } from 'expo-router';
 
 export type Contact = {
   id: string;
@@ -28,6 +30,7 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
+  const router = useRouter();
 
   if (!contact) return null;
 
@@ -53,8 +56,19 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
   };
 
   const handleShareTrip = () => {
-    Alert.alert('Share Live Trip', `Live location sharing with ${contact.name} has been initiated for the next 30 minutes.`);
-    // Future integration for live location tracking
+    if (!contact?.contact_user_id) {
+      Alert.alert('Not on Safen', 'Live location sharing only works with contacts who are on Safen.');
+      return;
+    }
+    onClose();
+    // Emit event → map tab listens and opens the ShareTripModal
+    tripEvents.emitShareTrip({
+      contactUserId: contact.contact_user_id,
+      contactName: contact.name,
+      contactId: contact.id,
+    });
+    // Navigate to map tab so the user sees the sharing start
+    router.push('/(tabs)/map');
   };
 
   return (

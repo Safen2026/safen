@@ -188,11 +188,16 @@ export const Header = () => {
                   const renderCard = (n: AppNotification) => {
                     let meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
                     
-                    // Intercept journey notifications (bypassed DB enum as 'report')
+                    // Journey tracking notifications
                     if (n.title.includes('started a journey')) {
                       meta = { icon: 'map', color: '#10B981' };
                     } else if (n.title.includes('arrived safely')) {
                       meta = { icon: 'checkmark-circle', color: '#10B981' };
+                    // Location sharing notifications
+                    } else if (n.title.includes('sharing their live location') || n.title.includes('is sharing live location')) {
+                      meta = { icon: 'navigate', color: '#6366F1' };
+                    } else if (n.title.includes('stopped sharing') || n.title.includes('location sharing ended')) {
+                      meta = { icon: 'location-outline', color: '#9CA3AF' };
                     }
 
                     const isRequest = n.type === 'contact_added' && n.title === 'Contact Request';

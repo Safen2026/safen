@@ -1,7 +1,7 @@
-// Supabase Edge Function: send-feedback
+﻿// Supabase Edge Function: send-feedback
 //
 // Triggered by a Database Webhook on INSERT into public.feedback.
-// Sends feedback to your email via Resend (resend.com) — no SMTP,
+// Sends feedback to your email via Resend (resend.com) ΓÇö no SMTP,
 // no Gmail app passwords, no port issues.
 //
 // Required secrets:
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
     const html = `
       <div style="font-family: sans-serif; line-height: 1.6; color: #1F2937; max-width: 600px;">
         <div style="background: #0A2463; padding: 20px 24px; border-radius: 8px 8px 0 0;">
-          <h2 style="color: #fff; margin: 0; font-size: 20px;">📬 New Safen Feedback</h2>
+          <h2 style="color: #fff; margin: 0; font-size: 20px;">≡ƒô¼ New Safen Feedback</h2>
         </div>
         <div style="border: 1px solid #E5E7EB; border-top: none; padding: 24px; border-radius: 0 0 8px 8px;">
           <p><strong>From:</strong> ${senderLabel}</p>
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       </div>
     `;
 
-    // Send via Resend API — simple HTTP, no SMTP needed
+    // Send via Resend API ΓÇö simple HTTP, no SMTP needed
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
