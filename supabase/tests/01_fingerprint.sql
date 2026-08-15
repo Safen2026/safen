@@ -15,7 +15,7 @@ begin
     'fingerprint is not 64 lowercase hex chars';
 
   -- Agreement with the TypeScript implementation. Regenerate with:
-  --   npx deno@2 run supabase/functions/_shared/emit_fingerprint.ts "security" "Man<tab>took<newline>my   BAG"
+  --   npx deno@2 run supabase/functions/check-report-quality/emit_fingerprint.ts "security" "Man<tab>took<newline>my   BAG"
   assert public.report_payload_fingerprint('security', E'Man\ttook\nmy   BAG')
        = current_setting('safen.expected_fp', true),
     format('SQL/TS fingerprint drift: sql=%s ts=%s',

@@ -10,7 +10,7 @@ as $$
 $$;
 
 -- Normalisation MUST stay byte-identical to normalise() in
--- supabase/functions/_shared/fingerprint.ts. The character class is explicit
+-- supabase/functions/check-report-quality/fingerprint.ts. The character class is explicit
 -- rather than [[:space:]] so the two engines cannot disagree on Unicode spaces.
 -- btrim() with no second argument strips only ASCII space (not Unicode spaces like U+00A0).
 -- This default MUST NOT be changed to a Unicode-aware trim, or TS/SQL fingerprints will drift.
