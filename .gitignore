@@ -45,11 +45,24 @@ yarn-error.*
 /android
 
 # documentation
-docs/
+# `docs/*` rather than `docs/` so the negation below works — git cannot
+# re-include a path whose parent directory is itself excluded.
+docs/*
+!docs/superpowers/
 *.docx
 ~$*.docx
+
+# subagent-driven-development scratch (ledger, briefs, review packages)
+.superpowers/
 
 # test & scratch scripts
 test*.js
 test*.ts
 test*.png
+# rehearsal schema dump (generated from production, not source)
+supabase/rehearsal/baseline.sql
+
+# incidental root deno.lock from running tests at the repo root.
+# supabase/functions/deno.lock IS tracked — it pins the Anthropic SDK version
+# so edge deploys are reproducible.
+/deno.lock
