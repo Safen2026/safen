@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -26,42 +27,27 @@ type HistoryItem = {
   created_at: string;
 };
 
-const TYPE_META: Record<string, { icon: any; color: string; label: string }> = {
-  sos: { icon: 'alert-circle', color: '#E02B2B', label: 'SOS Alert' },
-  medical: { icon: 'medkit', color: '#DC2626', label: 'Medical Assistance' },
-  police: { icon: 'shield', color: '#2563EB', label: 'Police Request' },
-  fire: { icon: 'flame', color: '#EA580C', label: 'Fire Emergency' },
-  robbery: { icon: 'warning', color: '#7C3AED', label: 'Incident Report (Robbery)' },
-  accident: { icon: 'car-sport', color: '#D97706', label: 'Incident Report (Accident)' },
-  harassment: { icon: 'hand-left', color: '#DB2777', label: 'Incident Report (Harassment)' },
-  hazard: { icon: 'alert-triangle', color: '#EA580C', label: 'Hazard Report' },
-  other: { icon: 'document-text', color: '#6B7280', label: 'Incident Report' },
+// Map backend types to UI colors, icons, and filter categories
+const TYPE_META: Record<string, { icon: any; color: string; label: string; category: string }> = {
+  sos: { icon: 'alert', color: '#E02B2B', label: 'Emergency SOS', category: 'SOS' },
+  medical: { icon: 'medkit', color: '#10B981', label: 'Medical Assistance', category: 'Medical' },
+  police: { icon: 'shield', color: '#2563EB', label: 'Security Request', category: 'Security' },
+  fire: { icon: 'flame', color: '#EA580C', label: 'Fire Incident', category: 'Fire' },
+  robbery: { icon: 'person-mask', color: '#7C3AED', label: 'Theft / Robbery Report', category: 'Security' },
+  accident: { icon: 'car', color: '#D97706', label: 'Accident Report', category: 'Other' },
+  other: { icon: 'document-text', color: '#6B7280', label: 'Incident Report', category: 'Other' },
 };
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
-
-  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffDays === 0) return `Today at ${timeStr}`;
-  if (diffDays === 1) return `Yesterday at ${timeStr}`;
-  if (diffDays < 7) return `${diffDays} days ago at ${timeStr}`;
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + ` · ${timeStr}`;
-}
+const FILTERS = ['All', 'SOS', 'Security', 'Medical', 'Fire', 'Other'];
 
 export default function HistoryScreen() {
   const { colors } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
+
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'alert' | 'report'>('all');
+  const [activeFilter, setActiveFilter] = useState('All');
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -72,7 +58,7 @@ export default function HistoryScreen() {
         return;
       }
 
-      // 1. Fetch user alerts
+      // Fetch alerts
       const { data: alertsData } = await supabase
         .from('alerts')
         .select('id, type, status, created_at')
@@ -80,7 +66,7 @@ export default function HistoryScreen() {
         .order('created_at', { ascending: false })
         .limit(30);
 
-      // 2. Fetch user reports
+      // Fetch reports
       const { data: reportsData } = await supabase
         .from('reports')
         .select('id, type, title, description, address, status, created_at')
@@ -96,7 +82,7 @@ export default function HistoryScreen() {
           source: 'alert',
           type: a.type || 'sos',
           title: TYPE_META[a.type]?.label || 'Emergency Alert',
-          status: a.status || 'resolved',
+          status: a.status || 'Resolved',
           created_at: a.created_at,
         });
       });
@@ -109,12 +95,11 @@ export default function HistoryScreen() {
           title: r.title || TYPE_META[r.type]?.label || 'Incident Report',
           description: r.description,
           address: r.address,
-          status: r.status || 'submitted',
+          status: r.status || 'Resolved',
           created_at: r.created_at,
         });
       });
 
-      // Sort newest first
       combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setItems(combined);
     } catch (err) {
@@ -134,293 +119,355 @@ export default function HistoryScreen() {
     fetchHistory();
   };
 
-  const filteredItems = items.filter(i => {
-    if (filter === 'all') return true;
-    return i.source === filter;
-  });
+  // 1. Filter items
+  const filteredItems = useMemo(() => {
+    if (activeFilter === 'All') return items;
+    return items.filter(item => {
+      const meta = TYPE_META[item.type] || TYPE_META.other;
+      return meta.category === activeFilter;
+    });
+  }, [items, activeFilter]);
+
+  // 2. Group by date
+  const groupedItems = useMemo(() => {
+    const groups: { title: string; data: HistoryItem[] }[] = [];
+    const map = new Map<string, HistoryItem[]>();
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const twoDaysAgo = new Date(today);
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+    filteredItems.forEach(item => {
+      const d = new Date(item.created_at);
+      const itemDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+      let groupTitle = '';
+      if (itemDay.getTime() === today.getTime()) {
+        groupTitle = 'Today';
+      } else if (itemDay.getTime() === yesterday.getTime()) {
+        groupTitle = 'Yesterday';
+      } else if (itemDay.getTime() === twoDaysAgo.getTime()) {
+        groupTitle = '2 Days Ago';
+      } else {
+        groupTitle = d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      }
+
+      if (!map.has(groupTitle)) {
+        map.set(groupTitle, []);
+        groups.push({ title: groupTitle, data: map.get(groupTitle)! });
+      }
+      map.get(groupTitle)!.push(item);
+    });
+
+    return groups;
+  }, [filteredItems]);
+
+  const formatTime = (isoString: string, groupTitle: string) => {
+    const d = new Date(isoString);
+    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    
+    // Match screenshot behavior: If it's today, just show time. If yesterday, show "Yesterday, 6:45 PM".
+    if (groupTitle === 'Today') return timeStr;
+    if (groupTitle === 'Yesterday' || groupTitle === '2 Days Ago') return `${groupTitle}, ${timeStr}`;
+    return timeStr;
+  };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
-      {/* Header Bar */}
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity
-          style={[styles.backBtn, { backgroundColor: colors.border }]}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-          accessibilityLabel="Go back"
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTitleRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>History</Text>
+        </View>
+        <View style={{ width: 24 }} /> {/* Empty spacer to balance header */}
+      </View>
+
+      {/* Filter Chips ScrollView */}
+      <View>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          contentContainerStyle={styles.filterScrollContent}
         >
-          <Ionicons name="arrow-back" size={20} color={colors.text.primary} />
-        </TouchableOpacity>
-
-        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>History & Logs</Text>
-
-        <View style={{ width: 36 }} />
-      </View>
-
-      {/* Filter Tabs */}
-      <View style={styles.filterRow}>
-        {(
-          [
-            { id: 'all', label: 'All' },
-            { id: 'alert', label: 'SOS & Alerts' },
-            { id: 'report', label: 'Reports' },
-          ] as const
-        ).map(tab => {
-          const active = filter === tab.id;
-          return (
-            <TouchableOpacity
-              key={tab.id}
-              style={[
-                styles.filterTab,
-                {
-                  backgroundColor: active ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => setFilter(tab.id)}
-              activeOpacity={0.7}
-            >
-              <Text
+          {FILTERS.map((filter) => {
+            const isActive = activeFilter === filter;
+            return (
+              <TouchableOpacity
+                key={filter}
                 style={[
-                  styles.filterTabText,
-                  { color: active ? '#fff' : colors.text.secondary },
+                  styles.filterChip,
+                  isActive ? styles.filterChipActive : styles.filterChipInactive
                 ]}
+                onPress={() => setActiveFilter(filter)}
+                activeOpacity={0.8}
               >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+                <Text style={[
+                  styles.filterChipText,
+                  isActive ? styles.filterChipTextActive : styles.filterChipTextInactive
+                ]}>
+                  {filter}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      {/* Content List */}
+      {/* List */}
       {loading ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      ) : filteredItems.length === 0 ? (
+      ) : groupedItems.length === 0 ? (
         <ScrollView
           contentContainerStyle={styles.centerContainer}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
           <View style={[styles.emptyIconCircle, { backgroundColor: colors.border }]}>
-            <Ionicons name="time-outline" size={32} color={colors.text.secondary} />
+            <Ionicons name="document-text-outline" size={32} color={colors.text.secondary} />
           </View>
-          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>No activity history yet</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>No history found</Text>
           <Text style={[styles.emptySub, { color: colors.text.secondary }]}>
-            Past SOS activations, incident reports, and emergency alerts will appear here.
+            No events match the selected filter.
           </Text>
         </ScrollView>
       ) : (
         <ScrollView
           style={styles.list}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 30 }}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {filteredItems.map(item => {
-            const meta = TYPE_META[item.type] || TYPE_META.other;
-            const isAlert = item.source === 'alert';
+          {groupedItems.map((group, gIndex) => (
+            <View key={group.title} style={styles.groupContainer}>
+              <Text style={styles.groupTitle}>{group.title}</Text>
+              
+              {group.data.map((item) => {
+                const meta = TYPE_META[item.type] || TYPE_META.other;
+                const locationText = item.address || item.description || 'Location unavailable';
 
-            return (
-              <View
-                key={item.id}
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: colors.white,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={[styles.typeIconBox, { backgroundColor: meta.color + '15' }]}>
-                    <Ionicons name={meta.icon} size={18} color={meta.color} />
-                  </View>
-
-                  <View style={styles.cardTitleBlock}>
-                    <Text style={[styles.cardTitle, { color: colors.text.primary }]} numberOfLines={1}>
-                      {item.title}
-                    </Text>
-                    <Text style={[styles.cardTime, { color: colors.text.secondary }]}>
-                      {formatDate(item.created_at)}
-                    </Text>
-                  </View>
-
-                  {item.status && (
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        {
-                          backgroundColor:
-                            item.status === 'active'
-                              ? '#FEE2E2'
-                              : item.status === 'resolved' || item.status === 'submitted'
-                              ? '#DCFCE7'
-                              : colors.border,
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusBadgeText,
-                          {
-                            color:
-                              item.status === 'active'
-                                ? '#DC2626'
-                                : item.status === 'resolved' || item.status === 'submitted'
-                                ? '#16A34A'
-                                : colors.text.secondary,
-                          },
-                        ]}
-                      >
-                        {item.status.toUpperCase()}
-                      </Text>
+                return (
+                  <TouchableOpacity key={item.id} style={styles.card} activeOpacity={0.8}>
+                    
+                    {/* Icon */}
+                    <View style={[styles.iconBox, { backgroundColor: meta.color }]}>
+                      {meta.category === 'SOS' ? (
+                        <Text style={styles.sosIconText}>SOS</Text>
+                      ) : (
+                        <Ionicons name={meta.icon as any} size={22} color="#FFFFFF" />
+                      )}
                     </View>
-                  )}
-                </View>
 
-                {item.description ? (
-                  <Text style={[styles.cardDesc, { color: colors.text.secondary }]} numberOfLines={2}>
-                    {item.description}
-                  </Text>
-                ) : null}
+                    {/* Content */}
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardHeaderRow}>
+                        <Text style={styles.cardTitle} numberOfLines={1}>{meta.label}</Text>
+                        <Text style={styles.cardTime}>{formatTime(item.created_at, group.title)}</Text>
+                      </View>
+                      
+                      <Text style={styles.cardLocation} numberOfLines={1}>
+                        {locationText}
+                      </Text>
 
-                {item.address ? (
-                  <View style={styles.addressRow}>
-                    <Ionicons name="location-outline" size={13} color={colors.text.secondary} />
-                    <Text style={[styles.addressText, { color: colors.text.secondary }]} numberOfLines={1}>
-                      {item.address}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            );
-          })}
+                      <View style={styles.cardBottomRow}>
+                        {item.status && (
+                          <Text style={styles.statusText}>
+                            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                          </Text>
+                        )}
+                        <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
+                      </View>
+                    </View>
+
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
         </ScrollView>
       )}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB', // Light clean background matching UI
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 15,
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  backButton: {
+    paddingRight: 4,
   },
   headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#111827',
   },
-  filterRow: {
-    flexDirection: 'row',
+  filterIconBtn: {
+    padding: 6,
+  },
+  filterScrollContent: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 8,
+    paddingBottom: 20,
+    gap: 10,
   },
-  filterTab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
+  filterChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
+    ...Shadows.sm,
+    shadowOpacity: 0.05,
+    elevation: 2,
   },
-  filterTabText: {
-    fontSize: 13,
+  filterChipActive: {
+    backgroundColor: '#E02B2B',
+    borderColor: '#E02B2B',
+  },
+  filterChipInactive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#F3F4F6',
+  },
+  filterChipText: {
+    fontSize: 14,
     fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  filterChipTextInactive: {
+    color: '#4B5563',
   },
   list: {
     flex: 1,
   },
+  groupContainer: {
+    marginBottom: 20,
+  },
+  groupTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    ...Shadows.sm,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  iconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  sosIconText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+    letterSpacing: 0.5,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 2,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    flex: 1,
+    marginRight: 8,
+  },
+  cardTime: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  cardLocation: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#10B981', // Green for resolved
+    backgroundColor: '#10B98115',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
   centerContainer: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 40,
-    gap: 8,
+    alignItems: 'center',
+    padding: 40,
   },
   emptyIconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    alignItems: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '700',
+    marginBottom: 8,
   },
   emptySub: {
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  card: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 10,
-    ...Shadows.sm,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  typeIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitleBlock: {
-    flex: 1,
-  },
-  cardTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  cardTime: {
-    fontSize: 11,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  cardDesc: {
-    fontSize: 13,
-    marginTop: 8,
-    lineHeight: 18,
-  },
-  addressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-  },
-  addressText: {
-    fontSize: 11,
-    flex: 1,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

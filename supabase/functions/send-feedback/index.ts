@@ -1,4 +1,4 @@
-// Supabase Edge Function: send-feedback
+﻿// Supabase Edge Function: send-feedback
 //
 // Triggered by a Database Webhook on INSERT into public.feedback.
 // Sends feedback to your email via Resend (resend.com) — no SMTP,

@@ -15,16 +15,20 @@ export default function RootLayout() {
   usePushNotifications(session?.user?.id);
 
   useEffect(() => {
+    // Get current session immediately on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
+    // Also listen for future auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {

@@ -70,11 +70,11 @@ export const QuickActions = () => {
     const actionToTrigger = selectedAction;
     const config = ACTION_CONFIG[actionToTrigger];
 
-    const success = await triggerAlert(actionToTrigger as AlertType, description.trim() || undefined);
+    const result = await triggerAlert(actionToTrigger as AlertType, description.trim() || undefined);
 
     handleClose();
 
-    if (success) {
+    if (result === 'ok') {
       setTimeout(() => {
         setConfirmModal({
           visible: true,
@@ -86,8 +86,18 @@ export const QuickActions = () => {
           color: config.color,
         });
       }, 300);
+    } else if (result === 'sms') {
+      setTimeout(() => {
+        setConfirmModal({
+          visible: true,
+          title: 'SMS Opened (Offline)',
+          msg: 'No internet detected. A pre-filled SOS message has been opened in your SMS app.',
+          icon: 'chatbubble-ellipses',
+          color: '#D97706',
+        });
+      }, 300);
     } else {
-      Alert.alert('Error', 'Could not send request. Please check your connection and try again.');
+      Alert.alert('Could not send request', 'Please check your connection and try again.');
     }
   };
 
