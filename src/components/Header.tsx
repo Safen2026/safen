@@ -184,18 +184,8 @@ export const Header = () => {
   return (
     <View style={styles.container}>
 
-      {/* Left: History button */}
-      <TouchableOpacity
-        style={styles.menuBtn}
-        onPress={() => router.push('/history')}
-        activeOpacity={0.7}
-        accessibilityLabel="View history"
-      >
-        <Ionicons name="time-outline" size={24} color={colors.text.primary} />
-      </TouchableOpacity>
-
-      {/* Center: Brand identity */}
-      <View style={styles.brand}>
+      {/* Left: Brand identity */}
+      <View style={[styles.brand, { alignItems: 'flex-start' }]}>
         <View style={styles.brandTopRow}>
           <Image
             source={require('../../assets/image.png')}
@@ -204,19 +194,30 @@ export const Header = () => {
           />
           <Text style={styles.brandName}>SAFEN</Text>
         </View>
-        <Text style={styles.brandTagline}>SAFE NIGERIA. ALWAYS.</Text>
+        <Text style={[styles.brandTagline, { textAlign: 'left' }]}>SAFE NIGERIA. ALWAYS.</Text>
       </View>
 
-      {/* Right: Notification bell */}
-      <TouchableOpacity
-        style={styles.bellBtn}
-        activeOpacity={0.7}
-        onPress={() => { setNotificationsVisible(true); markAllRead(); }}
-        accessibilityLabel="Open notifications"
-      >
-        <Ionicons name="notifications-outline" size={22} color={colors.text.primary} />
-        {unreadCount > 0 && <View style={styles.badge} />}
-      </TouchableOpacity>
+      {/* Right: Actions Group */}
+      <View style={styles.rightActionsGroup}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => router.push('/history')}
+          activeOpacity={0.7}
+          accessibilityLabel="View history"
+        >
+          <Ionicons name="time-outline" size={26} color={colors.text.primary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionBtn}
+          activeOpacity={0.7}
+          onPress={() => { setNotificationsVisible(true); markAllRead(); }}
+          accessibilityLabel="Open notifications"
+        >
+          <Ionicons name="notifications-outline" size={24} color={colors.text.primary} />
+          {unreadCount > 0 && <View style={styles.badge} />}
+        </TouchableOpacity>
+      </View>
 
       {/* Notifications panel */}
       <Modal visible={notificationsVisible} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent onRequestClose={() => setNotificationsVisible(false)}>
@@ -281,51 +282,51 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     borderBottomColor: colors.border,
   },
 
-  // Left — hamburger
-  menuBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Center — brand
+  // Left — brand
   brand: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
+    marginLeft: 12, // Pushed further to the right per user request
   },
   brandTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 8,
   },
   brandLogo: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 9,
   },
   brandName: {
     fontSize: 22,
     fontWeight: '800',
     color: colors.text.primary,
-    letterSpacing: 2,
+    letterSpacing: 2.2,
   },
   brandTagline: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
     color: colors.text.primary,
-    letterSpacing: 1.2,
+    letterSpacing: 1.5,
     marginTop: 2,
-    textAlign: 'center',
+    textAlign: 'left',
   },
 
-  // Right — notification bell
-  bellBtn: {
-    width: 40,
-    height: 40,
+  // Right Actions
+  rightActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12, // Increased spacing between buttons
+  },
+  actionBtn: {
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 22,
+    backgroundColor: `${colors.border}40`, // slight background to group them visually
   },
   badge: {
     position: 'absolute',

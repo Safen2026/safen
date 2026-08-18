@@ -28,7 +28,6 @@ export interface EmergencyRecordingState {
 }
 
 const VIDEO_MAX_DURATION_SECONDS = 60;
-const SNAPSHOT_INTERVAL_SECONDS  = 10;
 const AUDIO_CHUNK_INTERVAL_SECONDS = 15;
 
 export function useEmergencyRecording() {
@@ -54,7 +53,6 @@ export function useEmergencyRecording() {
       isMountedRef.current = false;
       killEverything();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Hard-stop timers and recorders ─────────────────────────────────────────
@@ -153,19 +151,6 @@ export function useEmergencyRecording() {
     }
   }, [uploadChunk]);
 
-  // ─── Take one snapshot during the video phase ─────────────────────────────
-  const captureSnapshot = useCallback(async (alertId: string) => {
-    if (!isActiveRef.current || !cameraRef.current) return;
-    try {
-      if (typeof cameraRef.current.takePictureAsync === 'function') {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.5, skipProcessing: true });
-        if (photo?.uri) uploadChunk(photo.uri, 'snapshot', alertId);
-      }
-    } catch (err) {
-      console.warn('[Recording] Snapshot error:', err);
-    }
-  }, [uploadChunk]);
-
   // ─── Start video recording on whatever camera is currently bound ───────────
   const startVideoRecording = useCallback((cam: CameraRef, alertId: string) => {
     if (!cam || !isActiveRef.current || elapsedSecondsRef.current >= VIDEO_MAX_DURATION_SECONDS) return;
@@ -242,10 +227,6 @@ export function useEmergencyRecording() {
       elapsedSecondsRef.current = elapsed;
       if (isMountedRef.current) setDurationSeconds(elapsed);
 
-      if (elapsed <= VIDEO_MAX_DURATION_SECONDS && elapsed % SNAPSHOT_INTERVAL_SECONDS === 0) {
-        captureSnapshot(alertId);
-      }
-      
       // Video Chunking: Every 15s during the first minute, stop the camera.
       // This forces the current 15s video segment to save and upload immediately.
       // The 600ms cool-down in startVideoRecording's .finally() then cleanly starts the next 15s chunk!
@@ -303,8 +284,7 @@ export function useEmergencyRecording() {
     }
 
     return true;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uploadChunk, captureSnapshot, cycleAudioChunk, startVideoRecording]);
+  }, [cycleAudioChunk, startVideoRecording]);
 
   // ─── STOP ──────────────────────────────────────────────────────────────────
   const stopRecording = useCallback(async () => {
