@@ -1,5 +1,6 @@
 import { getInfoAsync, uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
 import type { FileInfo } from 'expo-file-system';
+import { supabase } from './supabase';
 
 // ─── Detect resource type and filename from URI ────────────────────────────────
 const getUploadMeta = (uri: string): { fileName: string; mimeType: string; resourceType: 'video' | 'image' } => {
@@ -22,11 +23,10 @@ const attemptUpload = async (
   uri: string,
   options?: { public_id?: string; folder?: string }
 ): Promise<string | null> => {
-  const cloudName   = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+  const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
-  if (!cloudName || !uploadPreset) {
-    console.warn('[Cloudinary] Missing env vars — EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME or EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET not set.');
+  if (!cloudName) {
+    console.warn('[Cloudinary] Missing EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME env var.');
     return null;
   }
 
@@ -57,10 +57,24 @@ const attemptUpload = async (
   // This guarantees the resulting URL ends in e.g. "audio_12345.m4a", so the app always
   // knows whether it's audio or video regardless of the folder path.
   const descriptivePublicId = fileName.split('.')[0]; 
+  const finalPublicId = options?.public_id || descriptivePublicId;
+
+  // ── Fetch Secure Signature from Supabase ──────────────────────────────────
+  console.log('[Cloudinary] Fetching secure signature...');
+  const { data: sigData, error: sigError } = await supabase.functions.invoke('get-cloudinary-signature', {
+    body: { public_id: finalPublicId, folder: options?.folder }
+  });
+
+  if (sigError || !sigData?.signature || !sigData?.api_key || !sigData?.timestamp) {
+    console.error('[Cloudinary] Signature fetch failed:', sigError || sigData);
+    throw new Error(`[Cloudinary] Failed to get signature: ${sigError?.message || 'Missing signature data'}`);
+  }
 
   const parameters: Record<string, string> = { 
-    upload_preset: uploadPreset,
-    public_id: options?.public_id || descriptivePublicId
+    public_id: finalPublicId,
+    api_key: sigData.api_key,
+    timestamp: String(sigData.timestamp),
+    signature: sigData.signature
   };
   
   if (options?.folder) parameters.folder = options.folder;
