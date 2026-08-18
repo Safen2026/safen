@@ -22,6 +22,7 @@
     "ios": {
       "bundleIdentifier": "com.safen.app",
       "supportsTablet": true,
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
