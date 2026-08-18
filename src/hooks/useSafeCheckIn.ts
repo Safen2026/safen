@@ -1,22 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Platform } from 'react-native';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { DateTriggerInput } from 'expo-notifications';
 import { notifyCheckInMissed, notifyCheckInReminder, notifyCheckInDeadline } from '../lib/notifications';
-
-// ─────────────────────────────────────────────
-// Lazy-load Notifications — avoids crashes in Expo Go
-// ─────────────────────────────────────────────
-const isExpoGo =
-  Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-
-let Notifications: any = null;
-if (!isExpoGo) {
-  try {
-    Notifications = require('expo-notifications');
-  } catch {}
-}
-
+import { Notifications, isExpoGo } from '../lib/expoNotifications';
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
@@ -75,7 +62,7 @@ async function scheduleCheckInNotifications(session: CheckInSession) {
         sound: true,
         data: { type: 'check_in_reminder' },
       },
-      trigger: { type: 'date', date: reminderAt, channelId: 'check_in' } as any,
+      trigger: { type: 'date', date: reminderAt, channelId: 'check_in' } as DateTriggerInput,
     });
   }
 
@@ -87,7 +74,7 @@ async function scheduleCheckInNotifications(session: CheckInSession) {
       sound: true,
       data: { type: 'check_in_deadline' },
     },
-    trigger: { type: 'date', date: deadlineDate, channelId: 'check_in' } as any,
+    trigger: { type: 'date', date: deadlineDate, channelId: 'check_in' } as DateTriggerInput,
   });
 
   // T+5 min — "Contacts have been alerted" notification to the user
@@ -100,7 +87,7 @@ async function scheduleCheckInNotifications(session: CheckInSession) {
         sound: true,
         data: { type: 'check_in_contacts_alerted', destination: session.destination },
       },
-      trigger: { type: 'date', date: contactAlertAt, channelId: 'check_in' } as any,
+      trigger: { type: 'date', date: contactAlertAt, channelId: 'check_in' } as DateTriggerInput,
     });
   }
 
@@ -116,8 +103,8 @@ async function cancelCheckInNotifications(session: Partial<CheckInSession>) {
   if (session.deadlineNotifId) {
     await Notifications.cancelScheduledNotificationAsync(session.deadlineNotifId).catch(() => {});
   }
-  if ((session as any).contactAlertNotifId) {
-    await Notifications.cancelScheduledNotificationAsync((session as any).contactAlertNotifId).catch(() => {});
+  if (session.contactAlertNotifId) {
+    await Notifications.cancelScheduledNotificationAsync(session.contactAlertNotifId).catch(() => {});
   }
 }
 

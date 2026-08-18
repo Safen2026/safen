@@ -25,7 +25,26 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
-const calcCompleteness = (mp: any): number => {
+interface MedicalProfileRecord {
+  blood_type?: string | null;
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  allergies?: string[] | null;
+  conditions?: string[] | null;
+  medications?: string[] | null;
+  doctor_name?: string | null;
+  doctor_phone?: string | null;
+}
+
+interface ExpoPushMessage {
+  to: string;
+  sound: 'default';
+  title: string;
+  body: string;
+  data: Record<string, string>;
+}
+
+const calcCompleteness = (mp: MedicalProfileRecord | null | undefined): number => {
   if (!mp) return 0;
   const checks = [
     !!mp.blood_type,
@@ -66,7 +85,7 @@ Deno.serve(async () => {
       return new Response(`Error: ${error.message}`, { status: 500 });
     }
 
-    const messages: any[] = [];
+    const messages: ExpoPushMessage[] = [];
     const updatedIds: string[] = [];
 
     for (const profile of profiles ?? []) {

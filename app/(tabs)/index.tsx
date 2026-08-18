@@ -1,6 +1,5 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useState } from 'react';
 import { useTheme } from '../../src/context/ThemeContext';
 import { Header }           from '../../src/components/Header';
 import { WelcomeCard }      from '../../src/components/WelcomeCard';
@@ -25,9 +24,14 @@ export default function HomeScreen() {
     cancelCheckIn,
   } = useSafeCheckIn();
 
-  const handleStartCheckIn = async (data: { destination: string; durationMinutes: number; notifyContacts: boolean }) => {
+  // Performance Fix: Memoize these handlers so we don't recreate them 
+  // every 30 seconds when the timeLeftStr timer ticks and causes a re-render.
+  const openCheckInModal = useCallback(() => setCheckInModalVisible(true), []);
+  const closeCheckInModal = useCallback(() => setCheckInModalVisible(false), []);
+
+  const handleStartCheckIn = useCallback(async (data: { destination: string; durationMinutes: number; notifyContacts: boolean }) => {
     await startCheckIn(data);
-  };
+  }, [startCheckIn]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -44,16 +48,16 @@ export default function HomeScreen() {
 
         {/* 3. Safe Check-In status (idle CTA or active watchdog info) */}
         <SafeCheckInCard
-          onStart={() => setCheckInModalVisible(true)}
+          onStart={openCheckInModal}
           activeCheckIn={isActive ? {
-            destination: session!.destination,
+            destination: session?.destination ?? '',
             timeLeftStr: isExpired
               ? '🚨 Deadline passed — confirm you\'re safe!'
               : `${timeLeftStr} • Watchdog on`,
           } : null}
           onConfirmSafe={confirmSafe}
           onCancel={cancelCheckIn}
-          onEdit={() => setCheckInModalVisible(true)}
+          onEdit={openCheckInModal}
           isExpired={isExpired}
         />
 
@@ -67,11 +71,11 @@ export default function HomeScreen() {
       {/* Full-Screen Safe Check-In Modal */}
       <SafeCheckInModal
         visible={checkInModalVisible}
-        onClose={() => setCheckInModalVisible(false)}
+        onClose={closeCheckInModal}
         onStartCheckIn={handleStartCheckIn}
         initialSession={isActive ? {
-          destination: session!.destination,
-          notifyContacts: session!.notifyContacts,
+          destination: session?.destination ?? '',
+          notifyContacts: session?.notifyContacts ?? true,
         } : null}
       />
     </View>

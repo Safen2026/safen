@@ -1,4 +1,5 @@
 import { getInfoAsync, uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
+import type { FileInfo } from 'expo-file-system';
 
 // ─── Detect resource type and filename from URI ────────────────────────────────
 const getUploadMeta = (uri: string): { fileName: string; mimeType: string; resourceType: 'video' | 'image' } => {
@@ -31,12 +32,13 @@ const attemptUpload = async (
 
   // ── Verify file exists on disk ─────────────────────────────────────────────
   try {
-    const info = await getInfoAsync(uri);
+    const info: FileInfo = await getInfoAsync(uri);
     if (!info.exists) {
       console.warn('[Cloudinary] File does not exist at URI:', uri);
       return null;
     }
-    const size = (info as any).size ?? 0;
+    // size is only present when exists is true
+    const size = (info as FileInfo & { size?: number }).size ?? 0;
     if (size === 0) {
       console.warn('[Cloudinary] File is 0 bytes — skipping upload:', uri);
       return null;
@@ -79,7 +81,7 @@ const attemptUpload = async (
   }
 
   if (response.status >= 200 && response.status < 300) {
-    let parsed: any;
+    let parsed: { secure_url?: string };
     try { parsed = JSON.parse(response.body); } catch {
       throw new Error(`[Cloudinary] Could not parse response: ${response.body.substring(0, 200)}`);
     }

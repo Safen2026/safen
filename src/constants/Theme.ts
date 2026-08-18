@@ -61,6 +61,10 @@ export const DarkTheme = {
 // Temporarily keep Colors to prevent immediate app crash during refactor
 export const Colors = LightTheme;
 
+// Single source of truth for the theme colors type.
+// All getStyles(colors) functions should use this.
+export type ThemeColors = typeof LightTheme;
+
 export const Shadows = {
   sm: {
     shadowColor: "#000",

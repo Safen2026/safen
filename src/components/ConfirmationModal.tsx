@@ -1,14 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Shadows } from '../constants/Theme';
+import type { ThemeColors } from '../constants/Theme';
 import { useTheme } from '../context/ThemeContext';
 
 interface ConfirmationModalProps {
   visible: boolean;
   title: string;
   message: string;
-  iconName: any;
+  iconName: React.ComponentProps<typeof Ionicons>['name'];
   iconColor?: string;
   onClose: () => void;
 }
@@ -48,74 +48,98 @@ export const ConfirmationModal = ({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <Animated.View style={[styles.modalContainer, { transform: [{ scale: scaleValue }] }]}>
-          <View style={[styles.iconCircle, { backgroundColor: activeIconColor + '20' }]}>
-            <Ionicons name={iconName} size={40} color={activeIconColor} />
+        <Animated.View style={[styles.modalContent, { transform: [{ scale: scaleValue }] }]}>
+          <View style={styles.modalHeader}>
+            <View style={[styles.iconWrapper, { backgroundColor: `${activeIconColor}15` }]}>
+              <Ionicons name={iconName} size={32} color={activeIconColor} />
+            </View>
+            <Text style={styles.modalTitle}>{title}</Text>
           </View>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
-          
-          <TouchableOpacity 
-            style={[styles.button, { backgroundColor: activeIconColor }]} 
-            onPress={onClose} 
-            activeOpacity={0.8}
-          >
-            <Text style={styles.buttonText}>Got it</Text>
-          </TouchableOpacity>
+          <View style={styles.modalBody}>
+            <Text style={styles.modalWarning}>{message}</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={[styles.confirmButton, { backgroundColor: activeIconColor }]} 
+                onPress={onClose} 
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmText}>Got it</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </Animated.View>
       </View>
     </Modal>
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-  },
-  modalContainer: {
-    backgroundColor: colors.white,
-    borderRadius: 20,
     padding: 24,
-    alignItems: 'center',
-    width: '100%',
-    maxWidth: 340,
-    ...Shadows.md,
   },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  modalContent: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalHeader: {
+    paddingTop: 28,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
+  modalTitle: {
     color: colors.text.primary,
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 0.3,
     textAlign: 'center',
   },
-  message: {
+  modalBody: {
+    padding: 24,
+    paddingTop: 12,
+  },
+  modalWarning: {
     fontSize: 15,
     color: colors.text.secondary,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 28,
     lineHeight: 22,
   },
-  button: {
+  modalActions: {
+    flexDirection: 'row',
     width: '100%',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
   },
-  buttonText: {
-    color: colors.white,
+  confirmButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmText: {
+    color: '#ffffff',
+    fontWeight: '700',
     fontSize: 16,
-    fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
 });

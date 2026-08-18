@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
+import type { PostgrestError } from '@supabase/supabase-js';
 import { notifyEmergencyContacts } from '../lib/notifications';
 import {
   isOnline,
@@ -20,6 +21,7 @@ export type ActiveAlert = {
 
 export function useAlert() {
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const [activeAlert, setActiveAlert] = useState<ActiveAlert | null>(null);
 
   // Re-hydrate any active alert from the DB on mount (covers app restarts).
@@ -73,6 +75,7 @@ export function useAlert() {
   // ── Main trigger ─────────────────────────────────────────────────────────
   const triggerAlert = async (type: AlertType, description?: string): Promise<AlertResult> => {
     setLoading(true);
+    setLoadingMessage('Acquiring secure location...');
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return false; }
@@ -80,6 +83,7 @@ export function useAlert() {
     // 1. Location — fast via getLastKnownPositionAsync
     const coords = await getLocation();
 
+    setLoadingMessage('Connecting to emergency network...');
     // 2. Fetch sender name + contact phones upfront (needed for both paths)
     const [profileRes, smsContacts] = await Promise.all([
       supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
@@ -92,13 +96,16 @@ export function useAlert() {
 
     // ── OFFLINE PATH ─────────────────────────────────────────────────────
     if (!online) {
+      setLoadingMessage('Network unavailable. Preparing SMS fallback...');
+      // Give UI a moment to show the message before blocking on SMS composer
+      await new Promise(r => setTimeout(r, 600)); 
       setLoading(false);
+      setLoadingMessage(null);
       const result = await sendEmergencySms(smsContacts, senderName, coords);
-      // Even if SMS fails we return 'sms' so the UI shows the offline state
-      // rather than the generic error. The caller can inspect the result if needed.
       return result.success ? 'sms' : 'sms';
     }
 
+    setLoadingMessage('Activating SOS protocol...');
     // ── ONLINE PATH ──────────────────────────────────────────────────────
     const basePayload = {
       user_id: user.id,
@@ -109,7 +116,7 @@ export function useAlert() {
     };
 
     let data: { id: string } | null = null;
-    let error: any = null;
+    let error: PostgrestError | null = null;
 
     // Try inserting with description first; fall back without it
     if (description?.trim()) {
@@ -133,6 +140,7 @@ export function useAlert() {
     }
 
     setLoading(false);
+    setLoadingMessage(null);
     if (error || !data) return false;
 
     setActiveAlert({ id: data.id, type });
@@ -169,6 +177,6 @@ export function useAlert() {
     return true;
   };
 
-  return { loading, activeAlert, triggerAlert, cancelAlert };
+  return { loading, loadingMessage, activeAlert, triggerAlert, cancelAlert };
 }
 

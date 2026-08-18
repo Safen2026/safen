@@ -7,10 +7,12 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
 
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
 type Guideline = {
   key: string;
   title: string;
-  icon: string;
+  icon: IoniconsName;
   iconSet: 'ion' | 'mci';
   color: string;
   points: string[];
@@ -116,7 +118,8 @@ export default function SafetyGuidelinesScreen() {
             <View key={section.key} style={[styles.card, { borderColor: isExpanded ? section.color : colors.border }]}>
               <TouchableOpacity style={styles.cardHeader} onPress={() => toggle(section.key)} activeOpacity={0.7}>
                 <View style={[styles.iconBox, { backgroundColor: section.color + '18' }]}>
-                  <IconComponent name={section.icon as any} size={20} color={section.color} />
+                  {/* IconComponent is dynamically Ionicons or MCI — cast required at render boundary */}
+                  <IconComponent name={section.icon as never} size={20} color={section.color} />
                 </View>
                 <Text style={styles.cardTitle}>{section.title}</Text>
                 <Ionicons

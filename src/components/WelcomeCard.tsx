@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, Image, TouchableOpacity,
   Modal, Pressable, Platform, ActivityIndicator
@@ -7,16 +7,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
-import { Shadows } from '../constants/Theme';
-import { SessionContext } from '../context/SessionContext';
+import type { ThemeColors } from '../constants/Theme';
+import { useSession } from '../context/SessionContext';
 import { useAvatar } from '../hooks/useAvatar';
 import { ConfirmationModal } from './ConfirmationModal';
 
-export const WelcomeCard = () => {
+export const WelcomeCard = React.memo(() => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
-  const session = useContext(SessionContext);
+  const session = useSession();
   const { avatarUrl, uploading, uploadAvatar } = useAvatar();
 
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -26,12 +26,19 @@ export const WelcomeCard = () => {
   });
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  const fullName = session?.user?.user_metadata?.full_name
-    ?? session?.user?.email?.split('@')[0]
-    ?? 'there';
-  const firstName = fullName.split(' ')[0];
+  const firstName = React.useMemo(() => {
+    const fullName = session?.user?.user_metadata?.full_name
+      ?? session?.user?.email?.split('@')[0]
+      ?? 'User';
+    return fullName.split(' ')[0];
+  }, [session?.user?.id]);
 
-  const handlePickAndUpload = async (source: 'camera' | 'gallery') => {
+  const openPicker = useCallback(() => setPickerVisible(true), []);
+  const closePicker = useCallback(() => setPickerVisible(false), []);
+  const closeError = useCallback(() => setPermissionError({ visible: false, msg: '' }), []);
+  const closeSuccess = useCallback(() => setUploadSuccess(false), []);
+
+  const handlePickAndUpload = useCallback(async (source: 'camera' | 'gallery') => {
     setPickerVisible(false);
     await new Promise(r => setTimeout(r, 400)); // Let sheet close first
 
@@ -94,7 +101,11 @@ export const WelcomeCard = () => {
         msg: 'Something went wrong. Please try again.',
       });
     }
-  };
+  }, [uploadAvatar]);
+
+  // Stable callers so JSX never holds a new function reference per render
+  const handleCamera = useCallback(() => handlePickAndUpload('camera'), [handlePickAndUpload]);
+  const handleGallery = useCallback(() => handlePickAndUpload('gallery'), [handlePickAndUpload]);
 
   return (
     <View style={styles.container}>
@@ -102,7 +113,7 @@ export const WelcomeCard = () => {
       <TouchableOpacity
         style={styles.avatarWrap}
         activeOpacity={0.8}
-        onPress={() => setPickerVisible(true)}
+        onPress={openPicker}
         disabled={uploading}
         accessibilityLabel="Update profile picture"
       >
@@ -140,9 +151,9 @@ export const WelcomeCard = () => {
         transparent
         animationType="slide"
         statusBarTranslucent
-        onRequestClose={() => setPickerVisible(false)}
+        onRequestClose={closePicker}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setPickerVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={closePicker}>
           <Pressable
             style={[styles.bottomSheet, { backgroundColor: colors.white, paddingBottom: Math.max(insets.bottom + 20, 36) }]}
             onPress={e => e.stopPropagation()}
@@ -150,7 +161,7 @@ export const WelcomeCard = () => {
             <Text style={[styles.sheetTitle, { color: colors.text.primary }]}>Update Profile Picture</Text>
 
             {Platform.OS !== 'ios' || !__DEV__ ? (
-              <TouchableOpacity style={[styles.sheetOption, { borderBottomColor: colors.border }]} onPress={() => handlePickAndUpload('camera')}>
+              <TouchableOpacity style={[styles.sheetOption, { borderBottomColor: colors.border }]} onPress={handleCamera}>
                 <View style={[styles.sheetIconBox, { backgroundColor: colors.primary + '15' }]}>
                   <Ionicons name="camera" size={22} color={colors.primary} />
                 </View>
@@ -158,14 +169,14 @@ export const WelcomeCard = () => {
               </TouchableOpacity>
             ) : null}
 
-            <TouchableOpacity style={[styles.sheetOption, { borderBottomColor: colors.border }]} onPress={() => handlePickAndUpload('gallery')}>
+            <TouchableOpacity style={[styles.sheetOption, { borderBottomColor: colors.border }]} onPress={handleGallery}>
               <View style={[styles.sheetIconBox, { backgroundColor: (colors.icon?.activeTab || colors.primary) + '15' }]}>
                 <Ionicons name="images" size={22} color={colors.icon?.activeTab || colors.primary} />
               </View>
               <Text style={[styles.sheetOptionText, { color: colors.text.primary }]}>Choose from Gallery</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.sheetCancel, { backgroundColor: colors.border }]} onPress={() => setPickerVisible(false)}>
+            <TouchableOpacity style={[styles.sheetCancel, { backgroundColor: colors.border }]} onPress={closePicker}>
               <Text style={[styles.sheetCancelText, { color: colors.text.primary }]}>Cancel</Text>
             </TouchableOpacity>
           </Pressable>
@@ -179,7 +190,7 @@ export const WelcomeCard = () => {
         message={permissionError.msg}
         iconName="warning"
         iconColor={colors.primary}
-        onClose={() => setPermissionError({ visible: false, msg: '' })}
+        onClose={closeError}
       />
       <ConfirmationModal
         visible={uploadSuccess}
@@ -187,14 +198,14 @@ export const WelcomeCard = () => {
         message="Your profile picture has been saved successfully."
         iconName="checkmark-circle"
         iconColor="#00875A"
-        onClose={() => setUploadSuccess(false)}
+        onClose={closeSuccess}
       />
     </View>
   );
-};
+});
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',

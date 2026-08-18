@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons, Entypo } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 
 export const AIRiskCard = () => {
   const { colors } = useTheme();
@@ -104,7 +105,7 @@ export const AIRiskCard = () => {
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: colors.white,
     marginHorizontal: 20,

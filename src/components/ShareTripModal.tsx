@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 import { Shadows } from '../constants/Theme';
 import { TripShareContact } from '../hooks/useShareLiveTrip';
 
@@ -17,12 +18,14 @@ interface ShareTripModalProps {
   onStart: (durationMinutes: number) => void;
 }
 
-const DURATIONS = [
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+const DURATIONS: { label: string; minutes: number; icon: IoniconsName }[] = [
   { label: '15 min', minutes: 15, icon: 'time-outline' },
   { label: '30 min', minutes: 30, icon: 'time-outline' },
   { label: '1 hour', minutes: 60, icon: 'timer-outline' },
   { label: 'Until I stop', minutes: 0, icon: 'infinite-outline' },
-] as const;
+];
 
 export const ShareTripModal = ({
   visible,
@@ -90,7 +93,7 @@ export const ShareTripModal = ({
                   activeOpacity={0.75}
                 >
                   <Ionicons
-                    name={d.icon as any}
+                    name={d.icon}
                     size={22}
                     color={isSelected ? colors.primary : colors.text.secondary}
                   />
@@ -141,7 +144,7 @@ export const ShareTripModal = ({
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',

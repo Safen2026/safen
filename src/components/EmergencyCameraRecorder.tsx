@@ -3,13 +3,13 @@ import { StyleSheet, View } from 'react-native';
 import { CameraView } from 'expo-camera';
 
 interface EmergencyCameraRecorderProps {
-  onCameraReady?: (cameraRef: any) => void;
+  onCameraReady?: (cameraRef: CameraView | null) => void;
 }
 
 export const EmergencyCameraRecorder: React.FC<EmergencyCameraRecorderProps> = ({
   onCameraReady,
 }) => {
-  const cameraRef = useRef<any>(null);
+  const cameraRef = useRef<CameraView | null>(null);
 
   return (
     // The camera MUST render at a real size for the Android GPU compositor

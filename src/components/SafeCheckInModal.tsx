@@ -17,6 +17,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 import { Shadows } from '../constants/Theme';
 
 interface SafeCheckInModalProps {
@@ -26,7 +27,9 @@ interface SafeCheckInModalProps {
   initialSession?: { destination: string; notifyContacts: boolean } | null;
 }
 
-const DESTINATION_PRESETS = [
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+const DESTINATION_PRESETS: { label: string; icon: IoniconsName }[] = [
   { label: 'Home', icon: 'home-outline' },
   { label: 'Work', icon: 'briefcase-outline' },
   { label: 'Gym', icon: 'barbell-outline' },
@@ -150,7 +153,7 @@ export const SafeCheckInModal = ({
     setCustomMinutes(prev => Math.max(1, Math.min(43200, prev + delta)));
   };
 
-  const handleTimePicked = (event: any, selectedDate?: Date) => {
+  const handleTimePicked = (event: import('@react-native-community/datetimepicker').DateTimePickerEvent, selectedDate?: Date) => {
     if (event.type === 'dismissed') {
       setPickerMode(null);
       return;
@@ -304,7 +307,7 @@ export const SafeCheckInModal = ({
                     activeOpacity={0.8}
                   >
                     <Ionicons
-                      name={preset.icon as any}
+                      name={preset.icon}
                       size={16}
                       color={isSelected ? '#fff' : colors.text.primary}
                       style={{ marginRight: 6 }}
@@ -545,7 +548,7 @@ export const SafeCheckInModal = ({
   );
 };
 
-const getStyles = (colors: any) =>
+const getStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: {
       flex: 1,

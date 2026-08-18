@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import * as Notifications from 'expo-notifications';
+import { Notifications } from '../lib/expoNotifications';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
 import { uploadToCloudinary } from '../lib/cloudinary';
+import { useSession } from '../context/SessionContext';
 
 export type ReportPayload = {
   category: string;
@@ -15,13 +16,14 @@ export type ReportPayload = {
 };
 
 export function useReport() {
+  // Pull the session from the Water Tower (SessionContext) — free, no DB call.
+  const session = useSession();
   const [loading, setLoading] = useState(false);
 
   const submitReport = async (payload: ReportPayload): Promise<boolean> => {
     setLoading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         console.warn('No session found');
         setLoading(false);
@@ -86,7 +88,7 @@ export function useReport() {
       if (payload.media && payload.media.length > 0) {
         const failedCount = payload.media.length - uploadedUrls.length;
         if (failedCount > 0) {
-          Notifications.scheduleNotificationAsync({
+          Notifications?.scheduleNotificationAsync({
             content: {
               title: 'Some media failed to attach',
               body: uploadedUrls.length > 0

@@ -7,13 +7,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
-import { SessionContext } from '../context/SessionContext';
+import type { ThemeColors } from '../constants/Theme';
+import { useSession } from '../context/SessionContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NotificationDetailsModal } from './NotificationDetailsModal';
 import { useNotifications, AppNotification } from '../hooks/useNotifications';
 import { supabase } from '../lib/supabase';
+import { timeAgo } from '../utils/dateUtils';
 
-const NOTIFICATION_TYPE_META: Record<AppNotification['type'], { icon: string; color: string }> = {
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
+const NOTIFICATION_TYPE_META: Record<AppNotification['type'], { icon: IoniconsName; color: string }> = {
   sos: { icon: 'alert-circle', color: '#E02B2B' },
   medical: { icon: 'medkit', color: '#DC2626' },
   police: { icon: 'shield', color: '#2563EB' },
@@ -27,21 +31,11 @@ const NOTIFICATION_TYPE_META: Record<AppNotification['type'], { icon: string; co
   check_in_deadline: { icon: 'warning', color: '#EF4444' },
 };
 
-function timeAgo(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins} min${mins > 1 ? 's' : ''} ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hr${hrs > 1 ? 's' : ''} ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days} day${days > 1 ? 's' : ''} ago`;
-}
 
 export const Header = () => {
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
-  const session = useContext(SessionContext);
+  const session = useSession();
 
   const { notifications, loading: notificationsLoading, unreadCount, markAllRead, removeNotification } = useNotifications();
 
@@ -90,6 +84,103 @@ export const Header = () => {
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
 
+  // --- PERFORMANCE OPTIMIZATION ---
+  // Memoize the bucketing logic so it doesn't recalculate on every single render
+  const groupedNotifications = React.useMemo(() => {
+    const groups = {
+      today: [] as AppNotification[],
+      yesterday: [] as AppNotification[],
+      last7Days: [] as AppNotification[],
+      last30Days: [] as AppNotification[],
+      earlier: [] as AppNotification[]
+    };
+
+    const now = new Date();
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    const yesterdayDate = new Date(todayDate);
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+
+    const sevenDaysAgo = new Date(todayDate);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const thirtyDaysAgo = new Date(todayDate);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    notifications.forEach(n => {
+      const d = new Date(n.created_at);
+      if (d >= todayDate) groups.today.push(n);
+      else if (d >= yesterdayDate) groups.yesterday.push(n);
+      else if (d >= sevenDaysAgo) groups.last7Days.push(n);
+      else if (d >= thirtyDaysAgo) groups.last30Days.push(n);
+      else groups.earlier.push(n);
+    });
+
+    return groups;
+  }, [notifications]);
+
+  const renderCard = React.useCallback((n: AppNotification) => {
+    let meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+    
+    // Journey tracking notifications
+    if (n.title.includes('started a journey')) {
+      meta = { icon: 'map', color: '#10B981' };
+    } else if (n.title.includes('arrived safely')) {
+      meta = { icon: 'checkmark-circle', color: '#10B981' };
+    // Location sharing notifications
+    } else if (n.title.includes('sharing their live location') || n.title.includes('is sharing live location')) {
+      meta = { icon: 'navigate', color: '#6366F1' };
+    } else if (n.title.includes('stopped sharing') || n.title.includes('location sharing ended')) {
+      meta = { icon: 'location-outline', color: '#9CA3AF' };
+    }
+
+    const isRequest = n.type === 'contact_added' && n.title === 'Contact Request';
+    return (
+      <View key={n.id} style={[styles.notificationCard, !n.is_read && styles.notificationCardUnread]}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+          <View style={[styles.notificationIcon, { backgroundColor: meta.color + '18' }]}>
+            <Ionicons name={meta.icon} size={20} color={meta.color} />
+          </View>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <Text style={styles.notificationTextTitle} numberOfLines={1}>{n.title}</Text>
+            <Text style={styles.notificationTextBody} numberOfLines={2}>{n.body}</Text>
+            <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
+          </View>
+        </View>
+
+        {isRequest && (
+          <View style={styles.contactRequestActions}>
+            <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAcceptContact(n)} activeOpacity={0.8}>
+              <Ionicons name="checkmark" size={15} color="#fff" />
+              <Text style={styles.acceptBtnText}>Accept</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.declineBtn} onPress={() => handleRejectContact(n)} activeOpacity={0.8}>
+              <Ionicons name="close" size={15} color="#EF4444" />
+              <Text style={styles.declineBtnText}>Decline</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!isRequest && (
+          <TouchableOpacity style={styles.viewDetailsBtn} onPress={() => setSelectedNotification(n)} activeOpacity={0.7}>
+            <Text style={styles.viewDetailsBtnText}>View details</Text>
+            <Ionicons name="chevron-forward" size={13} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }, [colors.primary, styles]);
+
+  const renderGroup = (title: string, group: AppNotification[]) => {
+    if (group.length === 0) return null;
+    return (
+      <View key={title} style={{ marginBottom: 12 }}>
+        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text.secondary, marginBottom: 8, marginLeft: 4 }}>{title}</Text>
+        {group.map(n => renderCard(n))}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
 
@@ -129,9 +220,8 @@ export const Header = () => {
 
       {/* Notifications panel */}
       <Modal visible={notificationsVisible} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent onRequestClose={() => setNotificationsVisible(false)}>
-        <SafeAreaView style={styles.notificationsModalFull} edges={['top', 'bottom']}>
-
-            {/* Header */}
+        {notificationsVisible && (
+          <SafeAreaView style={styles.notificationsModalFull} edges={['top', 'bottom']}>
             <View style={styles.notificationsHeader}>
               <View>
                 <Text style={styles.notificationsTitle}>Notifications</Text>
@@ -157,123 +247,11 @@ export const Header = () => {
               </View>
             ) : (
               <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 8 }}>
-                {(() => {
-                  const today: AppNotification[] = [];
-                  const yesterday: AppNotification[] = [];
-                  const last7Days: AppNotification[] = [];
-                  const last30Days: AppNotification[] = [];
-                  const earlier: AppNotification[] = [];
-
-                  const now = new Date();
-                  const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                  
-                  const yesterdayDate = new Date(todayDate);
-                  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-
-                  const sevenDaysAgo = new Date(todayDate);
-                  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-                  const thirtyDaysAgo = new Date(todayDate);
-                  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-                  notifications.forEach(n => {
-                    const d = new Date(n.created_at);
-                    if (d >= todayDate) today.push(n);
-                    else if (d >= yesterdayDate) yesterday.push(n);
-                    else if (d >= sevenDaysAgo) last7Days.push(n);
-                    else if (d >= thirtyDaysAgo) last30Days.push(n);
-                    else earlier.push(n);
-                  });
-
-                  const renderCard = (n: AppNotification) => {
-                    let meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
-                    
-                    // Journey tracking notifications
-                    if (n.title.includes('started a journey')) {
-                      meta = { icon: 'map', color: '#10B981' };
-                    } else if (n.title.includes('arrived safely')) {
-                      meta = { icon: 'checkmark-circle', color: '#10B981' };
-                    // Location sharing notifications
-                    } else if (n.title.includes('sharing their live location') || n.title.includes('is sharing live location')) {
-                      meta = { icon: 'navigate', color: '#6366F1' };
-                    } else if (n.title.includes('stopped sharing') || n.title.includes('location sharing ended')) {
-                      meta = { icon: 'location-outline', color: '#9CA3AF' };
-                    }
-
-                    const isRequest = n.type === 'contact_added' && n.title === 'Contact Request';
-                    return (
-                      <View key={n.id} style={[styles.notificationCard, !n.is_read && styles.notificationCardUnread]}>
-
-                        {/* Top row: icon, text */}
-                        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-                          <View style={[styles.notificationIcon, { backgroundColor: meta.color + '18' }]}>
-                            <Ionicons name={meta.icon as any} size={20} color={meta.color} />
-                          </View>
-                          <View style={{ flex: 1, marginRight: 8 }}>
-                            <Text style={styles.notificationTextTitle} numberOfLines={1}>{n.title}</Text>
-                            <Text style={styles.notificationTextBody} numberOfLines={2}>{n.body}</Text>
-                            <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
-                          </View>
-                        </View>
-
-                        {/* Accept / Decline row for contact requests */}
-                        {isRequest && (
-                          <View style={styles.contactRequestActions}>
-                            <TouchableOpacity
-                              style={styles.acceptBtn}
-                              onPress={() => handleAcceptContact(n)}
-                              activeOpacity={0.8}
-                            >
-                              <Ionicons name="checkmark" size={15} color="#fff" />
-                              <Text style={styles.acceptBtnText}>Accept</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.declineBtn}
-                              onPress={() => handleRejectContact(n)}
-                              activeOpacity={0.8}
-                            >
-                              <Ionicons name="close" size={15} color="#EF4444" />
-                              <Text style={styles.declineBtnText}>Decline</Text>
-                            </TouchableOpacity>
-                          </View>
-                        )}
-
-                        {/* Tap whole card for details (non-request types) */}
-                        {!isRequest && (
-                          <TouchableOpacity
-                            style={styles.viewDetailsBtn}
-                            onPress={() => setSelectedNotification(n)}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={styles.viewDetailsBtnText}>View details</Text>
-                            <Ionicons name="chevron-forward" size={13} color={colors.primary} />
-                          </TouchableOpacity>
-                        )}
-
-                      </View>
-                    );
-                  };
-
-                  const renderGroup = (title: string, group: AppNotification[]) => {
-                    if (group.length === 0) return null;
-                    return (
-                      <View key={title} style={{ marginBottom: 12 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.text.secondary, marginBottom: 8, marginLeft: 4 }}>{title}</Text>
-                        {group.map(n => renderCard(n))}
-                      </View>
-                    );
-                  };
-
-                  return (
-                    <>
-                      {renderGroup('Today', today)}
-                      {renderGroup('Yesterday', yesterday)}
-                      {renderGroup('Last 7 Days', last7Days)}
-                      {renderGroup('Last 30 Days', last30Days)}
-                      {renderGroup('Earlier', earlier)}
-                    </>
-                  );
-                })()}
+                {renderGroup('Today', groupedNotifications.today)}
+                {renderGroup('Yesterday', groupedNotifications.yesterday)}
+                {renderGroup('Last 7 Days', groupedNotifications.last7Days)}
+                {renderGroup('Last 30 Days', groupedNotifications.last30Days)}
+                {renderGroup('Earlier', groupedNotifications.earlier)}
               </ScrollView>
             )}
 
@@ -283,13 +261,14 @@ export const Header = () => {
             notification={notifications.find(n => n.id === selectedNotification?.id) || selectedNotification}
             onClose={() => setSelectedNotification(null)}
           />
-        </SafeAreaView>
+          </SafeAreaView>
+        )}
       </Modal>
     </View>
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-between',

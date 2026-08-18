@@ -62,7 +62,7 @@ const calcCompleteness = (p: MedicalProfile): number => {
 const SectionCard = ({
   title, icon, color, expanded, onToggle, children, completeBadge,
 }: {
-  title: string; icon: string; color: string;
+  title: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string;
   expanded: boolean; onToggle: () => void;
   children: React.ReactNode; completeBadge?: boolean;
 }) => {
@@ -71,7 +71,7 @@ const SectionCard = ({
     <View style={[sectionStyles.card, { borderColor: expanded ? color : colors.border }]}>
       <TouchableOpacity style={sectionStyles.header} onPress={onToggle} activeOpacity={0.7}>
         <View style={[sectionStyles.iconBox, { backgroundColor: color + '18' }]}>
-          <Ionicons name={icon as any} size={20} color={color} />
+          <Ionicons name={icon} size={20} color={color} />
         </View>
         <Text style={[sectionStyles.title, { color: colors.text.primary }]}>{title}</Text>
         {completeBadge && (
@@ -294,8 +294,8 @@ const ICECardModal = ({ visible, profile, userName, onClose }: {
             <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, marginTop: 4 }}>
               <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600', marginBottom: 4 }}>DOCTOR</Text>
               <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>{profile.doctor_name}</Text>
-              {profile.doctor_phone && <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 }}>{profile.doctor_phone}</Text>}
-              {profile.doctor_hospital && <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 1 }}>{profile.doctor_hospital}</Text>}
+              {profile.doctor_phone ? <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 }}>{profile.doctor_phone}</Text> : null}
+              {profile.doctor_hospital ? <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 1 }}>{profile.doctor_hospital}</Text> : null}
             </View>
           )}
         </View>
@@ -388,7 +388,7 @@ export default function MedicalProfileScreen() {
     }
   };
 
-  const update = (key: keyof MedicalProfile, value: any) =>
+  const update = <K extends keyof MedicalProfile>(key: K, value: MedicalProfile[K]) =>
     setProfile(prev => ({ ...prev, [key]: value }));
 
   if (loading) {
@@ -451,7 +451,7 @@ export default function MedicalProfileScreen() {
             </View>
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, {
-                width: `${completeness}%` as any,
+                width: `${completeness}%` as import('react-native').DimensionValue,
                 backgroundColor: completeness === 100 ? '#00875A' : completeness >= 50 ? colors.primary : '#EA580C',
               }]} />
             </View>
@@ -633,7 +633,7 @@ export default function MedicalProfileScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: import('../src/constants/Theme').ThemeColors) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
   scroll: { flex: 1 },

@@ -1,18 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { AppState } from 'react-native';
+import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { contactEvents } from '../lib/events';
-
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-
-let Notifications: any = null;
-if (!isExpoGo) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    Notifications = require('expo-notifications');
-  } catch {}
-}
+import { Notifications, isExpoGo } from '../lib/expoNotifications';
 
 
 export type AppNotification = {
@@ -69,7 +60,7 @@ export function useNotifications() {
       if (!user) return;
       userIdRef.current = user.id;
 
-      const handleNewNotification = (payload: any) => {
+      const handleNewNotification = (payload: RealtimePostgresChangesPayload<AppNotification>) => {
         const row = payload.new as AppNotification;
 
         // Merge, avoiding duplicates if realtime fires multiple times

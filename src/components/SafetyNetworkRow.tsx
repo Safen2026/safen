@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 import { supabase } from '../lib/supabase';
 import { contactEvents } from '../lib/events';
 import { Shadows } from '../constants/Theme';
@@ -57,8 +58,15 @@ export const SafetyNetworkRow = () => {
       .limit(MAX_VISIBLE);
 
     if (!error && data && isMountedRef.current) {
+      interface RawContactRow {
+        id: string;
+        name: string;
+        is_on_app: boolean;
+        contact_user_id: string | null;
+        profiles: { avatar_url: string | null } | null;
+      }
       setContacts(
-        data.map((c: any) => ({
+        (data as unknown as RawContactRow[]).map(c => ({
           id        : c.id,
           name      : c.name,
           is_on_app : c.is_on_app ?? false,
@@ -164,7 +172,7 @@ export const SafetyNetworkRow = () => {
 };
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: colors.white,
     marginHorizontal: 16,

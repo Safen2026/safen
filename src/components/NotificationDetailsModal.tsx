@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 import { AppNotification } from '../hooks/useNotifications';
 import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
@@ -419,14 +420,14 @@ export const NotificationDetailsModal = ({
           <TouchableOpacity style={styles.imageViewerClose} onPress={() => setExpandedImage(null)}>
             <Ionicons name="close" size={30} color="#fff" />
           </TouchableOpacity>
-          {expandedImage && <Image source={{ uri: expandedImage }} style={styles.imageViewerImg} resizeMode="contain" />}
+          {expandedImage ? <Image source={{ uri: expandedImage }} style={styles.imageViewerImg} resizeMode="contain" /> : null}
         </View>
       </Modal>
     </Modal>
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { width: '100%', backgroundColor: colors.white, borderRadius: 20, overflow: 'hidden', maxHeight: '90%', ...Shadows.lg },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: colors.border },

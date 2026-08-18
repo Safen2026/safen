@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 import { Shadows } from '../constants/Theme';
 
 interface JourneySetupModalProps {
@@ -13,13 +14,15 @@ interface JourneySetupModalProps {
   onStart: (destination: string, mode: string) => void;
 }
 
-const PRESETS = [
+type MCIName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+const PRESETS: { id: string; label: string; icon: MCIName }[] = [
   { id: 'home', label: 'Home', icon: 'home-outline' },
   { id: 'work', label: 'Work', icon: 'briefcase-outline' },
   { id: 'gym', label: 'Gym', icon: 'dumbbell' },
 ];
 
-const MODES = [
+const MODES: { id: string; label: string; icon: MCIName }[] = [
   { id: 'walking', label: 'Walk', icon: 'walk' },
   { id: 'cycling', label: 'Cycle', icon: 'bike' },
   { id: 'transit', label: 'Public Transport', icon: 'bus' },
@@ -78,7 +81,7 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
                   }}
                 >
                   <MaterialCommunityIcons 
-                    name={p.icon as any} 
+                    name={p.icon} 
                     size={20} 
                     color={isSelected ? colors.primary : colors.text.secondary} 
                   />
@@ -122,7 +125,7 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
                   onPress={() => setMode(m.id)}
                 >
                   <MaterialCommunityIcons 
-                    name={m.icon as any} 
+                    name={m.icon} 
                     size={24} 
                     color={isSelected ? colors.primary : colors.text.secondary} 
                   />
@@ -157,7 +160,7 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',

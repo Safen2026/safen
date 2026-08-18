@@ -60,9 +60,10 @@ export async function getEmergencyContactPhones(userId: string): Promise<SmsCont
 
     if (error || !data) return [];
 
-    return (data as any[])
+    type ContactRow = { name: string | null; phone: string | null };
+    return (data as ContactRow[])
       .filter((c) => typeof c.phone === 'string' && c.phone.trim().length > 0)
-      .map((c) => ({ name: c.name || 'Contact', phone: c.phone.trim() }));
+      .map((c) => ({ name: c.name || 'Contact', phone: (c.phone as string).trim() }));
   } catch {
     return [];
   }

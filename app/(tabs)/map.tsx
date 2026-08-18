@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTheme } from '../../src/context/ThemeContext';
+import type { ThemeColors } from '../../src/constants/Theme';
 import { useLocalSearchParams } from 'expo-router';
 import { JourneyCard } from '../../src/components/JourneyCard';
 import { JourneySetupModal } from '../../src/components/JourneySetupModal';
@@ -217,7 +218,7 @@ export default function MapScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

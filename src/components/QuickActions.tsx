@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Shadows } from '../constants/Theme';
+import type { ThemeColors } from '../constants/Theme';
 import { ConfirmationModal } from './ConfirmationModal';
 import { useAlert, AlertType } from '../hooks/useAlert';
 import { useTheme } from '../context/ThemeContext';
@@ -19,7 +20,13 @@ export const QuickActions = () => {
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [description, setDescription] = useState('');
   const { loading, triggerAlert } = useAlert();
-  const [confirmModal, setConfirmModal] = useState({
+  const [confirmModal, setConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    msg: string;
+    icon: React.ComponentProps<typeof import('@expo/vector-icons').Ionicons>['name'];
+    color: string;
+  }>({
     visible: false,
     title: '',
     msg: '',
@@ -211,7 +218,7 @@ export const QuickActions = () => {
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     backgroundColor: colors.white,
     marginHorizontal: 16,

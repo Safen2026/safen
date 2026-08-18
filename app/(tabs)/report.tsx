@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch, ActivityIndicator, Image, KeyboardAvoidingView, Platform, Animated, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Region } from 'react-native-maps';
 import { useTheme } from '../../src/context/ThemeContext';
+import type { ThemeColors } from '../../src/constants/Theme';
 import { Shadows } from '../../src/constants/Theme';
 import { ConfirmationModal } from '../../src/components/ConfirmationModal';
 import { useReport } from '../../src/hooks/useReport';
@@ -15,31 +17,12 @@ import MapView, { PROVIDER_DEFAULT } from 'react-native-maps';
 
 type IncidentType = 'medical' | 'fire' | 'security';
 
-const INCIDENT_CATEGORIES = [
-  {
-    id: 'medical',
-    label: 'Medical',
-    icon: 'medical-bag',
-    color: '#D92D20',
-    bgColor: '#FEF3F2',
-    darkBgColor: '#3F1D1D',
-  },
-  {
-    id: 'fire',
-    label: 'Fire',
-    icon: 'fire',
-    color: '#DC6803',
-    bgColor: '#FFFAEB',
-    darkBgColor: '#3D250E',
-  },
-  {
-    id: 'security',
-    label: 'Security',
-    icon: 'shield-outline',
-    color: '#1570EF',
-    bgColor: '#EFF8FF',
-    darkBgColor: '#172B4D',
-  },
+type MCIName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+const INCIDENT_CATEGORIES: { id: string; label: string; icon: MCIName; color: string; bgColor: string; darkBgColor: string }[] = [
+  { id: 'medical', label: 'Medical', icon: 'medical-bag', color: '#D92D20', bgColor: '#FEF3F2', darkBgColor: '#3F1D1D' },
+  { id: 'fire',    label: 'Fire',    icon: 'fire',        color: '#DC6803', bgColor: '#FFFAEB', darkBgColor: '#3D250E' },
+  { id: 'security', label: 'Security', icon: 'shield-outline', color: '#1570EF', bgColor: '#EFF8FF', darkBgColor: '#172B4D' },
 ];
 
 export default function ReportScreen() {
@@ -62,7 +45,7 @@ export default function ReportScreen() {
   const [address, setAddress] = useState('Fetching location...');
   const [locationDetails, setLocationDetails] = useState('');
 
-  const handleRegionChangeComplete = async (region: any) => {
+  const handleRegionChangeComplete = async (region: Region) => {
     try {
       setLocation(prev => prev ? {
         ...prev,
@@ -392,7 +375,7 @@ export default function ReportScreen() {
                   </View>
                 )}
                 <View style={[styles.iconCircle, { backgroundColor: isSelected ? colors.white : activeBgColor }]}>
-                  <MaterialCommunityIcons name={cat.icon as any} size={32} color={cat.color} />
+                  <MaterialCommunityIcons name={cat.icon} size={32} color={cat.color} />
                 </View>
                 <Text style={[styles.cardLabel, isSelected && { color: isDark ? colors.text.primary : cat.color }]}>{cat.label}</Text>
               </TouchableOpacity>
@@ -423,7 +406,7 @@ export default function ReportScreen() {
                   </View>
                 )}
                 <View style={[styles.iconCircle, { backgroundColor: isSelected ? colors.white : activeBgColor }]}>
-                  <MaterialCommunityIcons name={cat.icon as any} size={32} color={cat.color} />
+                  <MaterialCommunityIcons name={cat.icon} size={32} color={cat.color} />
                 </View>
                 <Text style={[styles.cardLabel, isSelected && { color: isDark ? colors.text.primary : cat.color }]}>{cat.label}</Text>
               </TouchableOpacity>
@@ -863,7 +846,7 @@ export default function ReportScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.white,

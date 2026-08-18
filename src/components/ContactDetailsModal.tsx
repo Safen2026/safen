@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, Linking, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 import { sendPing } from '../lib/notifications';
 import { tripEvents } from '../lib/events';
 import { useRouter } from 'expo-router';
@@ -96,7 +97,7 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
             <View style={styles.headerText}>
               <Text style={styles.name}>{contact.name}</Text>
               <Text style={styles.phone}>{contact.phone}</Text>
-              {contact.relationship && <Text style={styles.relationship}>{contact.relationship}</Text>}
+              {contact.relationship ? <Text style={styles.relationship}>{contact.relationship}</Text> : null}
             </View>
           </View>
 
@@ -184,7 +185,7 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
   header: { alignItems: 'center', marginBottom: 24, paddingTop: 12 },

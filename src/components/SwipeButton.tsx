@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+﻿import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, PanResponder, Dimensions, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 
 interface SwipeButtonProps {
   onComplete: () => void;
@@ -111,7 +112,7 @@ export const SwipeButton = ({ onComplete, loading }: SwipeButtonProps) => {
   );
 };
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     height: BUTTON_HEIGHT,
     backgroundColor: '#E6F4F1',

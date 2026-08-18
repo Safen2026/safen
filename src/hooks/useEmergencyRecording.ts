@@ -1,7 +1,16 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Audio } from 'expo-av';
+import { CameraView, type CameraRecordingOptions } from 'expo-camera';
 import { supabase } from '../lib/supabase';
 import { uploadToCloudinary } from '../lib/cloudinary';
+
+/** Minimal interface for the CameraView imperative handle we actually use. */
+interface CameraRef {
+  recordAsync?: (options?: CameraRecordingOptions) => Promise<{ uri: string } | undefined>;
+  record?: (options?: CameraRecordingOptions) => Promise<{ uri: string } | undefined>;
+  stopRecording?: () => void;
+  takePictureAsync?: (options?: import('expo-camera').CameraPictureOptions) => Promise<{ uri: string } | undefined>;
+}
 
 export type RecordingPhase =
   | 'idle'
@@ -32,7 +41,7 @@ export function useEmergencyRecording() {
   const audioRecordingRef = useRef<Audio.Recording | null>(null);
   const isCyclingAudioRef = useRef(false);
   const elapsedSecondsRef = useRef(0);
-  const cameraRef = useRef<any>(null);
+  const cameraRef = useRef<CameraRef | null>(null);
   const timerRef           = useRef<NodeJS.Timeout | null>(null);
   const alertIdRef         = useRef<string | null>(null);
   const evidenceListRef    = useRef<string[]>([]);
@@ -158,7 +167,7 @@ export function useEmergencyRecording() {
   }, [uploadChunk]);
 
   // ─── Start video recording on whatever camera is currently bound ───────────
-  const startVideoRecording = useCallback((cam: any, alertId: string) => {
+  const startVideoRecording = useCallback((cam: CameraRef, alertId: string) => {
     if (!cam || !isActiveRef.current || elapsedSecondsRef.current >= VIDEO_MAX_DURATION_SECONDS) return;
     const recordFn = cam.recordAsync ?? cam.record;
     if (typeof recordFn !== 'function') {
@@ -167,8 +176,8 @@ export function useEmergencyRecording() {
     }
     
     console.log('[Recording] Starting camera 15s video chunk recording…');
-    recordFn.call(cam, { quality: '720p' })
-      .then((result: any) => {
+    recordFn.call(cam, {})
+      .then((result: { uri: string } | undefined) => {
         if (result?.uri) {
           console.log('[Recording] Video chunk captured, uploading:', result.uri);
           uploadChunk(result.uri, 'video', alertId);
@@ -176,7 +185,7 @@ export function useEmergencyRecording() {
           console.warn('[Recording] recordAsync resolved with no URI:', result);
         }
       })
-      .catch((err: any) => {
+      .catch((err: Error) => {
         if (err?.message?.toLowerCase().includes('stopped') || err?.message?.toLowerCase().includes('cancel')) {
           console.log('[Recording] Camera recording chunk finished/stopped.');
         } else {
@@ -348,12 +357,12 @@ export function useEmergencyRecording() {
     }
   }, [uploadChunk]);
 
-  const bindCameraRef = useCallback((ref: any) => {
-    cameraRef.current = ref;
+  const bindCameraRef = useCallback((ref: CameraView | null) => {
+    cameraRef.current = ref as unknown as CameraRef | null;
     // If SOS is already active when camera mounts, start video immediately
     if (isActiveRef.current && alertIdRef.current && ref) {
       console.log('[Recording] Camera mounted during active SOS — starting video now.');
-      startVideoRecording(ref, alertIdRef.current);
+      startVideoRecording(ref as unknown as CameraRef, alertIdRef.current);
     }
   }, [startVideoRecording]);
 

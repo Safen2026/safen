@@ -5,8 +5,10 @@ import { View, ActivityIndicator } from 'react-native';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '../src/lib/supabase';
 import { SessionContext } from '../src/context/SessionContext';
-import { ThemeProvider } from '../src/context/ThemeContext';
+import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
+import { TopToast } from '../src/components/TopToast';
+import { toastRef } from '../src/utils/toast';
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -31,29 +33,42 @@ export default function RootLayout() {
     };
   }, []);
 
+  return (
+    <ThemeProvider>
+      <SessionContext.Provider value={session}>
+        <RootNavigator loading={loading} />
+      </SessionContext.Provider>
+    </ThemeProvider>
+  );
+}
+
+// We extract this into its own component so it sits *inside* the ThemeProvider
+// and can safely call useTheme() to dynamically control the StatusBar and Loading colors.
+function RootNavigator({ loading }: { loading: boolean }) {
+  const { isDark, colors } = useTheme();
+
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8F9FA' }}>
-        <ActivityIndicator size="large" color="#2271EE" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   return (
-    <ThemeProvider>
-      <SessionContext.Provider value={session}>
-        <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="auth" options={{ headerShown: false }} />
-          <Stack.Screen name="verify" options={{ headerShown: false }} />
-          <Stack.Screen name="permissions" options={{ headerShown: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="history" options={{ headerShown: false }} />
-          <Stack.Screen name="medical-profile" options={{ headerShown: false }} />
-          <Stack.Screen name="safety-guidelines" options={{ headerShown: false }} />
-        </Stack>
-      </SessionContext.Provider>
-    </ThemeProvider>
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="auth" />
+        <Stack.Screen name="verify" />
+        <Stack.Screen name="permissions" />
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="history" />
+        <Stack.Screen name="medical-profile" />
+        <Stack.Screen name="safety-guidelines" />
+      </Stack>
+      <TopToast ref={toastRef} />
+    </>
   );
 }

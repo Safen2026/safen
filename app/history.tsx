@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../src/context/ThemeContext';
+import type { ThemeColors } from '../src/constants/Theme';
 import { supabase } from '../src/lib/supabase';
 import { Shadows } from '../src/constants/Theme';
 
@@ -27,13 +28,15 @@ type HistoryItem = {
   created_at: string;
 };
 
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
 // Map backend types to UI colors, icons, and filter categories
-const TYPE_META: Record<string, { icon: any; color: string; label: string; category: string }> = {
+const TYPE_META: Record<string, { icon: IoniconsName; color: string; label: string; category: string }> = {
   sos: { icon: 'alert', color: '#E02B2B', label: 'Emergency SOS', category: 'SOS' },
   medical: { icon: 'medkit', color: '#10B981', label: 'Medical Assistance', category: 'Medical' },
   police: { icon: 'shield', color: '#2563EB', label: 'Security Request', category: 'Security' },
   fire: { icon: 'flame', color: '#EA580C', label: 'Fire Incident', category: 'Fire' },
-  robbery: { icon: 'person-mask', color: '#7C3AED', label: 'Theft / Robbery Report', category: 'Security' },
+  robbery: { icon: 'person', color: '#7C3AED', label: 'Theft / Robbery Report', category: 'Security' },
   accident: { icon: 'car', color: '#D97706', label: 'Accident Report', category: 'Other' },
   other: { icon: 'document-text', color: '#6B7280', label: 'Incident Report', category: 'Other' },
 };
@@ -156,10 +159,11 @@ export default function HistoryScreen() {
       }
 
       if (!map.has(groupTitle)) {
-        map.set(groupTitle, []);
-        groups.push({ title: groupTitle, data: map.get(groupTitle)! });
+        const newGroup: typeof filteredItems = [];
+        map.set(groupTitle, newGroup);
+        groups.push({ title: groupTitle, data: newGroup });
       }
-      map.get(groupTitle)!.push(item);
+      map.get(groupTitle)?.push(item);
     });
 
     return groups;
@@ -261,7 +265,7 @@ export default function HistoryScreen() {
                       {meta.category === 'SOS' ? (
                         <Text style={styles.sosIconText}>SOS</Text>
                       ) : (
-                        <Ionicons name={meta.icon as any} size={22} color="#FFFFFF" />
+                        <Ionicons name={meta.icon} size={22} color="#FFFFFF" />
                       )}
                     </View>
 
@@ -277,11 +281,11 @@ export default function HistoryScreen() {
                       </Text>
 
                       <View style={styles.cardBottomRow}>
-                        {item.status && (
+                        {item.status ? (
                           <Text style={styles.statusText}>
                             {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                           </Text>
-                        )}
+                        ) : null}
                         <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
                       </View>
                     </View>
@@ -297,7 +301,7 @@ export default function HistoryScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB', // Light clean background matching UI

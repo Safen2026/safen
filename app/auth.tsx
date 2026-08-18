@@ -16,9 +16,8 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import app, { firebaseAuth } from '../src/lib/firebase';
-import { PhoneAuthProvider } from 'firebase/auth';
+import { firebaseAuth } from '../src/lib/firebase';
+import { signInWithPhoneNumber } from '@react-native-firebase/auth';
 
 const Colors = {
   primary: '#0A2463',
@@ -119,7 +118,6 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
 
-  const recaptchaVerifier = useRef(null);
   const underlineX = useRef(new Animated.Value(0)).current;
 
   const switchMode = (next: Mode) => {
@@ -147,12 +145,9 @@ export default function AuthScreen() {
 
     setLoading(true);
     try {
-      if (!firebaseAuth) throw new Error('Firebase not configured');
-      const phoneProvider = new PhoneAuthProvider(firebaseAuth);
-      const verificationId = await phoneProvider.verifyPhoneNumber(
-        formattedPhone,
-        recaptchaVerifier.current as any
-      );
+      // The Native SDK handles reCAPTCHA / Play Integrity silently in the background
+      const confirmation = await signInWithPhoneNumber(firebaseAuth, formattedPhone);
+      const verificationId = confirmation.verificationId;
       setLoading(false);
       router.push({ 
         pathname: '/verify', 
@@ -164,21 +159,15 @@ export default function AuthScreen() {
           email: mode === 'signup' ? email : undefined 
         } 
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false);
-      Alert.alert('Authentication failed', err.message);
+      const msg = err instanceof Error ? err.message : String(err);
+      Alert.alert('Authentication failed', msg);
     }
   };
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        // @ts-ignore
-        innerRef={recaptchaVerifier}
-        firebaseConfig={app?.options}
-        attemptInvisibleVerification={true}
-      />
       <View style={[styles.brand, { marginTop: insets.top + 24 }]}>
         <Image
           source={require('../assets/images/logo.png')}

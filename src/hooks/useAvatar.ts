@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { uploadToCloudinary } from '../lib/cloudinary';
+import { useSession } from '../context/SessionContext';
 
 export function useAvatar() {
+  // Pull the session from the Water Tower (SessionContext) — free, no DB call.
+  const session = useSession();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => { loadAvatar(); }, []);
-
-  const loadAvatar = async () => {
+  // useCallback is necessary here because loadAvatar is a dependency of the
+  // useEffect below. Without it, a new function is created every render,
+  // causing the effect to re-run in an infinite loop.
+  const loadAvatar = useCallback(async () => {
+    if (!session?.user) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
-
       const { data } = await supabase
         .from('profiles')
         .select('avatar_url')
@@ -27,12 +29,14 @@ export function useAvatar() {
     } catch (err) {
       console.warn('loadAvatar error:', err);
     }
-  };
+  }, [session?.user?.id]); // Only re-create when the user ID changes
+
+  // Run once on mount (and again if the user logs out then back in).
+  useEffect(() => { loadAvatar(); }, [loadAvatar]);
 
   const uploadAvatar = async (localUri: string): Promise<boolean> => {
     setUploading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) {
         console.warn('No session found');
         setUploading(false);

@@ -6,9 +6,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
-import app, { firebaseAuth } from '../src/lib/firebase';
-import { PhoneAuthProvider, signInWithCredential, updateProfile } from 'firebase/auth';
+import { firebaseAuth } from '../src/lib/firebase';
+import { PhoneAuthProvider, signInWithCredential, signInWithPhoneNumber, updateProfile } from '@react-native-firebase/auth';
 import { supabase } from '../src/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PERMISSIONS_STORAGE_KEY } from './permissions';
@@ -28,14 +27,13 @@ const RESEND_COOLDOWN = 60;
 
 export default function VerifyScreen() {
   const insets = useSafeAreaInsets();
-  const { phone, verificationId: initialVerificationId, firstName, lastName, email } = useLocalSearchParams<{ phone: string, verificationId: string, firstName?: string, lastName?: string, email?: string }>();
+  const { phone, verificationId: initialVerificationId, firstName, lastName } = useLocalSearchParams<{ phone: string, verificationId: string, firstName?: string, lastName?: string, email?: string }>();
 
   const [verificationId, setVerificationId] = useState(initialVerificationId);
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN);
   const inputRefs = useRef<(TextInput | null)[]>([]);
-  const recaptchaVerifier = useRef(null);
 
   // Countdown timer for resend button
   useEffect(() => {
@@ -64,7 +62,7 @@ export default function VerifyScreen() {
     }
   };
 
-  const handleKeyPress = (e: any, index: number) => {
+  const handleKeyPress = (e: import('react-native').NativeSyntheticEvent<import('react-native').TextInputKeyPressEventData>, index: number) => {
     if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
@@ -80,7 +78,6 @@ export default function VerifyScreen() {
     setLoading(true);
     try {
       const credential = PhoneAuthProvider.credential(verificationId, token);
-      if (!firebaseAuth) throw new Error('Firebase not configured');
       const { user } = await signInWithCredential(firebaseAuth, credential);
       
       if (firstName && lastName) {
@@ -151,9 +148,10 @@ export default function VerifyScreen() {
       } catch {
         router.replace('/permissions');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false);
-      Alert.alert('Verification failed', err.message);
+      const msg = err instanceof Error ? err.message : String(err);
+      Alert.alert('Verification failed', msg);
       setOtp(Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
     }
@@ -163,21 +161,18 @@ export default function VerifyScreen() {
     if (resendCooldown > 0) return;
     setLoading(true);
     try {
-      if (!firebaseAuth) throw new Error('Firebase not configured');
-      const phoneProvider = new PhoneAuthProvider(firebaseAuth);
-      const newVerificationId = await phoneProvider.verifyPhoneNumber(
-        phone,
-        recaptchaVerifier.current as any
-      );
+      const confirmation = await signInWithPhoneNumber(firebaseAuth, phone);
+      const newVerificationId = confirmation.verificationId;
       setVerificationId(newVerificationId);
       setLoading(false);
       setResendCooldown(RESEND_COOLDOWN);
       setOtp(Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
       Alert.alert('Code sent', 'A new verification code has been sent to your phone.');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false);
-      Alert.alert('Resend failed', err.message);
+      const msg = err instanceof Error ? err.message : String(err);
+      Alert.alert('Resend failed', msg);
     }
   };
 
@@ -185,13 +180,6 @@ export default function VerifyScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        // @ts-ignore
-        innerRef={recaptchaVerifier}
-        firebaseConfig={app?.options}
-        attemptInvisibleVerification={true}
-      />
       <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* Back button */}

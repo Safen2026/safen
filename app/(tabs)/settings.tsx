@@ -8,7 +8,7 @@ import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
 import { firebaseAuth } from '../../src/lib/firebase';
 import { signOut } from 'firebase/auth';
-import { SessionContext } from '../../src/context/SessionContext';
+import { useSession } from '../../src/context/SessionContext';
 import { FeedbackModal } from '../../src/components/FeedbackModal';
 import { useAvatar } from '../../src/hooks/useAvatar';
 
@@ -16,7 +16,7 @@ export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
-  const session = useContext(SessionContext);
+  const session = useSession();
   const { avatarUrl } = useAvatar();
   
   const [signingOut, setSigningOut] = useState(false);
@@ -103,9 +103,10 @@ export default function SettingsScreen() {
       setSigningOut(false);
       setSignOutModalVisible(false);
       router.replace('/auth');
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSigningOut(false);
-      Alert.alert('Error', err.message);
+      const msg = err instanceof Error ? err.message : String(err);
+      Alert.alert('Error', msg);
     }
   };
 
@@ -145,7 +146,7 @@ export default function SettingsScreen() {
     }
   };
 
-  const renderRow = (icon: any, title: string, rightContent: React.ReactNode, onPress?: () => void, isDestructive = false) => (
+  const renderRow = (icon: React.ComponentProps<typeof Ionicons>['name'], title: string, rightContent: React.ReactNode, onPress?: () => void, isDestructive = false) => (
     <TouchableOpacity 
       style={styles.row} 
       onPress={() => {

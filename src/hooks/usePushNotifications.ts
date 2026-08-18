@@ -1,18 +1,9 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
-
-const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-
-let Notifications: any = null;
-if (!isExpoGo) {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    Notifications = require('expo-notifications');
-  } catch {}
-}
+import { Notifications, isExpoGo } from '../lib/expoNotifications';
 
 
 
@@ -43,7 +34,7 @@ export function usePushNotifications(userId: string | null | undefined) {
 }
 
 async function registerForPushNotifications(userId: string) {
-  if (isExpoGo) return;
+  if (isExpoGo || !Notifications) return;
 
   try {
     if (Platform.OS === 'android') {

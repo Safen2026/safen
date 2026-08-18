@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import type { ThemeColors } from '../constants/Theme';
 import { Shadows } from '../constants/Theme';
 
 interface SafeCheckInCardProps {
@@ -16,7 +17,7 @@ interface SafeCheckInCardProps {
   isExpired?: boolean;
 }
 
-export const SafeCheckInCard = ({
+export const SafeCheckInCard = React.memo(({
   onStart,
   activeCheckIn,
   onConfirmSafe,
@@ -82,10 +83,10 @@ export const SafeCheckInCard = ({
         </View>
         <View style={styles.textBlock}>
           <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
-            To {activeCheckIn!.destination}
+            To {activeCheckIn?.destination ?? '—'}
           </Text>
           <Text style={[styles.sub, { color: colors.text.secondary }]} numberOfLines={1}>
-            {activeCheckIn!.timeLeftStr ?? 'Watchdog timer active'}
+            {activeCheckIn?.timeLeftStr ?? 'Watchdog timer active'}
           </Text>
         </View>
         <View style={styles.activeActions}>
@@ -138,9 +139,9 @@ export const SafeCheckInCard = ({
       </TouchableOpacity>
     </View>
   );
-};
+});
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
