@@ -7,7 +7,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
 import { firebaseAuth } from '../../src/lib/firebase';
-import { signOut } from 'firebase/auth';
+import { signOut } from '@react-native-firebase/auth';
 import { useSession } from '../../src/context/SessionContext';
 import { FeedbackModal } from '../../src/components/FeedbackModal';
 import { useAvatar } from '../../src/hooks/useAvatar';

@@ -38,4 +38,4 @@ export const getCurrentSession = async () => {
   };
 };
 
-export default getApp;
+export default getApp();
