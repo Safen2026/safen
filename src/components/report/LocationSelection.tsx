@@ -123,9 +123,9 @@ export const LocationSelection = React.memo(function LocationSelection({
           </View>
 
           <Modal visible={isFullScreenMap} animationType="slide" onRequestClose={() => setIsFullScreenMap(false)}>
-            <View style={{ flex: 1 }}>
+            <View style={styles.flex1}>
               <MapView
-                style={{ flex: 1 }}
+                style={styles.flex1}
                 provider={PROVIDER_DEFAULT}
                 initialRegion={location ? {
                   latitude: location.coords.latitude,
@@ -152,7 +152,7 @@ export const LocationSelection = React.memo(function LocationSelection({
               </TouchableOpacity>
               <View style={styles.fullScreenFooter}>
                 <TouchableOpacity 
-                  style={[styles.nextButton, { width: '100%' }]}
+                  style={[styles.nextButton, styles.w100]}
                   activeOpacity={0.8}
                   onPress={() => setIsFullScreenMap(false)}
                   accessibilityRole="button"
@@ -165,7 +165,7 @@ export const LocationSelection = React.memo(function LocationSelection({
             </View>
           </Modal>
 
-          <View style={{ marginTop: 20 }}>
+          <View style={styles.mt20}>
             <Text style={styles.detailsLabel}>
               Exact Location Details (Optional)
             </Text>
@@ -360,4 +360,7 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  flex1: { flex: 1 },
+  w100: { width: '100%' },
+  mt20: { marginTop: 20 },
 });

@@ -42,6 +42,8 @@ export default function RootLayout() {
   );
 }
 
+import { ThemeProvider as NavThemeProvider, DefaultTheme, DarkTheme as NavDarkTheme } from '@react-navigation/native';
+
 // We extract this into its own component so it sits *inside* the ThemeProvider
 // and can safely call useTheme() to dynamically control the StatusBar and Loading colors.
 function RootNavigator({ loading }: { loading: boolean }) {
@@ -55,10 +57,20 @@ function RootNavigator({ loading }: { loading: boolean }) {
     );
   }
 
+  const navTheme = {
+    ...(isDark ? NavDarkTheme : DefaultTheme),
+    colors: {
+      ...(isDark ? NavDarkTheme.colors : DefaultTheme.colors),
+      background: colors.background,
+    },
+  };
+
   return (
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false }}>
+      <NavThemeProvider value={navTheme}>
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="auth" />
         <Stack.Screen name="verify" />
@@ -67,7 +79,9 @@ function RootNavigator({ loading }: { loading: boolean }) {
         <Stack.Screen name="history" />
         <Stack.Screen name="medical-profile" />
         <Stack.Screen name="safety-guidelines" />
-      </Stack>
+          </Stack>
+        </View>
+      </NavThemeProvider>
       <TopToast ref={toastRef} />
     </>
   );

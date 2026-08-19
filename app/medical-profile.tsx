@@ -1,313 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, ActivityIndicator, Switch, Alert,
+  TextInput, ActivityIndicator, Switch, Alert,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
 import { supabase } from '../src/lib/supabase';
+import { MedicalProfile, EMPTY_PROFILE, BLOOD_TYPES, calcCompleteness } from '../src/types/medical';
+import { SectionCard } from '../src/components/medical-profile/SectionCard';
+import { TagInput } from '../src/components/medical-profile/TagInput';
+import { AllergyInput } from '../src/components/medical-profile/AllergyInput';
+import { ICECardModal } from '../src/components/medical-profile/ICECardModal';
 
-// ── Types ────────────────────────────────────────────────────────────────────
-type Severity = 'mild' | 'severe';
-type Allergy = { name: string; severity: Severity };
-
-type MedicalProfile = {
-  blood_type: string | null;
-  height_cm: number | null;
-  weight_kg: number | null;
-  is_organ_donor: boolean;
-  allergies: Allergy[];
-  conditions: string[];
-  medications: string[];
-  doctor_name: string | null;
-  doctor_phone: string | null;
-  doctor_hospital: string | null;
-};
-
-const EMPTY_PROFILE: MedicalProfile = {
-  blood_type: null,
-  height_cm: null,
-  weight_kg: null,
-  is_organ_donor: false,
-  allergies: [],
-  conditions: [],
-  medications: [],
-  doctor_name: null,
-  doctor_phone: null,
-  doctor_hospital: null,
-};
-
-const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-
-// ── Completeness ─────────────────────────────────────────────────────────────
-const calcCompleteness = (p: MedicalProfile): number => {
-  const checks = [
-    !!p.blood_type,
-    !!p.height_cm,
-    !!p.weight_kg,
-    p.allergies.length > 0,
-    p.conditions.length > 0,
-    p.medications.length > 0,
-    !!p.doctor_name,
-    !!p.doctor_phone,
-  ];
-  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-};
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-const SectionCard = ({
-  title, icon, color, expanded, onToggle, children, completeBadge,
-}: {
-  title: string; icon: React.ComponentProps<typeof Ionicons>['name']; color: string;
-  expanded: boolean; onToggle: () => void;
-  children: React.ReactNode; completeBadge?: boolean;
-}) => {
-  const { colors } = useTheme();
-  return (
-    <View style={[sectionStyles.card, { borderColor: expanded ? color : colors.border }]}>
-      <TouchableOpacity style={sectionStyles.header} onPress={onToggle} activeOpacity={0.7}>
-        <View style={[sectionStyles.iconBox, { backgroundColor: color + '18' }]}>
-          <Ionicons name={icon} size={20} color={color} />
-        </View>
-        <Text style={[sectionStyles.title, { color: colors.text.primary }]}>{title}</Text>
-        {completeBadge && (
-          <View style={sectionStyles.completeBadge}>
-            <Ionicons name="checkmark-circle" size={16} color="#00875A" />
-          </View>
-        )}
-        <Ionicons
-          name={expanded ? 'chevron-up' : 'chevron-down'}
-          size={20}
-          color={colors.text.secondary}
-          style={{ marginLeft: 'auto' }}
-        />
-      </TouchableOpacity>
-      {expanded && <View style={sectionStyles.body}>{children}</View>}
-    </View>
-  );
-};
-
-const sectionStyles = StyleSheet.create({
-  card: { borderRadius: 14, borderWidth: 1.5, marginBottom: 12, overflow: 'hidden', backgroundColor: '#fff' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
-  iconBox: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  title: { fontSize: 16, fontWeight: '700' },
-  completeBadge: { marginLeft: 8 },
-  body: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 4 },
-});
-
-// ── Tag input ─────────────────────────────────────────────────────────────────
-const TagInput = ({
-  tags, onAdd, onRemove, placeholder, color,
-}: {
-  tags: string[]; onAdd: (t: string) => void;
-  onRemove: (i: number) => void; placeholder: string; color: string;
-}) => {
-  const { colors } = useTheme();
-  const [value, setValue] = useState('');
-
-  const submit = () => {
-    const trimmed = value.trim();
-    if (trimmed && !tags.includes(trimmed)) { onAdd(trimmed); setValue(''); }
-  };
-
-  return (
-    <View>
-      <View style={tagStyles.inputRow}>
-        <TextInput
-          style={[tagStyles.input, { color: colors.text.primary, borderColor: colors.border, backgroundColor: colors.background }]}
-          value={value}
-          onChangeText={setValue}
-          placeholder={placeholder}
-          placeholderTextColor={colors.text.secondary}
-          onSubmitEditing={submit}
-          returnKeyType="done"
-        />
-        <TouchableOpacity
-          style={[tagStyles.addBtn, { backgroundColor: color }]}
-          onPress={submit}
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-      <View style={tagStyles.tagsRow}>
-        {tags.map((tag, i) => (
-          <View key={i} style={[tagStyles.tag, { backgroundColor: color + '18', borderColor: color + '40' }]}>
-            <Text style={[tagStyles.tagText, { color }]}>{tag}</Text>
-            <TouchableOpacity onPress={() => onRemove(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={14} color={color} />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-};
-
-const tagStyles = StyleSheet.create({
-  inputRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  input: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 42, fontSize: 14 },
-  addBtn: { width: 42, height: 42, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
-  tagText: { fontSize: 13, fontWeight: '600' },
-});
-
-// ── Allergy tag input ─────────────────────────────────────────────────────────
-const AllergyInput = ({
-  allergies, onAdd, onRemove,
-}: {
-  allergies: Allergy[];
-  onAdd: (a: Allergy) => void;
-  onRemove: (i: number) => void;
-}) => {
-  const { colors } = useTheme();
-  const [value, setValue] = useState('');
-  const [severity, setSeverity] = useState<Severity>('mild');
-
-  const submit = () => {
-    const trimmed = value.trim();
-    if (trimmed) { onAdd({ name: trimmed, severity }); setValue(''); }
-  };
-
-  return (
-    <View>
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-        <TextInput
-          style={[tagStyles.input, { flex: 1, color: colors.text.primary, borderColor: colors.border, backgroundColor: colors.background }]}
-          value={value}
-          onChangeText={setValue}
-          placeholder="e.g. Penicillin"
-          placeholderTextColor={colors.text.secondary}
-          onSubmitEditing={submit}
-          returnKeyType="done"
-        />
-        <TouchableOpacity
-          style={[tagStyles.addBtn, { backgroundColor: '#DC2626' }]}
-          onPress={submit}
-        >
-          <Ionicons name="add" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-      {/* Severity selector */}
-      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-        {(['mild', 'severe'] as Severity[]).map(s => (
-          <TouchableOpacity
-            key={s}
-            style={{
-              flex: 1, paddingVertical: 7, borderRadius: 8, borderWidth: 1,
-              borderColor: severity === s ? (s === 'severe' ? '#DC2626' : '#EA580C') : colors.border,
-              backgroundColor: severity === s ? (s === 'severe' ? '#DC262618' : '#EA580C18') : colors.background,
-              alignItems: 'center',
-            }}
-            onPress={() => setSeverity(s)}
-          >
-            <Text style={{ fontSize: 13, fontWeight: '700', color: severity === s ? (s === 'severe' ? '#DC2626' : '#EA580C') : colors.text.secondary }}>
-              {s === 'mild' ? '⚠️ Mild' : '🚨 Severe'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <View style={tagStyles.tagsRow}>
-        {allergies.map((a, i) => (
-          <View key={i} style={[tagStyles.tag, {
-            backgroundColor: a.severity === 'severe' ? '#DC262618' : '#EA580C18',
-            borderColor: a.severity === 'severe' ? '#DC262640' : '#EA580C40',
-          }]}>
-            <Text style={{ fontSize: 11, marginRight: 2 }}>{a.severity === 'severe' ? '🚨' : '⚠️'}</Text>
-            <Text style={[tagStyles.tagText, { color: a.severity === 'severe' ? '#DC2626' : '#EA580C' }]}>{a.name}</Text>
-            <TouchableOpacity onPress={() => onRemove(i)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={14} color={a.severity === 'severe' ? '#DC2626' : '#EA580C'} />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-};
-
-// ── ICE Card Modal ────────────────────────────────────────────────────────────
-const ICECardModal = ({ visible, profile, userName, onClose }: {
-  visible: boolean; profile: MedicalProfile; userName: string; onClose: () => void;
-}) => {
-  const { colors } = useTheme();
-  const severeAllergies = profile.allergies.filter(a => a.severity === 'severe');
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: '#0A2463', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <MaterialCommunityIcons name="shield-cross" size={28} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 0.5 }}>ICE CARD</Text>
-            </View>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color="rgba(255,255,255,0.7)" />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600', marginBottom: 16, letterSpacing: 1 }}>IN CASE OF EMERGENCY</Text>
-
-          <Text style={{ color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 4 }}>{userName}</Text>
-
-          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 20 }}>
-            {profile.blood_type && (
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 }}>
-                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600' }}>BLOOD TYPE</Text>
-                <Text style={{ color: '#fff', fontSize: 24, fontWeight: '800' }}>{profile.blood_type}</Text>
-              </View>
-            )}
-            {profile.is_organ_donor && (
-              <View style={{ backgroundColor: '#00875A40', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, justifyContent: 'center' }}>
-                <Text style={{ color: '#4ADE80', fontSize: 13, fontWeight: '700' }}>🫀 Organ Donor</Text>
-              </View>
-            )}
-          </View>
-
-          {severeAllergies.length > 0 && (
-            <View style={{ backgroundColor: '#DC262620', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#DC262640' }}>
-              <Text style={{ color: '#FCA5A5', fontSize: 12, fontWeight: '700', marginBottom: 6 }}>🚨 SEVERE ALLERGIES</Text>
-              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>{severeAllergies.map(a => a.name).join(', ')}</Text>
-            </View>
-          )}
-
-          {profile.conditions.length > 0 && (
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600', marginBottom: 6 }}>CONDITIONS</Text>
-              <Text style={{ color: '#fff', fontSize: 14 }}>{profile.conditions.join(' · ')}</Text>
-            </View>
-          )}
-
-          {profile.medications.length > 0 && (
-            <View style={{ marginBottom: 12 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600', marginBottom: 6 }}>MEDICATIONS</Text>
-              <Text style={{ color: '#fff', fontSize: 14 }}>{profile.medications.join(' · ')}</Text>
-            </View>
-          )}
-
-          {profile.doctor_name && (
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, marginTop: 4 }}>
-              <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '600', marginBottom: 4 }}>DOCTOR</Text>
-              <Text style={{ color: '#fff', fontSize: 15, fontWeight: '600' }}>{profile.doctor_name}</Text>
-              {profile.doctor_phone ? <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, marginTop: 2 }}>{profile.doctor_phone}</Text> : null}
-              {profile.doctor_hospital ? <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 1 }}>{profile.doctor_hospital}</Text> : null}
-            </View>
-          )}
-        </View>
-      </View>
-    </Modal>
-  );
-};
-
-// ── Main Screen ───────────────────────────────────────────────────────────────
 export default function MedicalProfileScreen() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
 
   const [profile, setProfile] = useState<MedicalProfile>(EMPTY_PROFILE);
   const [userName, setUserName] = useState('');
@@ -322,8 +33,9 @@ export default function MedicalProfileScreen() {
     doctor: false,
   });
 
-  const toggle = (key: keyof typeof expanded) =>
+  const toggle = useCallback((key: keyof typeof expanded) => {
     setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   const completeness = calcCompleteness(profile);
 
@@ -359,7 +71,22 @@ export default function MedicalProfileScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const save = async () => {
+  const save = useCallback(async () => {
+    // Pre-flight Security validation
+    if (
+      (profile.doctor_name && profile.doctor_name.length > 100) ||
+      (profile.doctor_phone && profile.doctor_phone.length > 100) ||
+      (profile.doctor_hospital && profile.doctor_hospital.length > 100)
+    ) {
+      Alert.alert('Error', 'Contact fields cannot exceed 100 characters.');
+      return;
+    }
+    
+    if (profile.conditions.some(c => c.length > 50) || profile.medications.some(m => m.length > 50) || profile.allergies.some(a => a.name.length > 50)) {
+       Alert.alert('Error', 'Individual conditions or medications cannot exceed 50 characters.');
+       return;
+    }
+
     setSaving(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
@@ -375,9 +102,9 @@ export default function MedicalProfileScreen() {
         allergies: profile.allergies,
         conditions: profile.conditions,
         medications: profile.medications,
-        doctor_name: profile.doctor_name || null,
-        doctor_phone: profile.doctor_phone || null,
-        doctor_hospital: profile.doctor_hospital || null,
+        doctor_name: profile.doctor_name ? profile.doctor_name.trim() : null,
+        doctor_phone: profile.doctor_phone ? profile.doctor_phone.trim() : null,
+        doctor_hospital: profile.doctor_hospital ? profile.doctor_hospital.trim() : null,
       }, { onConflict: 'user_id' });
 
     setSaving(false);
@@ -386,10 +113,32 @@ export default function MedicalProfileScreen() {
     } else {
       Alert.alert('Saved', 'Your medical profile has been updated.');
     }
-  };
+  }, [profile]);
 
-  const update = <K extends keyof MedicalProfile>(key: K, value: MedicalProfile[K]) =>
+  const update = useCallback(<K extends keyof MedicalProfile>(key: K, value: MedicalProfile[K]) => {
     setProfile(prev => ({ ...prev, [key]: value }));
+  }, []);
+  
+  // Memoize all individual update callbacks to avoid re-rendering inputs repeatedly
+  const onAddAllergy = useCallback((a: import('../src/types/medical').Allergy) => {
+    setProfile(prev => ({ ...prev, allergies: [...prev.allergies, a] }));
+  }, []);
+  const onRemoveAllergy = useCallback((i: number) => {
+    setProfile(prev => ({ ...prev, allergies: prev.allergies.filter((_, idx) => idx !== i) }));
+  }, []);
+  const onAddCondition = useCallback((t: string) => {
+    setProfile(prev => ({ ...prev, conditions: [...prev.conditions, t] }));
+  }, []);
+  const onRemoveCondition = useCallback((i: number) => {
+    setProfile(prev => ({ ...prev, conditions: prev.conditions.filter((_, idx) => idx !== i) }));
+  }, []);
+  const onAddMedication = useCallback((t: string) => {
+    setProfile(prev => ({ ...prev, medications: [...prev.medications, t] }));
+  }, []);
+  const onRemoveMedication = useCallback((i: number) => {
+    setProfile(prev => ({ ...prev, medications: prev.medications.filter((_, idx) => idx !== i) }));
+  }, []);
+  const onCloseIceModal = useCallback(() => setIceVisible(false), []);
 
   if (loading) {
     return (
@@ -406,18 +155,25 @@ export default function MedicalProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity 
+            onPress={() => router.back()} 
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
             <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Medical Profile</Text>
+          <Text style={styles.headerTitle} accessibilityRole="header">Medical Profile</Text>
           <TouchableOpacity
             style={[styles.saveBtn, saving && { opacity: 0.6 }]}
             onPress={save}
             disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Save medical profile"
           >
             {saving
               ? <ActivityIndicator size="small" color="#fff" />
@@ -433,7 +189,7 @@ export default function MedicalProfileScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Completeness bar */}
-          <View style={styles.completenessCard}>
+          <View style={styles.completenessCard} accessibilityElementsHidden={true} importantForAccessibility="no-hide-descendants">
             <View style={styles.completenessTop}>
               <View>
                 <Text style={styles.completenessTitle}>Profile Completeness</Text>
@@ -458,10 +214,16 @@ export default function MedicalProfileScreen() {
           </View>
 
           {/* ICE Card button */}
-          <TouchableOpacity style={styles.iceBtn} onPress={() => setIceVisible(true)} activeOpacity={0.85}>
+          <TouchableOpacity 
+            style={styles.iceBtn} 
+            onPress={() => setIceVisible(true)} 
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="View In Case of Emergency Card"
+          >
             <MaterialCommunityIcons name="shield-cross" size={20} color="#fff" />
             <Text style={styles.iceBtnText}>View ICE Card</Text>
-            <Ionicons name="arrow-forward" size={16} color="rgba(255,255,255,0.8)" style={{ marginLeft: 'auto' }} />
+            <Ionicons name="arrow-forward" size={16} color="rgba(255,255,255,0.8)" style={styles.mlAuto} />
           </TouchableOpacity>
 
           {/* ── Section 1: Vitals ── */}
@@ -484,6 +246,9 @@ export default function MedicalProfileScreen() {
                     profile.blood_type === bt && styles.bloodTypeChipActive,
                   ]}
                   onPress={() => update('blood_type', profile.blood_type === bt ? null : bt)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: profile.blood_type === bt }}
+                  accessibilityLabel={`Blood type ${bt}`}
                 >
                   <Text style={[
                     styles.bloodTypeText,
@@ -495,7 +260,7 @@ export default function MedicalProfileScreen() {
 
             {/* Height & Weight */}
             <View style={styles.row2}>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex}>
                 <Text style={styles.fieldLabel}>Height (cm)</Text>
                 <TextInput
                   style={styles.inputField}
@@ -504,9 +269,11 @@ export default function MedicalProfileScreen() {
                   keyboardType="decimal-pad"
                   placeholder="e.g. 175"
                   placeholderTextColor={colors.text.secondary}
+                  maxLength={5}
+                  accessibilityLabel="Height in centimeters"
                 />
               </View>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex}>
                 <Text style={styles.fieldLabel}>Weight (kg)</Text>
                 <TextInput
                   style={styles.inputField}
@@ -515,13 +282,15 @@ export default function MedicalProfileScreen() {
                   keyboardType="decimal-pad"
                   placeholder="e.g. 70"
                   placeholderTextColor={colors.text.secondary}
+                  maxLength={5}
+                  accessibilityLabel="Weight in kilograms"
                 />
               </View>
             </View>
 
             {/* Organ donor */}
             <View style={styles.switchRow}>
-              <View style={{ flex: 1 }}>
+              <View style={styles.flex}>
                 <Text style={styles.switchLabel}>Organ Donor</Text>
                 <Text style={styles.switchSub}>Allow organs to be donated in an emergency</Text>
               </View>
@@ -530,6 +299,8 @@ export default function MedicalProfileScreen() {
                 onValueChange={v => update('is_organ_donor', v)}
                 trackColor={{ false: '#E5E7EB', true: '#00875A80' }}
                 thumbColor={profile.is_organ_donor ? '#00875A' : '#f4f3f4'}
+                accessibilityRole="switch"
+                accessibilityLabel="Organ Donor status"
               />
             </View>
           </SectionCard>
@@ -548,8 +319,8 @@ export default function MedicalProfileScreen() {
             </Text>
             <AllergyInput
               allergies={profile.allergies}
-              onAdd={a => update('allergies', [...profile.allergies, a])}
-              onRemove={i => update('allergies', profile.allergies.filter((_, idx) => idx !== i))}
+              onAdd={onAddAllergy}
+              onRemove={onRemoveAllergy}
             />
           </SectionCard>
 
@@ -565,17 +336,17 @@ export default function MedicalProfileScreen() {
             <Text style={styles.fieldLabel}>Medical Conditions</Text>
             <TagInput
               tags={profile.conditions}
-              onAdd={t => update('conditions', [...profile.conditions, t])}
-              onRemove={i => update('conditions', profile.conditions.filter((_, idx) => idx !== i))}
+              onAdd={onAddCondition}
+              onRemove={onRemoveCondition}
               placeholder="e.g. Diabetes, Hypertension"
               color="#7C3AED"
             />
-            <View style={{ height: 16 }} />
+            <View style={styles.spacer16} />
             <Text style={styles.fieldLabel}>Current Medications</Text>
             <TagInput
               tags={profile.medications}
-              onAdd={t => update('medications', [...profile.medications, t])}
-              onRemove={i => update('medications', profile.medications.filter((_, idx) => idx !== i))}
+              onAdd={onAddMedication}
+              onRemove={onRemoveMedication}
               placeholder="e.g. Metformin 500mg"
               color="#7C3AED"
             />
@@ -598,6 +369,8 @@ export default function MedicalProfileScreen() {
               placeholder="e.g. Dr. Adesola Balogun"
               placeholderTextColor={colors.text.secondary}
               autoCapitalize="words"
+              maxLength={100}
+              accessibilityLabel="Doctor's Name"
             />
             <Text style={styles.fieldLabel}>Phone Number</Text>
             <TextInput
@@ -607,6 +380,8 @@ export default function MedicalProfileScreen() {
               placeholder="e.g. 08012345678"
               placeholderTextColor={colors.text.secondary}
               keyboardType="phone-pad"
+              maxLength={100}
+              accessibilityLabel="Doctor's Phone Number"
             />
             <Text style={styles.fieldLabel}>Hospital / Clinic</Text>
             <TextInput
@@ -616,17 +391,19 @@ export default function MedicalProfileScreen() {
               placeholder="e.g. Lagos University Teaching Hospital"
               placeholderTextColor={colors.text.secondary}
               autoCapitalize="words"
+              maxLength={100}
+              accessibilityLabel="Doctor's Hospital or Clinic"
             />
           </SectionCard>
 
-          <View style={{ height: 40 }} />
+          <View style={[styles.bottomSpacer, { height: insets.bottom + 20 }]} />
         </ScrollView>
 
         <ICECardModal
           visible={iceVisible}
           profile={profile}
           userName={userName}
-          onClose={() => setIceVisible(false)}
+          onClose={onCloseIceModal}
         />
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -671,6 +448,10 @@ const getStyles = (colors: import('../src/constants/Theme').ThemeColors) => Styl
     backgroundColor: '#0A2463', borderRadius: 14,
     padding: 16, marginBottom: 16,
   },
+  flex: { flex: 1 },
+  mlAuto: { marginLeft: 'auto' },
+  spacer16: { height: 16 },
+  bottomSpacer: { width: '100%' },
   iceBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
   fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.text.primary, marginBottom: 8 },

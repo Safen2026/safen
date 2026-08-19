@@ -3,20 +3,20 @@ import { Animated } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
+import { showToast } from '../utils/toast';
 
 export function useReportMedia() {
   const [mediaFiles, setMediaFiles] = useState<string[]>([]);
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  const [errorModal, setErrorModal] = useState({ visible: false, title: '', message: '' });
 
   const showError = useCallback((title: string, message: string) => {
-    setErrorModal({ visible: true, title, message });
-  }, []);
-
-  const hideError = useCallback(() => {
-    setErrorModal(prev => ({ ...prev, visible: false }));
+    showToast({
+      title,
+      subtitle: message,
+      icon: 'warning',
+    });
   }, []);
 
   const handleTakePhoto = useCallback(async () => {
@@ -191,8 +191,6 @@ export function useReportMedia() {
     recording,
     recordingDuration,
     pulseAnim,
-    errorModal,
-    hideError,
     showError,
     handleTakePhoto,
     handleRecordVideo,

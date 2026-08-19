@@ -249,10 +249,10 @@ export const SOSButton = React.memo(() => {
             <Animated.View style={{ opacity: ch1 }}>
               <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
             </Animated.View>
-            <Animated.View style={{ opacity: ch2, marginLeft: -6 }}>
+            <Animated.View style={[styles.chevronOverlap, { opacity: ch2 }]}>
               <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
             </Animated.View>
-            <Animated.View style={{ opacity: ch3, marginLeft: -6 }}>
+            <Animated.View style={[styles.chevronOverlap, { opacity: ch3 }]}>
               <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
             </Animated.View>
           </View>
@@ -320,5 +320,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     zIndex: 2,
+  },
+  chevronOverlap: {
+    marginLeft: -6,
   },
 });

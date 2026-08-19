@@ -38,14 +38,14 @@ export const ContactCard = React.memo(function ContactCard({
           </View>
           <Text style={styles.contactPhone}>{item.phone}</Text>
           {isDeclined ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
-              <Ionicons name="close-circle" size={13} color="#EF4444" />
-              <Text style={{ fontSize: 12, color: '#EF4444' }}>Request Declined</Text>
+            <View style={styles.statusRow}>
+              <Ionicons name="close-circle" size={13} color={colors.status.alertText} />
+              <Text style={[styles.statusText, { color: colors.status.alertText }]}>Request Declined</Text>
             </View>
           ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
-              <Ionicons name="time-outline" size={13} color="#B45309" />
-              <Text style={{ fontSize: 12, color: '#B45309' }}>Pending...</Text>
+            <View style={styles.statusRow}>
+              <Ionicons name="time-outline" size={13} color={colors.status.warningText} />
+              <Text style={[styles.statusText, { color: colors.status.warningText }]}>Pending...</Text>
             </View>
           )}
         </View>
@@ -57,8 +57,8 @@ export const ContactCard = React.memo(function ContactCard({
           accessibilityLabel={`Delete request for ${item.name}`}
         >
           {isBeingDeleted
-            ? <ActivityIndicator size="small" color="#EF4444" />
-            : <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            ? <ActivityIndicator size="small" color={colors.status.alertText} />
+            : <Ionicons name="trash-outline" size={18} color={colors.status.alertText} />
           }
         </TouchableOpacity>
       </View>
@@ -131,5 +131,7 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   relationshipBadge: { alignSelf: 'flex-start', backgroundColor: colors.primary + '15', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
   relationshipText: { fontSize: 11, fontWeight: '600', color: colors.primary },
   actionBtn: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
-  deleteBtn: { borderColor: '#FEE2E2', backgroundColor: '#FFF5F5' },
+  deleteBtn: { borderColor: colors.status.alertBackground, backgroundColor: colors.status.alertBackground + '40' },
+  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
+  statusText: { fontSize: 12 },
 });

@@ -10,8 +10,8 @@ import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
 import { useSession } from '../context/SessionContext';
 import { useAvatar } from '../hooks/useAvatar';
-import { ConfirmationModal } from './ConfirmationModal';
 import { Avatar } from './Avatar';
+import { showToast } from '../utils/toast';
 
 export const WelcomeCard = React.memo(() => {
   const insets = useSafeAreaInsets();
@@ -21,11 +21,6 @@ export const WelcomeCard = React.memo(() => {
   const { avatarUrl, uploading, uploadAvatar } = useAvatar();
 
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [permissionError, setPermissionError] = useState<{ visible: boolean; msg: string }>({
-    visible: false,
-    msg: '',
-  });
-  const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const fullName = session?.user?.user_metadata?.full_name
     ?? session?.user?.email?.split('@')[0]
@@ -34,8 +29,6 @@ export const WelcomeCard = React.memo(() => {
 
   const openPicker = useCallback(() => setPickerVisible(true), []);
   const closePicker = useCallback(() => setPickerVisible(false), []);
-  const closeError = useCallback(() => setPermissionError({ visible: false, msg: '' }), []);
-  const closeSuccess = useCallback(() => setUploadSuccess(false), []);
 
   const handlePickAndUpload = useCallback(async (source: 'camera' | 'gallery') => {
     setPickerVisible(false);
@@ -46,17 +39,19 @@ export const WelcomeCard = React.memo(() => {
       if (source === 'camera') {
         const available = await ImagePicker.getCameraPermissionsAsync();
         if (available.canAskAgain === false && available.status !== 'granted') {
-          setPermissionError({
-            visible: true,
-            msg: 'Camera access was denied. Please enable it in your device Settings.',
+          showToast({
+            title: 'Permission Needed',
+            subtitle: 'Camera access was denied. Please enable it in your device Settings.',
+            icon: 'warning',
           });
           return;
         }
         const { status } = await ImagePicker.requestCameraPermissionsAsync();
         if (status !== 'granted') {
-          setPermissionError({
-            visible: true,
-            msg: 'Camera permission is required. Please allow it in Settings and try again.',
+          showToast({
+            title: 'Permission Needed',
+            subtitle: 'Camera permission is required. Please allow it in Settings and try again.',
+            icon: 'warning',
           });
           return;
         }
@@ -68,9 +63,10 @@ export const WelcomeCard = React.memo(() => {
       } else {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-          setPermissionError({
-            visible: true,
-            msg: 'Gallery permission is required. Please allow it in Settings and try again.',
+          showToast({
+            title: 'Permission Needed',
+            subtitle: 'Gallery permission is required. Please allow it in Settings and try again.',
+            icon: 'warning',
           });
           return;
         }
@@ -85,19 +81,25 @@ export const WelcomeCard = React.memo(() => {
       if (!result.canceled && result.assets?.[0]?.uri) {
         const success = await uploadAvatar(result.assets[0].uri);
         if (success) {
-          setUploadSuccess(true);
+          showToast({
+            title: 'Photo Updated',
+            subtitle: 'Your profile picture has been saved successfully.',
+            icon: 'checkmark-circle',
+          });
         } else {
-          setPermissionError({
-            visible: true,
-            msg: 'Upload failed. Check your internet connection and try again.',
+          showToast({
+            title: 'Upload Failed',
+            subtitle: 'Check your internet connection and try again.',
+            icon: 'warning',
           });
         }
       }
     } catch (err) {
       console.error('handlePickAndUpload error:', err);
-      setPermissionError({
-        visible: true,
-        msg: 'Something went wrong. Please try again.',
+      showToast({
+        title: 'Error',
+        subtitle: 'Something went wrong. Please try again.',
+        icon: 'warning',
       });
     }
   }, [uploadAvatar]);
@@ -196,23 +198,6 @@ export const WelcomeCard = React.memo(() => {
         </Pressable>
       </Modal>
 
-      {/* Feedback Modals */}
-      <ConfirmationModal
-        visible={permissionError.visible}
-        title="Permission Needed"
-        message={permissionError.msg}
-        iconName="warning"
-        iconColor={colors.primary}
-        onClose={closeError}
-      />
-      <ConfirmationModal
-        visible={uploadSuccess}
-        title="Photo Updated"
-        message="Your profile picture has been saved successfully."
-        iconName="checkmark-circle"
-        iconColor="#00875A"
-        onClose={closeSuccess}
-      />
     </View>
   );
 });

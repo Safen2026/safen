@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Shadows } from '../constants/Theme';
 import type { ThemeColors } from '../constants/Theme';
-import { ConfirmationModal } from './ConfirmationModal';
 import { QuickActionModal, ActionConfig } from './QuickActionModal';
+import { showToast } from '../utils/toast';
 import { useAlert, AlertType } from '../hooks/useAlert';
 import { useTheme } from '../context/ThemeContext';
 
@@ -17,20 +17,6 @@ export const QuickActions = React.memo(() => {
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [description, setDescription] = useState('');
   const { loading, triggerAlert } = useAlert();
-  
-  const [confirmModal, setConfirmModal] = useState<{
-    visible: boolean;
-    title: string;
-    msg: string;
-    icon: React.ComponentProps<typeof import('@expo/vector-icons').Ionicons>['name'];
-    color: string;
-  }>({
-    visible: false,
-    title: '',
-    msg: '',
-    icon: 'checkmark-circle',
-    color: colors.primary,
-  });
 
   const ACTION_CONFIG = useMemo<Record<ActionType, ActionConfig>>(() => ({
     medical: {
@@ -81,24 +67,20 @@ export const QuickActions = React.memo(() => {
 
     if (result === 'ok') {
       setTimeout(() => {
-        setConfirmModal({
-          visible: true,
+        showToast({
           title: `${config.label} Alert Sent`,
-          msg: description.trim()
-            ? `Your contacts have been notified: "${description.trim()}"`
-            : `Your emergency contacts have been notified of a ${config.label.toLowerCase()} situation and can see your current location.`,
+          subtitle: description.trim()
+            ? `Notified: "${description.trim()}"`
+            : `Your emergency contacts have been notified.`,
           icon: 'checkmark-circle',
-          color: config.color,
         });
       }, 300);
     } else if (result === 'sms') {
       setTimeout(() => {
-        setConfirmModal({
-          visible: true,
+        showToast({
           title: 'SMS Opened (Offline)',
-          msg: 'No internet detected. A pre-filled SOS message has been opened in your SMS app.',
+          subtitle: 'No internet. A pre-filled message was opened.',
           icon: 'chatbubble-ellipses',
-          color: '#D97706',
         });
       }, 300);
     } else {
@@ -140,15 +122,6 @@ export const QuickActions = React.memo(() => {
         onConfirm={handleConfirm}
         loading={loading}
         colors={colors}
-      />
-
-      <ConfirmationModal
-        visible={confirmModal.visible}
-        title={confirmModal.title}
-        message={confirmModal.msg}
-        iconName={confirmModal.icon}
-        iconColor={confirmModal.color}
-        onClose={() => setConfirmModal(prev => ({ ...prev, visible: false }))}
       />
     </View>
   );

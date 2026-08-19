@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/context/ThemeContext';
-import { ConfirmationModal } from '../../src/components/ConfirmationModal';
+import { showToast } from '../../src/utils/toast';
 import { useReport } from '../../src/hooks/useReport';
 import { useReportMedia } from '../../src/hooks/useReportMedia';
 import { useReportLocation } from '../../src/hooks/useReportLocation';
@@ -24,7 +24,6 @@ export default function ReportScreen() {
   const [selectedType, setSelectedType] = useState<IncidentType | null>('security');
   const [detailsText, setDetailsText] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
-  const [successModalVisible, setSuccessModalVisible] = useState(false);
 
   // Hooks
   const { loading, submitReport } = useReport();
@@ -36,8 +35,6 @@ export default function ReportScreen() {
     recording,
     recordingDuration,
     pulseAnim,
-    errorModal,
-    hideError,
     showError,
     handleTakePhoto,
     handleRecordVideo,
@@ -101,14 +98,19 @@ export default function ReportScreen() {
     });
     
     if (success) {
-      setSuccessModalVisible(true);
+      showToast({
+        title: 'Report Submitted',
+        subtitle: 'Your report has been securely transmitted.',
+        icon: 'checkmark-circle',
+      });
+      // Reset form immediately
+      handleCloseSuccess();
     } else {
       showError('Error', 'Failed to submit report. Please try again.');
     }
   }, [selectedType, locationDetails, detailsText, address, isAnonymous, mediaFiles, location, submitReport, showError]);
 
   const handleCloseSuccess = useCallback(() => {
-    setSuccessModalVisible(false);
     setStep(1);
     setDetailsText('');
     setIsAnonymous(false);
@@ -175,24 +177,6 @@ export default function ReportScreen() {
             colors={colors}
           />
         )}
-        
-        <ConfirmationModal
-          visible={successModalVisible}
-          title="Report Submitted"
-          message="Your report has been securely transmitted. Responders will review it shortly."
-          iconName="checkmark-circle"
-          iconColor="#00875A"
-          onClose={handleCloseSuccess}
-        />
-
-        <ConfirmationModal
-          visible={errorModal.visible}
-          title={errorModal.title}
-          message={errorModal.message}
-          iconName="alert-circle"
-          iconColor="#EF4444"
-          onClose={hideError}
-        />
 
         <MediaPreviewModal
           selectedPreview={selectedPreview}

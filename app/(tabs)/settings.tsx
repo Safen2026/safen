@@ -188,7 +188,7 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       <ScrollView 
-        contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.header}>Settings</Text>
@@ -216,8 +216,8 @@ export default function SettingsScreen() {
               colors={colors}
               onPress={handleOpenMedicalProfile}
               rightContent={
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 13, color: colors.text.secondary, fontWeight: '500' }}>ICE Info</Text>
+                <View style={styles.iceInfoRow}>
+                  <Text style={styles.iceInfoText}>ICE Info</Text>
                   <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
                 </View>
               }
@@ -386,12 +386,14 @@ const getStyles = (colors: any) => StyleSheet.create({
   heroPhone: { fontSize: 16, color: colors.text.secondary, fontWeight: '500' },
   section: { marginBottom: 24, paddingHorizontal: 20 },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.text.secondary, letterSpacing: 0.8, marginBottom: 8, marginLeft: 4 },
-  card: { backgroundColor: colors.white, borderRadius: 16, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
+  card: { backgroundColor: colors.white, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+  iceInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  iceInfoText: { fontSize: 13, color: colors.text.secondary, fontWeight: '500' },
+  rowBtn: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: colors.white },
   iconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
   rowText: { fontSize: 16, color: colors.text.primary, fontWeight: '500', flex: 1 },
   rightContentBox: { flexDirection: 'row', alignItems: 'center' },
   valueText: { fontSize: 15, color: colors.text.secondary, fontWeight: '400' },
   divider: { height: 1, backgroundColor: colors.border, marginLeft: 60 },
-  versionText: { textAlign: 'center', color: colors.text.secondary, fontSize: 13, fontWeight: '500', marginTop: 10, marginBottom: 20, letterSpacing: 0.5 },
+  versionText: { textAlign: 'center', color: colors.text.secondary, fontSize: 13, fontWeight: '500', marginTop: 10, letterSpacing: 0.5 },
 });

@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
 import { supabase } from '../../src/lib/supabase';
-import { ConfirmationModal } from '../../src/components/ConfirmationModal';
+import { showToast } from '../../src/utils/toast';
 import { sendContactRequest } from '../../src/lib/notifications';
 import { contactEvents } from '../../src/lib/events';
 import { ContactDetailsModal, Contact } from '../../src/components/ContactDetailsModal';
@@ -37,7 +37,6 @@ export default function ContactsScreen() {
   const [deleteModal, setDeleteModal] = useState<{ visible: boolean; contact: Contact | null }>({
     visible: false, contact: null,
   });
-  const [successModal, setSuccessModal] = useState({ visible: false, title: '', message: '' });
 
   useFocusEffect(
     useCallback(() => {
@@ -151,14 +150,15 @@ export default function ContactsScreen() {
 
     setSheetVisible(false);
     await fetchContacts();
-    setSuccessModal({
-      visible: true,
+    
+    showToast({
       title: editingContact ? 'Contact Updated' : (isOnApp ? 'Request Sent' : 'Contact Added'),
-      message: editingContact
+      subtitle: editingContact
         ? 'Your changes have been saved.'
         : (isOnApp
             ? `A contact request has been sent to ${form.name}. They will be added to your contacts once they accept.`
             : `${form.name} has been saved. They'll be auto-verified once they join Safen.`),
+      icon: 'checkmark-circle',
     });
 
     if (isOnApp && contactUserId && contactUserId !== editingContact?.contact_user_id) {
@@ -208,10 +208,6 @@ export default function ContactsScreen() {
     setDeleteModal({ visible: false, contact: null });
   }, []);
 
-  const handleCloseSuccessModal = useCallback(() => {
-    setSuccessModal(s => ({ ...s, visible: false }));
-  }, []);
-
   const handleCloseDetails = useCallback(() => {
     setSelectedContact(null);
   }, []);
@@ -223,6 +219,16 @@ export default function ContactsScreen() {
   const handleDeleteDetailsRequest = useCallback(() => {
     if (selectedContact) setDeleteModal({ visible: true, contact: selectedContact });
   }, [selectedContact]);
+
+  const renderContactCard = useCallback(({ item }: { item: Contact }) => (
+    <ContactCard
+      item={item}
+      colors={colors}
+      deletingId={deleting}
+      onPress={setSelectedContact}
+      onDeleteRequest={handleDeleteRequest}
+    />
+  ), [colors, deleting, setSelectedContact, handleDeleteRequest]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -287,15 +293,7 @@ export default function ContactsScreen() {
           contentContainerStyle={protectingContacts.length === 0 ? styles.emptyListContent : styles.listContent}
           data={protectingContacts}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <ContactCard
-              item={item}
-              colors={colors}
-              deletingId={deleting}
-              onPress={setSelectedContact}
-              onDeleteRequest={handleDeleteRequest}
-            />
-          )}
+          renderItem={renderContactCard}
           ListEmptyComponent={<ContactListEmptyState type="protecting" colors={colors} />}
           showsVerticalScrollIndicator={false}
         />
@@ -308,15 +306,7 @@ export default function ContactsScreen() {
           }
           data={activeContactsList}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <ContactCard
-              item={item}
-              colors={colors}
-              deletingId={deleting}
-              onPress={setSelectedContact}
-              onDeleteRequest={handleDeleteRequest}
-            />
-          )}
+          renderItem={renderContactCard}
           ListEmptyComponent={
             pendingContactsList.length === 0
               ? <ContactListEmptyState type="my_contacts" colors={colors} maxContacts={MAX_CONTACTS} onAddContact={openAddSheet} />
@@ -329,15 +319,7 @@ export default function ContactsScreen() {
                 <FlatList
                   data={pendingContactsList}
                   keyExtractor={item => item.id}
-                  renderItem={({ item }) => (
-                    <ContactCard
-                      item={item}
-                      colors={colors}
-                      deletingId={deleting}
-                      onPress={setSelectedContact}
-                      onDeleteRequest={handleDeleteRequest}
-                    />
-                  )}
+                  renderItem={renderContactCard}
                   scrollEnabled={false}
                 />
               </View>
@@ -375,15 +357,6 @@ export default function ContactsScreen() {
         onClose={handleCloseDetails}
         onEdit={handleEditRequest}
         onDelete={handleDeleteDetailsRequest}
-      />
-
-      <ConfirmationModal
-        visible={successModal.visible}
-        title={successModal.title}
-        message={successModal.message}
-        iconName="checkmark-circle"
-        iconColor={colors.status.safeText}
-        onClose={handleCloseSuccessModal}
       />
     </SafeAreaView>
   );

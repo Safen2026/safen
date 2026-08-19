@@ -6,10 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
@@ -17,7 +18,8 @@ import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
-import { Shadows } from '../src/constants/Theme';
+import { Shadows, ThemeColors } from '../src/constants/Theme';
+import { PermissionCard, PermissionItemConfig } from '../src/components/permissions/PermissionCard';
 
 export const PERMISSIONS_STORAGE_KEY = '@safen_permissions_completed';
 
@@ -28,9 +30,45 @@ interface PermissionState {
   notifications: boolean;
 }
 
+// Static configuration moved outside the component to prevent recreation on every render
+const PERMISSION_ITEMS: PermissionItemConfig[] = [
+  {
+    key: 'location',
+    title: 'Live Location',
+    description: 'Shares your real-time GPS coordinates with your safety network during an SOS.',
+    iconName: 'navigate',
+    badge: 'Critical',
+    badgeColor: '#E02B2B',
+  },
+  {
+    key: 'microphone',
+    title: 'Microphone',
+    description: 'Silently records emergency audio evidence when SOS is activated.',
+    iconName: 'mic',
+    badge: 'SOS Evidence',
+    badgeColor: '#EA580C',
+  },
+  {
+    key: 'camera',
+    title: 'Camera',
+    description: 'Captures visual evidence and attaches incident photos during emergencies.',
+    iconName: 'camera',
+    badge: 'SOS Evidence',
+    badgeColor: '#2563EB',
+  },
+  {
+    key: 'notifications',
+    title: 'Safety Alerts',
+    description: 'Instantly alerts you when someone in your network triggers an SOS.',
+    iconName: 'notifications',
+    badge: 'Network',
+    badgeColor: '#107C41',
+  },
+];
+
 export default function PermissionsScreen() {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const [loading, setLoading] = useState(false);
   const [requestingKey, setRequestingKey] = useState<string | null>(null);
 
@@ -66,8 +104,10 @@ export default function PermissionsScreen() {
     checkCurrentPermissions();
   }, [checkCurrentPermissions]);
 
-  // Request individual permission
-  const requestSinglePermission = async (key: keyof PermissionState) => {
+  // Optimized individual permission request handler
+  const requestSinglePermission = useCallback(async (key: string) => {
+    if (requestingKey) return; // Prevent concurrent requests
+    
     setRequestingKey(key);
     try {
       let granted = false;
@@ -88,19 +128,23 @@ export default function PermissionsScreen() {
       if (granted) {
         try {
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        } catch {}
+        } catch {} // Ignore haptic errors on unsupported devices
+      } else {
+        // Log rejection for security auditing or prompt user to open OS settings
+        console.warn(`User rejected ${key} permission.`);
       }
 
       setPermissions(prev => ({ ...prev, [key]: granted }));
     } catch (e) {
       console.warn(`Error requesting ${key} permission:`, e);
+      Alert.alert('Permission Error', `We encountered a problem requesting the ${key} permission. Please try again or check your OS settings.`);
     } finally {
       setRequestingKey(null);
     }
-  };
+  }, [requestingKey]);
 
-  // Request all pending permissions sequentially
-  const handleEnableAll = async () => {
+  // Request all pending permissions sequentially (strict error handling)
+  const handleEnableAll = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Location
@@ -108,7 +152,9 @@ export default function PermissionsScreen() {
         try {
           const res = await Location.requestForegroundPermissionsAsync();
           setPermissions(prev => ({ ...prev, location: res.granted }));
-        } catch {}
+        } catch (e) {
+          console.warn('Failed to request location:', e);
+        }
       }
 
       // 2. Microphone
@@ -116,7 +162,9 @@ export default function PermissionsScreen() {
         try {
           const res = await Audio.requestPermissionsAsync();
           setPermissions(prev => ({ ...prev, microphone: res.granted }));
-        } catch {}
+        } catch (e) {
+          console.warn('Failed to request microphone:', e);
+        }
       }
 
       // 3. Camera
@@ -124,7 +172,9 @@ export default function PermissionsScreen() {
         try {
           const res = await ImagePicker.requestCameraPermissionsAsync();
           setPermissions(prev => ({ ...prev, camera: res.granted }));
-        } catch {}
+        } catch (e) {
+          console.warn('Failed to request camera:', e);
+        }
       }
 
       // 4. Notifications
@@ -132,7 +182,9 @@ export default function PermissionsScreen() {
         try {
           const res = await Notifications.requestPermissionsAsync();
           setPermissions(prev => ({ ...prev, notifications: res.granted }));
-        } catch {}
+        } catch (e) {
+          console.warn('Failed to request notifications:', e);
+        }
       }
 
       try {
@@ -142,17 +194,20 @@ export default function PermissionsScreen() {
       // Mark completed & proceed
       await completeAndProceed();
     } catch (e) {
-      console.warn('Error in handleEnableAll:', e);
+      console.warn('Critical error in handleEnableAll:', e);
+      // Even if a critical error occurs during batch processing, we let them proceed to avoid soft-locking onboarding
       await completeAndProceed();
     } finally {
       setLoading(false);
     }
-  };
+  }, [permissions]);
 
   const completeAndProceed = async () => {
     try {
       await AsyncStorage.setItem(PERMISSIONS_STORAGE_KEY, 'true');
-    } catch {}
+    } catch (e) {
+      console.error('Failed to write permission status to storage:', e);
+    }
     router.replace('/(tabs)');
   };
 
@@ -162,50 +217,14 @@ export default function PermissionsScreen() {
     permissions.camera &&
     permissions.notifications;
 
-  const PERMISSION_ITEMS = [
-    {
-      key: 'location' as const,
-      title: 'Live Location',
-      description: 'Shares your real-time GPS coordinates with your safety network during an SOS.',
-      icon: (color: string) => <Ionicons name="navigate" size={22} color={color} />,
-      granted: permissions.location,
-      badge: 'Critical',
-      badgeColor: '#E02B2B',
-    },
-    {
-      key: 'microphone' as const,
-      title: 'Microphone',
-      description: 'Silently records emergency audio evidence when SOS is activated.',
-      icon: (color: string) => <Ionicons name="mic" size={22} color={color} />,
-      granted: permissions.microphone,
-      badge: 'SOS Evidence',
-      badgeColor: '#EA580C',
-    },
-    {
-      key: 'camera' as const,
-      title: 'Camera',
-      description: 'Captures visual evidence and attaches incident photos during emergencies.',
-      icon: (color: string) => <Ionicons name="camera" size={22} color={color} />,
-      granted: permissions.camera,
-      badge: 'SOS Evidence',
-      badgeColor: '#2563EB',
-    },
-    {
-      key: 'notifications' as const,
-      title: 'Safety Alerts',
-      description: 'Instantly alerts you when someone in your network triggers an SOS.',
-      icon: (color: string) => <Ionicons name="notifications" size={22} color={color} />,
-      granted: permissions.notifications,
-      badge: 'Network',
-      badgeColor: '#107C41',
-    },
-  ];
+  // Memoize styles to avoid recreation
+  const currentStyles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={currentStyles.container}>
       <ScrollView
         contentContainerStyle={[
-          styles.scrollContent,
+          currentStyles.scrollContent,
           {
             paddingTop: Math.max(insets.top + 16, 32),
             paddingBottom: Math.max(insets.bottom + 24, 36),
@@ -214,94 +233,47 @@ export default function PermissionsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Hero Header */}
-        <View style={styles.heroSection}>
-          <View style={[styles.heroIconCircle, { backgroundColor: '#0A246312' }]}>
-            <MaterialCommunityIcons name="shield-lock-outline" size={38} color="#0A2463" />
+        <View style={currentStyles.heroSection}>
+          <View style={currentStyles.heroIconCircle}>
+            <MaterialCommunityIcons name="shield-lock-outline" size={38} color={colors.primary} />
           </View>
-          <Text style={[styles.heroTitle, { color: colors.text.primary }]}>
+          <Text style={currentStyles.heroTitle} accessibilityRole="header">
             Emergency Readiness
           </Text>
-          <Text style={[styles.heroSubtitle, { color: colors.text.secondary }]}>
+          <Text style={currentStyles.heroSubtitle}>
             To protect you instantly during an emergency without delay, Safen requires the following device permissions.
           </Text>
         </View>
 
-        {/* Permission Cards */}
-        <View style={styles.list}>
-          {PERMISSION_ITEMS.map(item => {
-            const isRequesting = requestingKey === item.key;
-            return (
-              <View
-                key={item.key}
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: colors.white,
-                    borderColor: item.granted ? '#107C4140' : colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={[styles.iconBox, { backgroundColor: item.badgeColor + '18' }]}>
-                    {item.icon(item.badgeColor)}
-                  </View>
-
-                  <View style={styles.cardInfo}>
-                    <View style={styles.titleRow}>
-                      <Text style={[styles.cardTitle, { color: colors.text.primary }]}>
-                        {item.title}
-                      </Text>
-                      <View style={[styles.badge, { backgroundColor: item.badgeColor + '15' }]}>
-                        <Text style={[styles.badgeText, { color: item.badgeColor }]}>
-                          {item.badge}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.cardDescription, { color: colors.text.secondary }]}>
-                      {item.description}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Status or Action Button */}
-                <View style={styles.cardFooter}>
-                  {item.granted ? (
-                    <View style={styles.grantedBadge}>
-                      <Ionicons name="checkmark-circle" size={18} color="#107C41" />
-                      <Text style={styles.grantedText}>Enabled</Text>
-                    </View>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.grantButton, { borderColor: colors.border }]}
-                      onPress={() => requestSinglePermission(item.key)}
-                      disabled={isRequesting || loading}
-                      activeOpacity={0.7}
-                    >
-                      {isRequesting ? (
-                        <ActivityIndicator size="small" color="#0A2463" />
-                      ) : (
-                        <Text style={styles.grantButtonText}>Allow Access</Text>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            );
-          })}
+        {/* Permission Cards List */}
+        <View style={currentStyles.list}>
+          {PERMISSION_ITEMS.map(item => (
+            <PermissionCard
+              key={item.key}
+              item={item}
+              granted={permissions[item.key as keyof PermissionState]}
+              isRequesting={requestingKey === item.key}
+              colors={colors}
+              onRequest={requestSinglePermission}
+              disabled={loading || (requestingKey !== null && requestingKey !== item.key)}
+            />
+          ))}
         </View>
 
         {/* CTA Buttons */}
-        <View style={styles.ctaSection}>
+        <View style={currentStyles.ctaSection}>
           <TouchableOpacity
-            style={[styles.primaryCta, loading && styles.ctaDisabled]}
+            style={[currentStyles.primaryCta, loading && currentStyles.ctaDisabled]}
             onPress={allGranted ? completeAndProceed : handleEnableAll}
             disabled={loading}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={allGranted ? 'Continue to Safen application' : 'Enable all permissions and continue'}
           >
             {loading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text style={styles.primaryCtaText}>
+              <Text style={currentStyles.primaryCtaText}>
                 {allGranted ? 'Continue to Safen' : 'Enable All & Continue'}
               </Text>
             )}
@@ -309,12 +281,14 @@ export default function PermissionsScreen() {
 
           {!allGranted && (
             <TouchableOpacity
-              style={styles.skipButton}
+              style={currentStyles.skipButton}
               onPress={completeAndProceed}
               disabled={loading}
               hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Skip remaining permissions for now"
             >
-              <Text style={[styles.skipText, { color: colors.text.secondary }]}>
+              <Text style={currentStyles.skipText}>
                 I'll set up remaining permissions later
               </Text>
             </TouchableOpacity>
@@ -325,9 +299,10 @@ export default function PermissionsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -344,6 +319,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    backgroundColor: isDark ? '#ffffff10' : '#0A246312',
   },
   heroTitle: {
     fontSize: 24,
@@ -351,98 +327,18 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     marginBottom: 8,
     textAlign: 'center',
+    color: colors.text.primary,
   },
   heroSubtitle: {
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
     paddingHorizontal: 10,
+    color: colors.text.secondary,
   },
   list: {
     gap: 12,
     marginBottom: 28,
-  },
-  card: {
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1.5,
-    ...Shadows.sm,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-  },
-  iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  cardInfo: {
-    flex: 1,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    flex: 1,
-    flexShrink: 1,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    flexShrink: 0,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  cardDescription: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  cardFooter: {
-    marginTop: 12,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#E5E7EB60',
-  },
-  grantedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  grantedText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#107C41',
-  },
-  grantButton: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    backgroundColor: '#F3F4F6',
-  },
-  grantButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0A2463',
   },
   ctaSection: {
     alignItems: 'center',
@@ -453,7 +349,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 52,
     borderRadius: 14,
-    backgroundColor: '#0A2463',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     ...Shadows.sm,
@@ -473,5 +369,6 @@ const styles = StyleSheet.create({
   skipText: {
     fontSize: 13,
     fontWeight: '500',
+    color: colors.text.secondary,
   },
 });
