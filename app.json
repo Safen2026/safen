@@ -40,38 +40,17 @@
     "web": {
       "favicon": "./assets/logo.png"
     },
+
     "plugins": [
-      "expo-router",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "Allow SAFEN to use your location to share it during emergencies."
-        }
-      ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": "Allow SAFEN to access your photos so you can attach evidence to reports.",
-          "cameraPermission": "Allow SAFEN to access your camera to capture evidence for emergency reports."
-        }
-      ],
-      [
-        "expo-av",
-        {
-          "microphonePermission": "Allow SAFEN to access your microphone to record audio evidence for reports."
-        }
-      ],
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/android-icon-monochrome.png",
-          "color": "#00875A"
-        }
-      ],
-      "@react-native-community/datetimepicker",
-      "@react-native-firebase/app",
-      "@react-native-firebase/auth"
-    ],
+  "expo-router",
+  ["expo-location", { "locationAlwaysAndWhenInUsePermission": "Allow SAFEN to use your location to share it during emergencies." }],
+  ["expo-image-picker", { "photosPermission": "Allow SAFEN to access your photos so you can attach evidence to reports.", "cameraPermission": "Allow SAFEN to access your camera to capture evidence for emergency reports." }],
+  ["expo-av", { "microphonePermission": "Allow SAFEN to access your microphone to record audio evidence for reports." }],
+  ["expo-notifications", { "icon": "./assets/android-icon-monochrome.png", "color": "#00875A" }],
+  "@react-native-community/datetimepicker",
+  ["@react-native-firebase/app", { "ios": { "useFrameworks": "dynamic" } }],
+  "@react-native-firebase/auth"
+],
     "extra": {
       "router": {},
       "eas": {
