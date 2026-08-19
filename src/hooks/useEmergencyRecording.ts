@@ -39,6 +39,7 @@ export function useEmergencyRecording() {
 
   const audioRecordingRef = useRef<Audio.Recording | null>(null);
   const isCyclingAudioRef = useRef(false);
+  const isAudioReadyRef = useRef(false);
   const elapsedSecondsRef = useRef(0);
   const cameraRef = useRef<CameraRef | null>(null);
   const timerRef           = useRef<NodeJS.Timeout | null>(null);
@@ -71,6 +72,7 @@ export function useEmergencyRecording() {
       audioRecordingRef.current = null;
     }
     isCyclingAudioRef.current = false;
+    isAudioReadyRef.current = false;
   };
 
   // ─── Sync one Cloudinary URL into the DB row ────────────────────────────────
@@ -128,6 +130,19 @@ export function useEmergencyRecording() {
       await currentRec.stopAndUnloadAsync();
       const chunkUri = currentRec.getURI();
 
+      // Cleanly clear the ref now that it's unloaded, so stopRecording doesn't grab a dead recorder
+      // if the user cancels exactly during the upcoming 800ms transition delay.
+      if (audioRecordingRef.current === currentRec) {
+        audioRecordingRef.current = null;
+      }
+
+      // iOS/Android Collision Fix: At exactly 60 seconds, the camera is stopping and releasing the microphone.
+      // If expo-av immediately asks for the microphone here, the OS panics because the hardware is locked in transition.
+      // We give the OS 800ms to gracefully shut down the camera stream before expo-av grabs it.
+      if (elapsedSecondsRef.current === VIDEO_MAX_DURATION_SECONDS) {
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+
       // Start next slice immediately
       if (isActiveRef.current) {
         const { recording: next } = await Audio.Recording.createAsync(
@@ -153,7 +168,8 @@ export function useEmergencyRecording() {
 
   // ─── Start video recording on whatever camera is currently bound ───────────
   const startVideoRecording = useCallback((cam: CameraRef, alertId: string) => {
-    if (!cam || !isActiveRef.current || elapsedSecondsRef.current >= VIDEO_MAX_DURATION_SECONDS) return;
+    if (!cam || !isActiveRef.current || !isAudioReadyRef.current || elapsedSecondsRef.current >= VIDEO_MAX_DURATION_SECONDS) return;
+    
     const recordFn = cam.recordAsync ?? cam.record;
     if (typeof recordFn !== 'function') {
       console.warn('[Recording] Camera ref has no recordAsync/record function.');
@@ -198,6 +214,7 @@ export function useEmergencyRecording() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     if (cameraRef.current?.stopRecording) { try { cameraRef.current.stopRecording(); } catch {} }
     isCyclingAudioRef.current = false;
+    isAudioReadyRef.current = false;
 
     // 2. Set alert ID and evidence list before any await
     alertIdRef.current      = alertId;
@@ -278,6 +295,8 @@ export function useEmergencyRecording() {
       console.warn('[Recording] Audio setup failed (SOS still active, timer running):', err);
     }
 
+    isAudioReadyRef.current = true;
+
     // 7. Start camera video if it is already bound and ready
     if (isActiveRef.current && cameraRef.current) {
       startVideoRecording(cameraRef.current, alertId);
@@ -339,8 +358,8 @@ export function useEmergencyRecording() {
 
   const bindCameraRef = useCallback((ref: CameraView | null) => {
     cameraRef.current = ref as unknown as CameraRef | null;
-    // If SOS is already active when camera mounts, start video immediately
-    if (isActiveRef.current && alertIdRef.current && ref) {
+    // If SOS is already active AND audio session is ready when camera mounts, start video immediately
+    if (isActiveRef.current && isAudioReadyRef.current && alertIdRef.current && ref) {
       console.log('[Recording] Camera mounted during active SOS — starting video now.');
       startVideoRecording(ref as unknown as CameraRef, alertIdRef.current);
     }

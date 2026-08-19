@@ -1,9 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppNotification } from '../hooks/useNotifications';
 import { timeAgo } from '../utils/dateUtils';
 import type { ThemeColors } from '../constants/Theme';
+import type { SosAckResponse } from '../lib/notifications';
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -19,6 +20,7 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: IoniconsName; color: string
   check_in_missed: { icon: 'alert-circle', color: '#DC2626' },
   check_in_reminder: { icon: 'alarm-outline', color: '#F59E0B' },
   check_in_deadline: { icon: 'warning', color: '#EF4444' },
+  sos_ack: { icon: 'shield-checkmark', color: '#10B981' },
 };
 
 interface NotificationCardProps {
@@ -27,6 +29,7 @@ interface NotificationCardProps {
   onAcceptContact: (notification: AppNotification) => void;
   onDeclineContact: (notification: AppNotification) => void;
   onSelect: (notification: AppNotification) => void;
+  onSosRespond?: (notification: AppNotification, response: SosAckResponse) => void;
 }
 
 const NotificationCardComponent = ({
@@ -35,8 +38,21 @@ const NotificationCardComponent = ({
   onAcceptContact,
   onDeclineContact,
   onSelect,
+  onSosRespond,
 }: NotificationCardProps) => {
   const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const [selectedResponse, setSelectedResponse] = useState<SosAckResponse | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const handleSosPress = async (res: SosAckResponse) => {
+    if (isSubmitting || !onSosRespond) return;
+    setSelectedResponse(res);
+    setIsSubmitting(true);
+    await onSosRespond(n, res);
+    setIsSubmitting(false);
+    setIsCollapsed(true);
+  };
 
   let meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
 
@@ -50,9 +66,23 @@ const NotificationCardComponent = ({
     meta = { icon: 'navigate', color: '#6366F1' };
   } else if (n.title.includes('stopped sharing') || n.title.includes('location sharing ended')) {
     meta = { icon: 'location-outline', color: '#9CA3AF' };
+  // SOS Acknowledgements (disguised as 'report' due to DB constraints)
+  } else if (n.title.includes('— On My Way') || n.title.includes('— Calling You') || n.title.includes('— Alerting Authorities') || n.title.includes("— Can't Help")) {
+    meta = NOTIFICATION_TYPE_META.sos_ack;
   }
 
   const isRequest = n.type === 'contact_added' && n.title === 'Contact Request';
+  const isSos = n.type === 'sos';
+  const isOld = (new Date().getTime() - new Date(n.created_at).getTime()) > 24 * 60 * 60 * 1000;
+
+  const getResponseMeta = (res: SosAckResponse) => {
+    switch (res) {
+      case 'on_my_way': return { label: 'On My Way', emoji: '🚗' };
+      case 'calling_you': return { label: 'Calling You', emoji: '📞' };
+      case 'alerting_authorities': return { label: 'Calling 911', emoji: '🚨' };
+      case 'cant_help': return { label: "Can't Help", emoji: '❌' };
+    }
+  };
 
   return (
     <View style={[styles.notificationCard, !n.is_read && styles.notificationCardUnread]}>
@@ -97,6 +127,86 @@ const NotificationCardComponent = ({
         </View>
       )}
 
+      {isSos && onSosRespond && !isOld && (
+        <View style={styles.sosActionsGrid}>
+          {isCollapsed && selectedResponse ? (
+            <TouchableOpacity 
+              style={[styles.sosActionBtn, styles.sosActionBtnActive, { width: '100%' }]} 
+              onPress={() => setIsCollapsed(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.sosActionEmoji}>{getResponseMeta(selectedResponse).emoji}</Text>
+              <Text style={[styles.sosActionText, { color: colors.primary }]}>
+                {getResponseMeta(selectedResponse).label} (Tap to change)
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity 
+                style={[styles.sosActionBtn, selectedResponse === 'on_my_way' && styles.sosActionBtnActive]} 
+                onPress={() => handleSosPress('on_my_way')} 
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Respond: On my way"
+                disabled={isSubmitting}
+              >
+                {isSubmitting && selectedResponse === 'on_my_way' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={styles.sosActionEmoji}>🚗</Text>
+                )}
+                <Text style={[styles.sosActionText, selectedResponse === 'on_my_way' && { color: colors.primary }]}>On My Way</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.sosActionBtn, selectedResponse === 'calling_you' && styles.sosActionBtnActive]} 
+                onPress={() => handleSosPress('calling_you')} 
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Respond: Calling you"
+                disabled={isSubmitting}
+              >
+                {isSubmitting && selectedResponse === 'calling_you' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={styles.sosActionEmoji}>📞</Text>
+                )}
+                <Text style={[styles.sosActionText, selectedResponse === 'calling_you' && { color: colors.primary }]}>Calling You</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.sosActionBtn, selectedResponse === 'alerting_authorities' && styles.sosActionBtnActive]} 
+                onPress={() => handleSosPress('alerting_authorities')} 
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Respond: Alerting Authorities"
+                disabled={isSubmitting}
+              >
+                {isSubmitting && selectedResponse === 'alerting_authorities' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={styles.sosActionEmoji}>🚨</Text>
+                )}
+                <Text style={[styles.sosActionText, selectedResponse === 'alerting_authorities' && { color: colors.primary }]}>Calling 911</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.sosActionBtn, selectedResponse === 'cant_help' && styles.sosActionBtnActive]} 
+                onPress={() => handleSosPress('cant_help')} 
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Respond: Can't Help"
+                disabled={isSubmitting}
+              >
+                {isSubmitting && selectedResponse === 'cant_help' ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Text style={styles.sosActionEmoji}>❌</Text>
+                )}
+                <Text style={[styles.sosActionText, selectedResponse === 'cant_help' && { color: colors.primary }]}>Can&apos;t Help</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
       {!isRequest && (
         <TouchableOpacity 
           style={styles.viewDetailsBtn} 
@@ -127,6 +237,11 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   acceptBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   declineBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: '#FEE2E2', paddingVertical: 9, borderRadius: 8 },
   declineBtnText: { color: '#EF4444', fontSize: 13, fontWeight: '700' },
-  viewDetailsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: 4 },
+  viewDetailsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, marginTop: 14 },
   viewDetailsBtnText: { fontSize: 12, color: colors.primary, fontWeight: '500' },
+  sosActionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  sosActionBtn: { flex: 1, minWidth: '45%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.border + '40', paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
+  sosActionBtnActive: { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' },
+  sosActionEmoji: { fontSize: 16 },
+  sosActionText: { color: colors.text.primary, fontSize: 12, fontWeight: '600' },
 });

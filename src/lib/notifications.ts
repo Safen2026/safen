@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-export type NotifyType = 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'check_in_missed' | 'check_in_reminder' | 'check_in_deadline' | 'journey_started' | 'journey_arrived';
+export type NotifyType = 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'check_in_missed' | 'check_in_reminder' | 'check_in_deadline' | 'journey_started' | 'journey_arrived' | 'sos_ack';
 
 const TYPE_LABEL: Record<NotifyType, string> = {
   sos: 'SOS Emergency',
@@ -13,6 +13,7 @@ const TYPE_LABEL: Record<NotifyType, string> = {
   check_in_deadline: 'Safe Check-In Deadline',
   journey_started: 'Journey Started',
   journey_arrived: 'Journey Complete',
+  sos_ack: 'SOS Response',
 };
 
 type NotifyParams = {
@@ -521,5 +522,72 @@ export async function notifyJourneyArrived(params: {
     }
   } catch (err) {
     console.warn('notifyJourneyArrived error:', err);
+  }
+}
+
+// ─── SOS Acknowledgement ──────────────────────────────────────────────────────
+// Called when an emergency contact taps a response button on an SOS notification.
+// 1. Upserts a row into alert_acknowledgements (idempotent).
+// 2. Sends a return notification to the SOS sender.
+
+export type SosAckResponse = 'on_my_way' | 'calling_you' | 'alerting_authorities' | 'cant_help';
+
+const ACK_LABEL: Record<SosAckResponse, { emoji: string; label: string; body: (name: string) => string }> = {
+  on_my_way:             { emoji: '🚗', label: 'On My Way',             body: (n) => `${n} is on their way to help you.` },
+  calling_you:           { emoji: '📞', label: 'Calling You',           body: (n) => `${n} is calling you right now.` },
+  alerting_authorities:  { emoji: '🚨', label: 'Alerting Authorities',  body: (n) => `${n} is contacting emergency services on your behalf.` },
+  cant_help:             { emoji: '❌', label: "Can't Help",            body: (n) => `${n} has seen your alert but is unable to respond right now.` },
+};
+
+export async function sendSosAcknowledgement(params: {
+  alertId: string;
+  alertOwnerId: string; // the user_id who triggered the SOS
+  response: SosAckResponse;
+}): Promise<boolean> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle();
+    const myName = profile?.full_name?.trim() || 'Your contact';
+
+    const meta = ACK_LABEL[params.response];
+
+    // 1. Upsert acknowledgement row (idempotent — contact can change response)
+    const { error: upsertError } = await supabase
+      .from('alert_acknowledgements')
+      .upsert(
+        { alert_id: params.alertId, contact_id: user.id, response: params.response },
+        { onConflict: 'alert_id,contact_id' }
+      );
+
+    if (upsertError) {
+      console.warn('[SosAck] upsert failed:', upsertError.message);
+      return false;
+    }
+
+    // 2. Send return notification to the SOS owner
+    const { error: notifyError } = await supabase.from('notifications').insert({
+      recipient_id: params.alertOwnerId,
+      sender_id: user.id,
+      sender_name: myName,
+      type: 'sos_ack' as NotifyType, 
+      title: `${meta.emoji} ${myName} — ${meta.label}`,
+      body: meta.body(myName),
+      alert_id: params.alertId,
+    });
+
+    if (notifyError) {
+      console.warn('[SosAck] notify failed:', notifyError.message);
+    }
+
+    return true;
+  } catch (err) {
+    console.warn('[SosAck] error:', err);
+    return false;
   }
 }

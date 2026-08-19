@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../src/context/ThemeContext';
-import { useHistory } from '../src/hooks/useHistory';
-import { HistoryFilterChips } from '../src/components/history/HistoryFilterChips';
-import { HistoryCard } from '../src/components/history/HistoryCard';
-import { HistoryEmptyState } from '../src/components/history/HistoryEmptyState';
+import { useTheme } from '../../src/context/ThemeContext';
+import { useHistory, HistoryItem } from '../../src/hooks/useHistory';
+import { HistoryFilterChips } from '../../src/components/history/HistoryFilterChips';
+import { HistoryCard } from '../../src/components/history/HistoryCard';
+import { HistoryEmptyState } from '../../src/components/history/HistoryEmptyState';
 
 export default function HistoryScreen() {
   const { colors } = useTheme();
@@ -30,6 +30,19 @@ export default function HistoryScreen() {
     onRefresh,
     hasItems
   } = useHistory();
+
+  // Memoized navigation handler — stable reference prevents HistoryCard re-renders
+  const handleCardPress = useCallback((item: HistoryItem) => {
+    router.push(`/history/${item.id}?source=${item.source}`);
+  }, []);
+
+  // Memoized renderItem — prevents FlatList/SectionList child re-renders on scroll
+  const renderItem = useCallback(
+    ({ item, section }: { item: HistoryItem; section: { title: string } }) => (
+      <HistoryCard item={item} groupTitle={section.title} onPress={handleCardPress} />
+    ),
+    [handleCardPress]
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -75,9 +88,7 @@ export default function HistoryScreen() {
             </Text>
           )}
           
-          renderItem={({ item, section }) => (
-            <HistoryCard item={item} groupTitle={section.title} />
-          )}
+          renderItem={renderItem}
           
           // Performance optimizations for large lists
           initialNumToRender={10}

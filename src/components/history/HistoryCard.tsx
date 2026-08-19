@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { Shadows } from '../../constants/Theme';
@@ -10,6 +10,7 @@ import { getMediaType } from '../../utils/mediaUtils';
 type Props = {
   item: HistoryItem;
   groupTitle: string;
+  onPress: (item: HistoryItem) => void;
 };
 
 // Helper for dynamic status badge colors
@@ -22,7 +23,7 @@ const getStatusColors = (status: string | undefined) => {
   return { color: '#3B82F6', bg: '#3B82F615' }; // Default Blue
 };
 
-const HistoryCardComponent = ({ item, groupTitle }: Props) => {
+const HistoryCardComponent = ({ item, groupTitle, onPress }: Props) => {
   const { colors } = useTheme();
   
   const meta = TYPE_META[item.type] || TYPE_META.other;
@@ -46,11 +47,14 @@ const HistoryCardComponent = ({ item, groupTitle }: Props) => {
   const accessibilityDesc = `${meta.label} on ${timeDisplay}. ${locationText ? `Location: ${locationText}.` : ''} ${item.status ? `Status: ${item.status}.` : ''} ${mediaPaths.length > 0 ? `Has ${mediaPaths.length} attached media files.` : ''}`;
 
   return (
-    <View 
+    <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.background, borderColor: colors.border }]}
+      onPress={() => onPress(item)}
+      activeOpacity={0.75}
       accessible={true}
-      accessibilityRole="text"
-      aria-label={accessibilityDesc}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityDesc}
+      accessibilityHint="Double-tap to view full event details"
     >
       {/* Icon */}
       <View style={[styles.iconBox, { backgroundColor: meta.color }]} aria-hidden={true}>
@@ -115,9 +119,19 @@ const HistoryCardComponent = ({ item, groupTitle }: Props) => {
               )}
             </View>
           )}
+
+          {/* Tap affordance chevron — always at far right */}
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={colors.text.secondary}
+            style={styles.chevron}
+            accessibilityElementsHidden
+            importantForAccessibility="no"
+          />
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -175,6 +189,7 @@ const styles = StyleSheet.create({
   cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   statusText: {
     fontSize: 11,
@@ -203,13 +218,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
+  chevron: {
+    marginLeft: 'auto' as const,
+    opacity: 0.5,
+  },
 });
 
 const arePropsEqual = (prevProps: Props, nextProps: Props) => {
   return (
     prevProps.item.id === nextProps.item.id &&
     prevProps.item.status === nextProps.item.status &&
-    prevProps.groupTitle === nextProps.groupTitle
+    prevProps.groupTitle === nextProps.groupTitle &&
+    prevProps.onPress === nextProps.onPress
   );
 };
 

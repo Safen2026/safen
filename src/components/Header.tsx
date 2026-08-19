@@ -8,17 +8,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
-import { useSession } from '../context/SessionContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NotificationDetailsModal } from './NotificationDetailsModal';
 import { NotificationCard } from './NotificationCard';
 import { useNotifications, AppNotification } from '../hooks/useNotifications';
 import { supabase } from '../lib/supabase';
+import { sendSosAcknowledgement, type SosAckResponse } from '../lib/notifications';
 
 const HeaderComponent = () => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
-  const session = useSession();
 
   const { notifications, loading: notificationsLoading, unreadCount, markAllRead, removeNotification } = useNotifications();
 
@@ -49,6 +48,25 @@ const HeaderComponent = () => {
 
   const handleAcceptContact = useCallback((n: AppNotification) => handleContactResponse(n, 'accepted'), [handleContactResponse]);
   const handleDeclineContact = useCallback((n: AppNotification) => handleContactResponse(n, 'declined'), [handleContactResponse]);
+
+  const handleSosRespond = useCallback(async (n: AppNotification, response: SosAckResponse) => {
+    if (!n.alert_id || !n.sender_id) return;
+    
+    // Remove it optimistically (or keep it and mark as read? Wait, we probably want to keep it and show what they responded, but removing is fine for now just like contacts)
+    // Actually, letting them change their response is a requirement, so DO NOT remove it.
+    
+    // Mark as read so the dot goes away
+    if (!n.is_read) {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', n.id);
+      // It will auto-refresh via realtime hook, but we don't block.
+    }
+    
+    await sendSosAcknowledgement({
+      alertId: n.alert_id,
+      alertOwnerId: n.sender_id,
+      response,
+    });
+  }, []);
 
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
@@ -104,25 +122,26 @@ const HeaderComponent = () => {
             onAcceptContact={handleAcceptContact}
             onDeclineContact={handleDeclineContact}
             onSelect={setSelectedNotification}
+            onSosRespond={handleSosRespond}
           />
         ))}
       </View>
     );
-  }, [colors, handleAcceptContact, handleDeclineContact]);
+  }, [colors, handleAcceptContact, handleDeclineContact, handleSosRespond]);
 
   return (
     <View style={styles.container}>
       {/* Left: Brand identity */}
-      <View style={[styles.brand, { alignItems: 'flex-start' }]}>
-        <View style={styles.brandTopRow}>
-          <Image
-            source={require('../../assets/image.png')}
-            style={styles.brandLogo}
-            resizeMode="contain"
-          />
+      <View style={styles.brandContainer}>
+        <Image
+          source={require('../../assets/image.png')}
+          style={styles.brandLogo}
+          resizeMode="contain"
+        />
+        <View style={styles.brandTextGroup}>
           <Text style={styles.brandName}>SAFEN</Text>
+          <Text style={styles.brandTagline}>SAFE NIGERIA. ALWAYS.</Text>
         </View>
-        <Text style={[styles.brandTagline, { textAlign: 'left' }]}>SAFE NIGERIA. ALWAYS.</Text>
       </View>
 
       {/* Right: Actions Group */}
@@ -152,7 +171,7 @@ const HeaderComponent = () => {
       {/* Notifications panel */}
       <Modal visible={notificationsVisible} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent onRequestClose={() => setNotificationsVisible(false)}>
         {notificationsVisible && (
-          <SafeAreaView style={styles.notificationsModalFull} edges={['top', 'bottom']}>
+          <SafeAreaView style={styles.notificationsModalFull} edges={['bottom']}>
             <View style={styles.notificationsHeader}>
               <View accessible={true} accessibilityRole="header">
                 <Text style={styles.notificationsTitle}>Notifications</Text>
@@ -206,43 +225,44 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 24) + 10 : 52,
-    paddingBottom: 12,
+    paddingLeft: 4, // Reduce left padding to pull logo closer to edge
+    paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 24) + 2 : 38,
+    paddingBottom: 4,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
 
   // Left — brand
-  brand: {
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    marginLeft: 12, 
-  },
-  brandTopRow: {
+  brandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 0, // completely removed gap
   },
   brandLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 9,
+    width: 65,
+    height: 65,
+    borderRadius: 18,
+  },
+  brandTextGroup: {
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginLeft: -6, // negative margin to force it closer past the image bounds
+    marginTop: 4, // visually center the text against the logo
   },
   brandName: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '900',
     color: colors.text.primary,
     letterSpacing: 2.2,
+    lineHeight: 26,
   },
   brandTagline: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.text.primary,
-    letterSpacing: 1.5,
-    marginTop: 2,
-    textAlign: 'left',
+    color: colors.text.secondary,
+    letterSpacing: 1.2,
   },
 
   // Right Actions
@@ -269,7 +289,12 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: '#E02B2B',
     zIndex: 1,
   },
-  notificationsModalFull: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 20, paddingTop: 10 },
+  notificationsModalFull: { 
+    flex: 1, 
+    backgroundColor: colors.background, 
+    paddingHorizontal: 20, 
+    paddingTop: Platform.OS === 'ios' ? 54 : (RNStatusBar.currentHeight ?? 24) + 10 
+  },
   notificationsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   notificationsTitle: { fontSize: 18, fontWeight: '700', color: colors.text.primary },
   notificationsSubtitle: { fontSize: 12, color: colors.primary, fontWeight: '500', marginTop: 2 },

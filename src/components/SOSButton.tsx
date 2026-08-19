@@ -153,8 +153,13 @@ export const SOSButton = React.memo(() => {
   // ── Swipe gesture ────────────────────────────────────────────────────────
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !isActivated && !loading,
-      onMoveShouldSetPanResponder:  () => !isActivated && !loading,
+      onStartShouldSetPanResponder: () => false, // Don't block normal taps
+      onMoveShouldSetPanResponder: (_, g) => {
+        // Gesture Lock: Only capture gesture if it is horizontally dominant and moved > 5px.
+        // This prevents iOS Native ScrollView from fighting the gesture, fixing the sluggishness.
+        return !isActivated && !loading && Math.abs(g.dx) > 5 && Math.abs(g.dx) > Math.abs(g.dy);
+      },
+      onPanResponderTerminationRequest: () => false, // Refuse to surrender gesture to iOS Native components
       onPanResponderMove: (_, g) => {
         if (g.dx > 0) {
           if (g.dx <= SWIPE_RANGE) {
