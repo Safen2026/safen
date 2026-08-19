@@ -4,10 +4,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { Shadows } from '../../constants/Theme';
 import { HistoryItem, TYPE_META } from '../../hooks/useHistory';
+import { formatGroupedTime } from '../../utils/dateUtils';
+import { getMediaType } from '../../utils/mediaUtils';
 
 type Props = {
   item: HistoryItem;
   groupTitle: string;
+};
+
+// Helper for dynamic status badge colors
+const getStatusColors = (status: string | undefined) => {
+  if (!status) return null;
+  const s = status.toLowerCase();
+  if (s === 'active' || s === 'resolved') return { color: '#10B981', bg: '#10B98115' }; // Green
+  if (s === 'cancelled') return { color: '#6B7280', bg: '#6B728015' }; // Grey
+  if (s === 'pending') return { color: '#F59E0B', bg: '#F59E0B15' }; // Orange
+  return { color: '#3B82F6', bg: '#3B82F615' }; // Default Blue
 };
 
 const HistoryCardComponent = ({ item, groupTitle }: Props) => {
@@ -16,24 +28,41 @@ const HistoryCardComponent = ({ item, groupTitle }: Props) => {
   const meta = TYPE_META[item.type] || TYPE_META.other;
   const locationText = item.address || item.description || '';
 
-  // Format time logic extracted for purity
-  const formatTime = (isoString: string) => {
-    const d = new Date(isoString);
-    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    
-    if (groupTitle === 'Today') return timeStr;
-    if (groupTitle === 'Yesterday' || groupTitle === '2 Days Ago') return `${groupTitle}, ${timeStr}`;
-    return timeStr; // For specific dates, we just return time since date is in the group header
-  };
+  const timeDisplay = formatGroupedTime(item.created_at, groupTitle);
+  const statusTheme = getStatusColors(item.status);
 
-  const timeDisplay = formatTime(item.created_at);
+  // Compute media counts
+  const mediaPaths = item.media_paths || [];
+  let imageCount = 0;
+  let videoCount = 0;
+  let audioCount = 0;
+  mediaPaths.forEach(u => {
+    const type = getMediaType(u);
+    if (type === 'image') imageCount++;
+    else if (type === 'video') videoCount++;
+    else audioCount++;
+  });
+
+  const accessibilityDesc = `${meta.label} on ${timeDisplay}. ${locationText ? `Location: ${locationText}.` : ''} ${item.status ? `Status: ${item.status}.` : ''} ${mediaPaths.length > 0 ? `Has ${mediaPaths.length} attached media files.` : ''}`;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.background, borderColor: colors.border }]}>
+    <View 
+      style={[styles.card, { backgroundColor: colors.background, borderColor: colors.border }]}
+      accessible={true}
+      accessibilityRole="text"
+      aria-label={accessibilityDesc}
+    >
       {/* Icon */}
-      <View style={[styles.iconBox, { backgroundColor: meta.color }]}>
+      <View style={[styles.iconBox, { backgroundColor: meta.color }]} aria-hidden={true}>
         {meta.category === 'SOS' ? (
-          <Text style={styles.sosIconText}>SOS</Text>
+          <Text 
+            style={styles.sosIconText} 
+            allowFontScaling={true}
+            adjustsFontSizeToFit={true}
+            numberOfLines={1}
+          >
+            SOS
+          </Text>
         ) : (
           <Ionicons name={meta.icon} size={24} color="#FFFFFF" />
         )}
@@ -57,11 +86,35 @@ const HistoryCardComponent = ({ item, groupTitle }: Props) => {
         ) : null}
 
         <View style={[styles.cardBottomRow, !locationText && { marginTop: 4 }]}>
-          {item.status ? (
-            <Text style={[styles.statusText, { color: '#10B981', backgroundColor: '#10B98115' }]}>
+          {item.status && statusTheme ? (
+            <Text style={[styles.statusText, { color: statusTheme.color, backgroundColor: statusTheme.bg }]}>
               {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
             </Text>
           ) : null}
+
+          {/* Media Indicators */}
+          {(videoCount > 0 || audioCount > 0 || imageCount > 0) && (
+            <View style={styles.mediaIndicators}>
+              {videoCount > 0 && (
+                <View style={[styles.mediaBadge, { backgroundColor: '#2563EB15' }]}>
+                  <Ionicons name="videocam" size={12} color="#2563EB" />
+                  <Text style={[styles.mediaBadgeText, { color: '#2563EB' }]}>{videoCount}</Text>
+                </View>
+              )}
+              {audioCount > 0 && (
+                <View style={[styles.mediaBadge, { backgroundColor: '#EA580C15' }]}>
+                  <Ionicons name="mic" size={12} color="#EA580C" />
+                  <Text style={[styles.mediaBadgeText, { color: '#EA580C' }]}>{audioCount}</Text>
+                </View>
+              )}
+              {imageCount > 0 && (
+                <View style={[styles.mediaBadge, { backgroundColor: colors.border }]}>
+                  <Ionicons name="image" size={12} color={colors.text.secondary} />
+                  <Text style={[styles.mediaBadgeText, { color: colors.text.secondary }]}>{imageCount}</Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
       </View>
     </View>
@@ -132,7 +185,33 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     letterSpacing: 0.3,
   },
+  mediaIndicators: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 10,
+  },
+  mediaBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    gap: 3,
+  },
+  mediaBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
 });
 
-export const HistoryCard = React.memo(HistoryCardComponent);
+const arePropsEqual = (prevProps: Props, nextProps: Props) => {
+  return (
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.item.status === nextProps.item.status &&
+    prevProps.groupTitle === nextProps.groupTitle
+  );
+};
+
+export const HistoryCard = React.memo(HistoryCardComponent, arePropsEqual);
 HistoryCard.displayName = 'HistoryCard';

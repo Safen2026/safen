@@ -1,25 +1,23 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View, Text, StyleSheet, TouchableOpacity, Modal,
-  Alert, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform,
-} from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Shadows } from '../constants/Theme';
 import type { ThemeColors } from '../constants/Theme';
 import { ConfirmationModal } from './ConfirmationModal';
+import { QuickActionModal, ActionConfig } from './QuickActionModal';
 import { useAlert, AlertType } from '../hooks/useAlert';
 import { useTheme } from '../context/ThemeContext';
 
-type ActionType = 'medical' | 'police' | 'fire';
+export type ActionType = 'medical' | 'police' | 'fire';
 
-const MAX_DESCRIPTION = 140;
-
-export const QuickActions = () => {
+export const QuickActions = React.memo(() => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
+  
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [description, setDescription] = useState('');
   const { loading, triggerAlert } = useAlert();
+  
   const [confirmModal, setConfirmModal] = useState<{
     visible: boolean;
     title: string;
@@ -34,7 +32,7 @@ export const QuickActions = () => {
     color: colors.primary,
   });
 
-  const ACTION_CONFIG = useMemo(() => ({
+  const ACTION_CONFIG = useMemo<Record<ActionType, ActionConfig>>(() => ({
     medical: {
       label  : 'Medical',
       color  : colors.icon.medical,
@@ -61,17 +59,17 @@ export const QuickActions = () => {
     },
   }), [colors]);
 
-  const handleOpen = (type: ActionType) => {
+  const handleOpen = useCallback((type: ActionType) => {
     setDescription('');
     setSelectedAction(type);
-  };
+  }, []);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setSelectedAction(null);
     setDescription('');
-  };
+  }, []);
 
-  const handleConfirm = async () => {
+  const handleConfirm = useCallback(async () => {
     if (!selectedAction) return;
 
     const actionToTrigger = selectedAction;
@@ -106,14 +104,12 @@ export const QuickActions = () => {
     } else {
       Alert.alert('Could not send request', 'Please check your connection and try again.');
     }
-  };
+  }, [selectedAction, ACTION_CONFIG, triggerAlert, description, handleClose]);
 
   return (
     <View style={styles.container}>
-      {/* Section header */}
-      <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <Text style={styles.sectionTitle} accessible={true} accessibilityRole="header">Quick Actions</Text>
 
-      {/* Action cards */}
       <View style={styles.row}>
         {(Object.keys(ACTION_CONFIG) as ActionType[]).map(type => {
           const config = ACTION_CONFIG[type];
@@ -123,9 +119,10 @@ export const QuickActions = () => {
               style={styles.actionCard}
               onPress={() => handleOpen(type)}
               disabled={loading}
+              accessibilityRole="button"
               accessibilityLabel={`${config.label} quick action`}
             >
-              <View style={[styles.iconCircle, { backgroundColor: `${config.color}22` }]}>
+              <View style={[styles.iconCircle, { backgroundColor: `${config.color}22` }]} aria-hidden={true}>
                 {config.icon(26, config.color)}
               </View>
               <Text style={styles.actionText}>{config.label}</Text>
@@ -134,77 +131,16 @@ export const QuickActions = () => {
         })}
       </View>
 
-      {/* Confirmation modal with optional description input */}
-      <Modal
+      <QuickActionModal
         visible={selectedAction !== null}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={handleClose}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalOverlay}
-        >
-          {selectedAction && (() => {
-            const config = ACTION_CONFIG[selectedAction];
-            const charsLeft = MAX_DESCRIPTION - description.length;
-            return (
-              <View style={styles.modalContent}>
-                {/* Coloured header */}
-                <View style={[styles.modalHeader, { backgroundColor: config.color }]}>
-                  {config.icon(44, colors.white)}
-                  <Text style={styles.modalTitle}>{config.label} Emergency</Text>
-                </View>
-
-                <View style={styles.modalBody}>
-                  <Text style={styles.modalMessage}>{config.message}</Text>
-                  <Text style={styles.modalWarning}>{config.detail}</Text>
-
-                  {/* Optional description input */}
-                  <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                    <TextInput
-                      style={[styles.descriptionInput, { color: colors.text.primary }]}
-                      placeholder={config.placeholder}
-                      placeholderTextColor={colors.text.secondary}
-                      value={description}
-                      onChangeText={t => setDescription(t.slice(0, MAX_DESCRIPTION))}
-                      multiline
-                      maxLength={MAX_DESCRIPTION}
-                      returnKeyType="done"
-                      blurOnSubmit
-                      accessibilityLabel="Add a brief description of the situation"
-                    />
-                    <Text style={[styles.charCount, { color: charsLeft <= 20 ? config.color : colors.text.secondary }]}>
-                      {charsLeft}
-                    </Text>
-                  </View>
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[styles.cancelButton, { borderColor: colors.border, backgroundColor: colors.background }]}
-                      onPress={handleClose}
-                      disabled={loading}
-                    >
-                      <Text style={[styles.cancelText, { color: colors.text.secondary }]}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.confirmButton, { backgroundColor: config.color }, loading && { opacity: 0.7 }]}
-                      onPress={handleConfirm}
-                      disabled={loading}
-                    >
-                      {loading
-                        ? <ActivityIndicator color={colors.white} />
-                        : <Text style={styles.confirmText}>Send Alert</Text>
-                      }
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            );
-          })()}
-        </KeyboardAvoidingView>
-      </Modal>
+        config={selectedAction ? ACTION_CONFIG[selectedAction] : null}
+        description={description}
+        setDescription={setDescription}
+        onClose={handleClose}
+        onConfirm={handleConfirm}
+        loading={loading}
+        colors={colors}
+      />
 
       <ConfirmationModal
         visible={confirmModal.visible}
@@ -216,7 +152,9 @@ export const QuickActions = () => {
       />
     </View>
   );
-};
+});
+
+QuickActions.displayName = 'QuickActions';
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
@@ -262,102 +200,5 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.text.primary,
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalContent: {
-    width: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    overflow: 'hidden',
-    ...Shadows.md,
-  },
-  modalHeader: {
-    padding: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalTitle: {
-    color: colors.white,
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 10,
-    letterSpacing: 0.4,
-  },
-  modalBody: {
-    padding: 20,
-  },
-  modalMessage: {
-    fontSize: 16,
-    color: colors.text.primary,
-    textAlign: 'center',
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  modalWarning: {
-    fontSize: 13,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-
-  // Description input
-  inputWrapper: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 6,
-    marginBottom: 16,
-    minHeight: 70,
-  },
-  descriptionInput: {
-    fontSize: 14,
-    lineHeight: 20,
-    minHeight: 44,
-  },
-  charCount: {
-    fontSize: 11,
-    textAlign: 'right',
-    marginTop: 2,
-  },
-
-  // Buttons
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelText: {
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  confirmButton: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Shadows.sm,
-  },
-  confirmText: {
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 15,
   },
 });

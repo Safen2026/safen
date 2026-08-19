@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
   KeyboardAvoidingView, Platform, TouchableWithoutFeedback, TextInput 
@@ -29,18 +29,90 @@ const MODES: { id: string; label: string; icon: MCIName }[] = [
   { id: 'driving', label: 'Drive', icon: 'car-outline' },
 ];
 
-export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupModalProps) => {
+const PresetChip = React.memo(({ item, isSelected, colors, styles, onSelect }: any) => {
+  const handlePress = useCallback(() => onSelect(item.label), [item.label, onSelect]);
+  return (
+    <TouchableOpacity
+      style={[
+        styles.presetChip,
+        { borderColor: isSelected ? colors.primary : colors.border },
+        isSelected && { backgroundColor: `${colors.primary}10` }
+      ]}
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`Preset destination: ${item.label}`}
+      accessibilityState={{ selected: isSelected }}
+    >
+      <MaterialCommunityIcons 
+        name={item.icon} 
+        size={20} 
+        color={isSelected ? colors.primary : colors.text.secondary} 
+      />
+      <Text style={[
+        styles.presetText, 
+        { color: isSelected ? colors.primary : colors.text.secondary }
+      ]}>
+        {item.label}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+const ModeCard = React.memo(({ item, isSelected, colors, styles, onSelect }: any) => {
+  const handlePress = useCallback(() => onSelect(item.id), [item.id, onSelect]);
+  return (
+    <TouchableOpacity
+      style={[
+        styles.modeCard,
+        { borderColor: isSelected ? colors.primary : colors.border },
+        isSelected && { backgroundColor: `${colors.primary}10` }
+      ]}
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={`Transport mode: ${item.label}`}
+      accessibilityState={{ selected: isSelected }}
+    >
+      <MaterialCommunityIcons 
+        name={item.icon} 
+        size={24} 
+        color={isSelected ? colors.primary : colors.text.secondary} 
+      />
+      <Text style={[
+        styles.modeText,
+        { color: isSelected ? colors.primary : colors.text.secondary }
+      ]}>
+        {item.label}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+export const JourneySetupModalComponent = ({ visible, onClose, onStart }: JourneySetupModalProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const [destination, setDestination] = useState('Home');
   const [customDest, setCustomDest] = useState('');
   const [mode, setMode] = useState('driving');
 
-  const handleStart = () => {
+  const handleStart = useCallback(() => {
     const finalDest = customDest.trim() || destination;
     if (!finalDest) return;
     onStart(finalDest, mode);
-  };
+  }, [customDest, destination, mode, onStart]);
+
+  const handlePresetSelect = useCallback((label: string) => {
+    setDestination(label);
+    setCustomDest('');
+  }, []);
+
+  const handleCustomDestChange = useCallback((t: string) => {
+    setCustomDest(t);
+    setDestination('');
+  }, []);
+
+  const handleModeSelect = useCallback((id: string) => {
+    setMode(id);
+  }, []);
 
   return (
     <Modal
@@ -65,35 +137,16 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
 
           <Text style={styles.sectionLabel}>Where are you going?</Text>
           <View style={styles.presetRow}>
-            {PRESETS.map(p => {
-              const isSelected = destination === p.label && !customDest;
-              return (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[
-                    styles.presetChip,
-                    { borderColor: isSelected ? colors.primary : colors.border },
-                    isSelected && { backgroundColor: `${colors.primary}10` }
-                  ]}
-                  onPress={() => {
-                    setDestination(p.label);
-                    setCustomDest('');
-                  }}
-                >
-                  <MaterialCommunityIcons 
-                    name={p.icon} 
-                    size={20} 
-                    color={isSelected ? colors.primary : colors.text.secondary} 
-                  />
-                  <Text style={[
-                    styles.presetText, 
-                    { color: isSelected ? colors.primary : colors.text.secondary }
-                  ]}>
-                    {p.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {PRESETS.map(p => (
+              <PresetChip 
+                key={p.id} 
+                item={p} 
+                isSelected={destination === p.label && !customDest} 
+                colors={colors} 
+                styles={styles} 
+                onSelect={handlePresetSelect} 
+              />
+            ))}
           </View>
           
           <TextInput
@@ -104,52 +157,38 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
             placeholder="Or type a custom destination..."
             placeholderTextColor={colors.text.secondary}
             value={customDest}
-            onChangeText={(t) => {
-              setCustomDest(t);
-              setDestination('');
-            }}
+            onChangeText={handleCustomDestChange}
+            accessibilityLabel="Custom destination input"
           />
 
           <Text style={styles.sectionLabel}>How are you getting there?</Text>
           <View style={styles.modeRow}>
-            {MODES.map(m => {
-              const isSelected = mode === m.id;
-              return (
-                <TouchableOpacity
-                  key={m.id}
-                  style={[
-                    styles.modeCard,
-                    { borderColor: isSelected ? colors.primary : colors.border },
-                    isSelected && { backgroundColor: `${colors.primary}10` }
-                  ]}
-                  onPress={() => setMode(m.id)}
-                >
-                  <MaterialCommunityIcons 
-                    name={m.icon} 
-                    size={24} 
-                    color={isSelected ? colors.primary : colors.text.secondary} 
-                  />
-                  <Text style={[
-                    styles.modeText,
-                    { color: isSelected ? colors.primary : colors.text.secondary }
-                  ]}>
-                    {m.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {MODES.map(m => (
+              <ModeCard 
+                key={m.id} 
+                item={m} 
+                isSelected={mode === m.id} 
+                colors={colors} 
+                styles={styles} 
+                onSelect={handleModeSelect} 
+              />
+            ))}
           </View>
 
           <View style={styles.actions}>
             <TouchableOpacity 
               style={[styles.cancelBtn, { borderColor: colors.border }]} 
               onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel journey setup"
             >
               <Text style={[styles.cancelText, { color: colors.text.secondary }]}>Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.startBtn, { backgroundColor: colors.primary }]} 
               onPress={handleStart}
+              accessibilityRole="button"
+              accessibilityLabel="Start sharing journey"
             >
               <Text style={styles.startText}>Start Sharing</Text>
             </TouchableOpacity>
@@ -159,6 +198,8 @@ export const JourneySetupModal = ({ visible, onClose, onStart }: JourneySetupMod
     </Modal>
   );
 };
+
+export const JourneySetupModal = React.memo(JourneySetupModalComponent);
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {

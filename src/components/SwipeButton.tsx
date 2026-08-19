@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, PanResponder, Dimensions, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -16,7 +16,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const BUTTON_WIDTH = SCREEN_WIDTH - 48; // accounting for screen padding
 const SWIPE_RANGE = BUTTON_WIDTH - THUMB_SIZE - PADDING * 2;
 
-export const SwipeButton = ({ onComplete, loading }: SwipeButtonProps) => {
+export const SwipeButton = React.memo(function SwipeButton({ onComplete, loading }: SwipeButtonProps) {
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const [completed, setCompleted] = useState(false);
@@ -110,7 +110,7 @@ export const SwipeButton = ({ onComplete, loading }: SwipeButtonProps) => {
       </Animated.View>
     </View>
   );
-};
+});
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {

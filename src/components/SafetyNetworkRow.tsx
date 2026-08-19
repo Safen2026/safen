@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Image,
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +13,7 @@ import type { ThemeColors } from '../constants/Theme';
 import { supabase } from '../lib/supabase';
 import { contactEvents } from '../lib/events';
 import { Shadows } from '../constants/Theme';
+import { Avatar } from './Avatar';
 
 type Contact = {
   id: string;
@@ -24,19 +24,10 @@ type Contact = {
 
 const MAX_VISIBLE = 5;
 
-/** Returns up to 2 uppercase initials from a full name. */
-const getInitials = (name: string) =>
-  name
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-
-export const SafetyNetworkRow = () => {
+export const SafetyNetworkRow = React.memo(() => {
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
-  const router     = useRouter();
+  const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const isMountedRef = useRef(true);
 
@@ -110,19 +101,20 @@ export const SafetyNetworkRow = () => {
   }, [fetchContacts]);
 
   // Also re-fetch when the contacts tab emits a delete event via the event bus.
-  // This is the reliable path since Supabase realtime DELETE filters require
-  // REPLICA IDENTITY FULL to match filtered rows.
-  useEffect(() => contactEvents.onRefresh(fetchContacts), [fetchContacts]);
+  useEffect(() => {
+    const unsubscribe = contactEvents.onRefresh(fetchContacts);
+    return () => unsubscribe();
+  }, [fetchContacts]);
 
-  const goToNetwork  = () => router.push('/(tabs)/contacts');
-  const goToAddForm  = () => router.push({ pathname: '/(tabs)/contacts', params: { openAdd: 'true' } });
+  const goToNetwork = useCallback(() => router.push('/(tabs)/contacts'), [router]);
+  const goToAddForm = useCallback(() => router.push({ pathname: '/(tabs)/contacts', params: { openAdd: 'true' } }), [router]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={styles.header} accessible={true} accessibilityRole="header">
         <Text style={[styles.title, { color: colors.text.primary }]}>My Safety Network</Text>
-        <TouchableOpacity onPress={goToNetwork} accessibilityLabel="Manage safety network">
+        <TouchableOpacity onPress={goToNetwork} accessibilityRole="button" accessibilityLabel="Manage safety network">
           <Text style={[styles.manage, { color: colors.primary }]}>Manage</Text>
         </TouchableOpacity>
       </View>
@@ -135,19 +127,13 @@ export const SafetyNetworkRow = () => {
       >
         {contacts.map(contact => (
           <View key={contact.id} style={styles.item}>
-            <View style={styles.avatarWrap}>
-              {contact.avatar_url ? (
-                <Image source={{ uri: contact.avatar_url }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatarFallback, { backgroundColor: colors.white }]}>
-                  <Text style={[styles.initials, { color: colors.text.primary }]}>
-                    {getInitials(contact.name)}
-                  </Text>
-                </View>
-              )}
-              {contact.is_on_app && (
-                <View style={[styles.onlineDot, { borderColor: colors.background }]} />
-              )}
+            <View style={{ marginBottom: 6 }}>
+              <Avatar 
+                name={contact.name} 
+                avatarUrl={contact.avatar_url} 
+                isOnline={contact.is_on_app} 
+                size={52} 
+              />
             </View>
             <Text style={[styles.contactName, { color: colors.text.secondary }]} numberOfLines={1}>
               {contact.name.split(' ')[0]}
@@ -159,6 +145,7 @@ export const SafetyNetworkRow = () => {
         <TouchableOpacity
           style={styles.item}
           onPress={goToAddForm}
+          accessibilityRole="button"
           accessibilityLabel="Add emergency contact"
         >
           <View style={[styles.addCircle, { borderColor: colors.border }]}>
@@ -169,7 +156,9 @@ export const SafetyNetworkRow = () => {
       </ScrollView>
     </View>
   );
-};
+});
+
+SafetyNetworkRow.displayName = 'SafetyNetworkRow';
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
@@ -206,37 +195,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   item: {
     alignItems: 'center',
     width: 58,
-  },
-  avatarWrap: {
-    position: 'relative',
-    marginBottom: 6,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-  },
-  avatarFallback: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.sm,
-  },
-  initials: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 1,
-    right: 1,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#22C55E',
-    borderWidth: 2,
   },
   contactName: {
     fontSize: 11,

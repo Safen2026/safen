@@ -11,6 +11,10 @@ import { signOut } from '@react-native-firebase/auth';
 import { useSession } from '../../src/context/SessionContext';
 import { FeedbackModal } from '../../src/components/FeedbackModal';
 import { useAvatar } from '../../src/hooks/useAvatar';
+import { SignOutModal } from '../../src/components/settings/SignOutModal';
+import { DeleteAccountModal } from '../../src/components/settings/DeleteAccountModal';
+import { DisablePushModal } from '../../src/components/settings/DisablePushModal';
+import { SettingsRow } from '../../src/components/settings/SettingsRow';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
@@ -27,6 +31,8 @@ export default function SettingsScreen() {
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [pushModalVisible, setPushModalVisible] = useState(false);
+  const [hapticsEnabled, setHapticsEnabled] = useState(true);
+  const fullName = session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.first_name || 'User';
 
   // Fetch initial preference from Supabase
   useEffect(() => {
@@ -46,7 +52,13 @@ export default function SettingsScreen() {
     fetchPreferences();
   }, [session?.user?.id]);
 
-  const updatePushInSupabase = async (val: boolean) => {
+  const triggerHaptic = React.useCallback(() => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [hapticsEnabled]);
+
+  const updatePushInSupabase = React.useCallback(async (val: boolean) => {
     if (!session?.user?.id) return;
     const { error } = await supabase
       .from('profiles')
@@ -58,44 +70,31 @@ export default function SettingsScreen() {
       setPushEnabled(!val); // Revert on failure
       Alert.alert('Error', 'Failed to save your preference. Please try again.');
     }
-  };
+  }, [session?.user?.id]);
 
-  const handleTogglePush = async (val: boolean) => {
+  const handleTogglePush = React.useCallback(async (val: boolean) => {
     triggerHaptic();
     if (!val) {
-      // Trying to disable, show modal
       setPushModalVisible(true);
     } else {
-      // Enabling, do it immediately
       setPushEnabled(true);
       await updatePushInSupabase(true);
     }
-  };
+  }, [triggerHaptic, updatePushInSupabase]);
 
-  const confirmDisablePush = async () => {
+  const confirmDisablePush = React.useCallback(async () => {
     setPushModalVisible(false);
     triggerHaptic();
     setPushEnabled(false);
     await updatePushInSupabase(false);
-  };
+  }, [triggerHaptic, updatePushInSupabase]);
 
-  const [hapticsEnabled, setHapticsEnabled] = useState(true);
-
-
-  const fullName = session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.first_name || 'User';
-
-  const triggerHaptic = () => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  };
-
-  const handleSignOut = () => {
+  const handleSignOut = React.useCallback(() => {
     triggerHaptic();
     setSignOutModalVisible(true);
-  };
+  }, [hapticsEnabled]);
 
-  const confirmSignOut = async () => {
+  const confirmSignOut = React.useCallback(async () => {
     setSigningOut(true);
     try {
       if (firebaseAuth) await signOut(firebaseAuth);
@@ -108,9 +107,9 @@ export default function SettingsScreen() {
       const msg = err instanceof Error ? err.message : String(err);
       Alert.alert('Error', msg);
     }
-  };
+  }, []);
 
-  const confirmDeleteAccount = async () => {
+  const confirmDeleteAccount = React.useCallback(async () => {
     setDeleting(true);
     triggerHaptic();
     
@@ -126,17 +125,17 @@ export default function SettingsScreen() {
     setDeleting(false);
     setDeleteModalVisible(false);
     router.replace('/auth');
-  };
+  }, [hapticsEnabled]);
 
-  const openLink = async (url: string) => {
+  const openLink = React.useCallback(async (url: string) => {
     try {
       await Linking.openURL(url);
     } catch {
       Alert.alert("Error", "Could not open the link.");
     }
-  };
+  }, []);
 
-  const handleShareApp = async () => {
+  const handleShareApp = React.useCallback(async () => {
     try {
       await Share.share({
         message: 'Check out SAFEN - The ultimate personal safety platform! Stay safe and connected. https://safen.app',
@@ -144,29 +143,47 @@ export default function SettingsScreen() {
     } catch (error) {
       console.warn('Share error:', error);
     }
-  };
+  }, []);
 
-  const renderRow = (icon: React.ComponentProps<typeof Ionicons>['name'], title: string, rightContent: React.ReactNode, onPress?: () => void, isDestructive = false) => (
-    <TouchableOpacity 
-      style={styles.row} 
-      onPress={() => {
-        if (onPress) {
-          triggerHaptic();
-          onPress();
-        }
-      }} 
-      disabled={!onPress}
-      activeOpacity={onPress ? 0.7 : 1}
-    >
-      <View style={[styles.iconBox, isDestructive && { backgroundColor: '#EF444415' }]}>
-        <Ionicons name={icon} size={20} color={isDestructive ? '#EF4444' : colors.text.secondary} />
-      </View>
-      <Text style={[styles.rowText, isDestructive && { color: '#EF4444' }]}>{title}</Text>
-      <View style={styles.rightContentBox}>
-        {rightContent}
-      </View>
-    </TouchableOpacity>
-  );
+  const handleToggleTheme = React.useCallback((val: boolean) => {
+    triggerHaptic(); 
+    toggleTheme();
+  }, [triggerHaptic, toggleTheme]);
+
+  const handleToggleHaptics = React.useCallback((val: boolean) => {
+    if (val) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setHapticsEnabled(val);
+  }, []);
+
+  const handleOpenMedicalProfile = React.useCallback(() => {
+    triggerHaptic();
+    router.push('/medical-profile');
+  }, [triggerHaptic]);
+
+  const handleOpenSafetyGuidelines = React.useCallback(() => {
+    triggerHaptic();
+    router.push('/safety-guidelines');
+  }, [triggerHaptic]);
+
+  const handleOpenFeedback = React.useCallback(() => {
+    triggerHaptic();
+    setFeedbackModalVisible(true);
+  }, [triggerHaptic]);
+
+  const handleOpenPrivacy = React.useCallback(() => {
+    triggerHaptic();
+    openLink('https://safen.app/privacy');
+  }, [triggerHaptic, openLink]);
+
+  const handleOpenTerms = React.useCallback(() => {
+    triggerHaptic();
+    openLink('https://safen.app/terms');
+  }, [triggerHaptic, openLink]);
+
+  const handleDeleteAccountRequest = React.useCallback(() => {
+    triggerHaptic();
+    setDeleteModalVisible(true);
+  }, [triggerHaptic]);
 
   return (
     <View style={styles.container}>
@@ -193,15 +210,18 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>PROFILE</Text>
           <View style={styles.card}>
-            {renderRow(
-              "medical-outline",
-              "Medical Profile",
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 13, color: colors.text.secondary, fontWeight: '500' }}>ICE Info</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
-              </View>,
-              () => router.push('/medical-profile')
-            )}
+            <SettingsRow
+              icon="medical-outline"
+              title="Medical Profile"
+              colors={colors}
+              onPress={handleOpenMedicalProfile}
+              rightContent={
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 13, color: colors.text.secondary, fontWeight: '500' }}>ICE Info</Text>
+                  <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
+                </View>
+              }
+            />
           </View>
         </View>
 
@@ -209,82 +229,90 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>PREFERENCES</Text>
           <View style={styles.card}>
-            {renderRow(
-              isDark ? "moon-outline" : "sunny-outline",
-              "Dark Mode",
-              <Switch 
-                value={isDark} 
-                onValueChange={(val) => { triggerHaptic(); toggleTheme(); }} 
-                trackColor={{ true: '#00875A' }} 
-              />
-            )}
+            <SettingsRow
+              icon={isDark ? "moon-outline" : "sunny-outline"}
+              title="Dark Mode"
+              colors={colors}
+              rightContent={
+                <Switch 
+                  value={isDark} 
+                  onValueChange={handleToggleTheme} 
+                  trackColor={{ true: '#00875A' }} 
+                />
+              }
+            />
             <View style={styles.divider} />
-            {renderRow(
-              "notifications-outline",
-              "Push Notifications",
-              <Switch 
-                value={pushEnabled} 
-                onValueChange={handleTogglePush} 
-                trackColor={{ true: '#00875A' }} 
-              />
-            )}
-
+            <SettingsRow
+              icon="notifications-outline"
+              title="Push Notifications"
+              colors={colors}
+              rightContent={
+                <Switch 
+                  value={pushEnabled} 
+                  onValueChange={handleTogglePush} 
+                  trackColor={{ true: '#00875A' }} 
+                />
+              }
+            />
             <View style={styles.divider} />
-            {renderRow(
-              "hardware-chip-outline",
-              "Haptic Feedback",
-              <Switch 
-                value={hapticsEnabled} 
-                onValueChange={(val) => { 
-                  if (val) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setHapticsEnabled(val); 
-                }} 
-                trackColor={{ true: '#00875A' }} 
-              />
-            )}
+            <SettingsRow
+              icon="hardware-chip-outline"
+              title="Haptic Feedback"
+              colors={colors}
+              rightContent={
+                <Switch 
+                  value={hapticsEnabled} 
+                  onValueChange={handleToggleHaptics} 
+                  trackColor={{ true: '#00875A' }} 
+                />
+              }
+            />
           </View>
         </View>
-
-
 
         {/* Support */}
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>SUPPORT & ABOUT</Text>
           <View style={styles.card}>
-            {renderRow(
-              "book-outline",
-              "Safety Guidelines",
-              <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />,
-              () => router.push('/safety-guidelines')
-            )}
+            <SettingsRow
+              icon="book-outline"
+              title="Safety Guidelines"
+              colors={colors}
+              onPress={handleOpenSafetyGuidelines}
+              rightContent={<Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />}
+            />
             <View style={styles.divider} />
-            {renderRow(
-              "share-social-outline",
-              "Share SAFEN",
-              <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />,
-              handleShareApp
-            )}
+            <SettingsRow
+              icon="share-social-outline"
+              title="Share SAFEN"
+              colors={colors}
+              onPress={handleShareApp}
+              rightContent={<Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />}
+            />
             <View style={styles.divider} />
-            {renderRow(
-              "chatbubbles-outline",
-              "Share Feedback",
-              <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />,
-              () => setFeedbackModalVisible(true)
-            )}
+            <SettingsRow
+              icon="chatbubbles-outline"
+              title="Share Feedback"
+              colors={colors}
+              onPress={handleOpenFeedback}
+              rightContent={<Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />}
+            />
             <View style={styles.divider} />
-            {renderRow(
-              "document-text-outline",
-              "Privacy Policy",
-              <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />,
-              () => openLink('https://safen.app/privacy')
-            )}
+            <SettingsRow
+              icon="document-text-outline"
+              title="Privacy Policy"
+              colors={colors}
+              onPress={handleOpenPrivacy}
+              rightContent={<Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />}
+            />
             <View style={styles.divider} />
-            {renderRow(
-              "shield-checkmark-outline",
-              "Terms of Service",
-              <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />,
-              () => openLink('https://safen.app/terms')
-            )}
+            <SettingsRow
+              icon="shield-checkmark-outline"
+              title="Terms of Service"
+              colors={colors}
+              onPress={handleOpenTerms}
+              rightContent={<Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />}
+            />
           </View>
         </View>
 
@@ -292,21 +320,25 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>SESSION</Text>
           <View style={styles.card}>
-            {renderRow(
-              "log-out-outline",
-              "Sign Out",
-              signingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Ionicons name="chevron-forward" size={16} color="#EF4444" />,
-              handleSignOut,
-              true
-            )}
+            <SettingsRow
+              icon="log-out-outline"
+              title="Sign Out"
+              colors={colors}
+              isDestructive={true}
+              onPress={handleSignOut}
+              rightContent={
+                signingOut ? <ActivityIndicator size="small" color="#EF4444" /> : <Ionicons name="chevron-forward" size={16} color="#EF4444" />
+              }
+            />
             <View style={styles.divider} />
-            {renderRow(
-              "trash-outline",
-              "Delete Account",
-              <Ionicons name="chevron-forward" size={16} color="#EF4444" />,
-              () => { triggerHaptic(); setDeleteModalVisible(true); },
-              true
-            )}
+            <SettingsRow
+              icon="trash-outline"
+              title="Delete Account"
+              colors={colors}
+              isDestructive={true}
+              onPress={handleDeleteAccountRequest}
+              rightContent={<Ionicons name="chevron-forward" size={16} color="#EF4444" />}
+            />
           </View>
         </View>
 
@@ -314,102 +346,32 @@ export default function SettingsScreen() {
       </ScrollView>
 
       {/* Delete Account Modal */}
-      <Modal
+      <DeleteAccountModal 
         visible={deleteModalVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setDeleteModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="warning-outline" size={48} color="#EF4444" />
-              <Text style={styles.modalTitle}>Delete Account?</Text>
-            </View>
-            <View style={styles.modalBody}>
-              <Text style={styles.modalMessage}>This action is permanent and cannot be undone.</Text>
-              <Text style={styles.modalWarning}>
-                All of your safety data, emergency contacts, and settings will be permanently wiped from our servers immediately.
-              </Text>
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => { triggerHaptic(); setDeleteModalVisible(false); }} disabled={deleting}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.confirmButton, deleting && { opacity: 0.7 }]} onPress={confirmDeleteAccount} disabled={deleting}>
-                  {deleting ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmText}>Delete Forever</Text>}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        deleting={deleting}
+        colors={colors}
+        onCancel={React.useCallback(() => setDeleteModalVisible(false), [])}
+        onConfirm={confirmDeleteAccount}
+      />
 
       {/* Sign Out Modal */}
-      <Modal
+      <SignOutModal 
         visible={signOutModalVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setSignOutModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="log-out-outline" size={48} color="#EF4444" />
-              <Text style={styles.modalTitle}>Sign Out</Text>
-            </View>
-            <View style={styles.modalBody}>
-              <Text style={styles.modalMessage}>Are you sure you want to sign out?</Text>
-              <Text style={styles.modalWarning}>
-                You will need to sign in again to trigger alerts and share your location during an emergency.
-              </Text>
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => { triggerHaptic(); setSignOutModalVisible(false); }} disabled={signingOut}>
-                  <Text style={styles.cancelText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.confirmButton, signingOut && { opacity: 0.7 }]} onPress={() => { triggerHaptic(); confirmSignOut(); }} disabled={signingOut}>
-                  {signingOut ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmText}>Sign Out</Text>}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        signingOut={signingOut}
+        colors={colors}
+        onCancel={React.useCallback(() => setSignOutModalVisible(false), [])}
+        onConfirm={confirmSignOut}
+      />
 
       {/* Disable Push Modal */}
-      <Modal
+      <DisablePushModal 
         visible={pushModalVisible}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        onRequestClose={() => setPushModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="notifications-off-outline" size={48} color="#EF4444" />
-              <Text style={styles.modalTitle}>Disable Alerts?</Text>
-            </View>
-            <View style={styles.modalBody}>
-              <Text style={styles.modalMessage}>Are you sure you want to turn off Push Notifications?</Text>
-              <Text style={styles.modalWarning}>
-                If disabled, you will not be notified when your emergency contacts trigger an SOS or share reports with you!
-              </Text>
-              <View style={styles.modalActions}>
-                <TouchableOpacity style={styles.cancelButton} onPress={() => { triggerHaptic(); setPushModalVisible(false); }}>
-                  <Text style={styles.cancelText}>Keep On</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.confirmButton} onPress={confirmDisablePush}>
-                  <Text style={styles.confirmText}>Turn Off</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        colors={colors}
+        onCancel={React.useCallback(() => setPushModalVisible(false), [])}
+        onConfirm={confirmDisablePush}
+      />
 
-      <FeedbackModal visible={feedbackModalVisible} onClose={() => setFeedbackModalVisible(false)} />
+      <FeedbackModal visible={feedbackModalVisible} onClose={React.useCallback(() => setFeedbackModalVisible(false), [])} />
     </View>
   );
 }
@@ -432,17 +394,4 @@ const getStyles = (colors: any) => StyleSheet.create({
   valueText: { fontSize: 15, color: colors.text.secondary, fontWeight: '400' },
   divider: { height: 1, backgroundColor: colors.border, marginLeft: 60 },
   versionText: { textAlign: 'center', color: colors.text.secondary, fontSize: 13, fontWeight: '500', marginTop: 10, marginBottom: 20, letterSpacing: 0.5 },
-  
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { width: '100%', backgroundColor: colors.white, borderRadius: 16, overflow: 'hidden', shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 12, elevation: 5 },
-  modalHeader: { padding: 24, paddingBottom: 0, alignItems: 'center', justifyContent: 'center' },
-  modalTitle: { color: colors.text.primary, fontSize: 22, fontWeight: 'bold', marginTop: 12, letterSpacing: 0.5 },
-  modalBody: { padding: 24 },
-  modalMessage: { fontSize: 18, color: colors.text.primary, textAlign: 'center', fontWeight: '700', marginBottom: 8 },
-  modalWarning: { fontSize: 14, color: colors.text.secondary, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  cancelButton: { flex: 1, paddingVertical: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  cancelText: { color: colors.text.secondary, fontWeight: '700', fontSize: 16 },
-  confirmButton: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EF4444' },
-  confirmText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
 });

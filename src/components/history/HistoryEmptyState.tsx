@@ -3,12 +3,17 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 
-export function HistoryEmptyState() {
+const HistoryEmptyStateComponent = () => {
   const { colors } = useTheme();
 
   return (
-    <View style={styles.container}>
-      <View style={[styles.iconCircle, { backgroundColor: colors.border }]}>
+    <View 
+      style={styles.container}
+      accessible={true}
+      accessibilityRole="text"
+      aria-label="No history found. No events match the selected filter."
+    >
+      <View style={[styles.iconCircle, { backgroundColor: colors.border }]} aria-hidden={true}>
         <Ionicons name="document-text-outline" size={36} color={colors.text.secondary} />
       </View>
       <Text style={[styles.title, { color: colors.text.primary }]}>No history found</Text>
@@ -47,3 +52,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
 });
+
+export const HistoryEmptyState = React.memo(HistoryEmptyStateComponent);
+HistoryEmptyState.displayName = 'HistoryEmptyState';

@@ -202,7 +202,7 @@ export const SOSButton = React.memo(() => {
         onCancel={handleCancelAlert}
       />
 
-      <Animated.View style={[styles.track, { backgroundColor: trackBgColor }]}>
+      <Animated.View style={[styles.track, { backgroundColor: trackBgColor }]} aria-busy={loading}>
         <Animated.View
           style={[
             styles.thumb,
@@ -216,6 +216,13 @@ export const SOSButton = React.memo(() => {
           {...panResponder.panHandlers}
           accessibilityLabel="Swipe right to trigger SOS"
           accessibilityRole="button"
+          accessibilityHint="Double tap to trigger SOS immediately"
+          accessibilityActions={[{ name: 'activate', label: 'Trigger SOS' }]}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === 'activate') {
+              handleTrigger();
+            }
+          }}
         >
           {loading
             ? <ActivityIndicator size="small" color="#fff" />

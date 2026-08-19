@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEmergencyRecording } from '../hooks/useEmergencyRecording';
 import { cinematicScroll } from '../utils/scrollUtils';
+import { formatDuration } from '../utils/dateUtils';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface ActiveSOSModalProps {
@@ -154,19 +155,9 @@ export const ActiveSOSModal = React.memo(({
 
   const isVideoPhase = phase === 'recording_video_audio';
 
-  const totalMins = Math.floor(durationSeconds / 60);
-  const totalSecs = (durationSeconds % 60).toString().padStart(2, '0');
-  const timerStr = `${totalMins.toString().padStart(2, '0')}:${totalSecs}`;
-
-  const videoElapsed = Math.min(durationSeconds, 60);
-  const videoMins = Math.floor(videoElapsed / 60);
-  const videoSecs = (videoElapsed % 60).toString().padStart(2, '0');
-  const videoTimerStr = `${videoMins.toString().padStart(2, '0')}:${videoSecs}`;
-
-  const audioElapsed = Math.max(0, durationSeconds - 60);
-  const audioMins = Math.floor(audioElapsed / 60);
-  const audioSecs = (audioElapsed % 60).toString().padStart(2, '0');
-  const audioTimerStr = `${audioMins.toString().padStart(2, '0')}:${audioSecs}`;
+  const timerStr = formatDuration(durationSeconds);
+  const videoTimerStr = formatDuration(Math.min(durationSeconds, 60));
+  const audioTimerStr = formatDuration(Math.max(0, durationSeconds - 60));
 
   return (
     <Modal
@@ -200,7 +191,7 @@ export const ActiveSOSModal = React.memo(({
         >
           {/* Header */}
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={handleCancel} accessibilityLabel="Cancel SOS" disabled={loadingCancel}>
+            <TouchableOpacity onPress={handleCancel} accessibilityLabel="Cancel SOS" accessibilityRole="button" disabled={loadingCancel}>
               <Ionicons name="chevron-back" size={28} color="#fff" />
             </TouchableOpacity>
             <Text style={styles.modalHeaderText}>EMERGENCY SOS</Text>
@@ -209,8 +200,8 @@ export const ActiveSOSModal = React.memo(({
           </View>
 
           {/* Main Pulsing Area */}
-          <View style={styles.pulseContainer}>
-            <View style={styles.sonarContainer}>
+          <View style={styles.pulseContainer} accessibilityRole="alert" aria-live="assertive">
+            <View style={styles.sonarContainer} aria-hidden={true}>
               <Animated.View style={[styles.sonarRipple, {
                 transform: [{ scale: sonar1.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.5] }) }],
                 opacity: sonar1.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
@@ -332,6 +323,9 @@ export const ActiveSOSModal = React.memo(({
             style={styles.modalCancelBtn}
             onPress={handleCancel}
             disabled={loadingCancel}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel SOS"
+            aria-busy={loadingCancel}
           >
             {loadingCancel
               ? <ActivityIndicator size="small" color="#E74C3C" />

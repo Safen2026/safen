@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Linking } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -99,18 +99,36 @@ export default function MapScreen() {
     }
   }, [isMapReady, lat, lng]);
 
+
   // ── Journey handlers ───────────────────────────────────────────────────────
-  const handleJourneyStart = useCallback(async (destination: string, mode: string) => {
+  const handleJourneyStartPrompt = useCallback(() => setShowJourneyModal(true), []);
+  const handleJourneyClose = useCallback(() => setShowJourneyModal(false), []);
+  const handleJourneyStart = useCallback(async (dest: string, mode: string) => {
     setShowJourneyModal(false);
-    await startJourney(destination, mode);
+    await startJourney(dest, mode);
   }, [startJourney]);
 
   // ── Share trip handlers ────────────────────────────────────────────────────
+  const handleShareClose = useCallback(() => setShowShareModal(false), []);
   const handleShareStart = useCallback(async (durationMinutes: number) => {
     if (!shareTripContact) return;
     setShowShareModal(false);
     await startSharing(shareTripContact.contactUserId, shareTripContact.name, durationMinutes);
   }, [shareTripContact, startSharing]);
+  
+  const handleStopSharing = useCallback(() => stopSharing(false), [stopSharing]);
+
+  const handleMapReady = useCallback(() => setIsMapReady(true), []);
+
+  const initialRegion = React.useMemo(() => {
+    if (!location) return undefined;
+    return {
+      latitude: (lat && !isNaN(parseFloat(lat))) ? parseFloat(lat) : location.coords.latitude,
+      longitude: (lng && !isNaN(parseFloat(lng))) ? parseFloat(lng) : location.coords.longitude,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+  }, [location, lat, lng]);
 
   if (errorMsg) {
     return (
@@ -135,15 +153,10 @@ export default function MapScreen() {
         ref={mapRef}
         style={styles.map}
         provider={PROVIDER_DEFAULT}
-        initialRegion={{
-          latitude: (lat && !isNaN(parseFloat(lat))) ? parseFloat(lat) : location.coords.latitude,
-          longitude: (lng && !isNaN(parseFloat(lng))) ? parseFloat(lng) : location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
+        initialRegion={initialRegion}
         showsUserLocation={true}
         showsMyLocationButton={true}
-        onMapReady={() => setIsMapReady(true)}
+        onMapReady={handleMapReady}
       >
         {/* Alert pin — navigated from notification */}
         {lat && lng && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng)) && (
@@ -179,7 +192,7 @@ export default function MapScreen() {
             contactName={shareSession.contactName}
             remainingStr={remainingStr}
             isEnding={isShareEnding}
-            onStopSharing={() => stopSharing(false)}
+            onStopSharing={handleStopSharing}
             onExtend={extendSharing}
           />
         ) : isJourneyActive && journeySession ? (
@@ -193,25 +206,24 @@ export default function MapScreen() {
           />
         ) : (
           <JourneyCard
-            onStart={() => setShowJourneyModal(true)}
+            onStart={handleJourneyStartPrompt}
             isLoading={isJourneyStarting || isShareStarting}
           />
         )}
       </View>
 
-      {/* Journey Setup Modal */}
+      {/* Modals */}
       <JourneySetupModal
         visible={showJourneyModal}
-        onClose={() => setShowJourneyModal(false)}
+        onClose={handleJourneyClose}
         onStart={handleJourneyStart}
       />
 
-      {/* Share Live Trip Modal */}
       <ShareTripModal
         visible={showShareModal}
         contact={shareTripContact}
         isStarting={isShareStarting}
-        onClose={() => setShowShareModal(false)}
+        onClose={handleShareClose}
         onStart={handleShareStart}
       />
     </View>

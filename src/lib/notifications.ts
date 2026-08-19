@@ -46,6 +46,7 @@ export async function notifyEmergencyContacts(params: NotifyParams): Promise<voi
       .select('contact_user_id')
       .eq('user_id', user.id)
       .eq('is_on_app', true)
+      .eq('status', 'accepted')  // Only notify contacts who have accepted the request
       .not('contact_user_id', 'is', null);
 
     if (error) {
@@ -142,6 +143,7 @@ export async function notifyCheckInMissed(params: {
       .select('contact_user_id')
       .eq('user_id', user.id)
       .eq('is_on_app', true)
+      .eq('status', 'accepted')  // Only notify contacts who have accepted the request
       .not('contact_user_id', 'is', null);
 
     if (error || !contacts || contacts.length === 0) {
@@ -413,6 +415,7 @@ export async function notifyJourneyStarted(params: {
       .select('contact_user_id')
       .eq('user_id', user.id)
       .eq('is_on_app', true)
+      .eq('status', 'accepted')  // Only notify contacts who have accepted the request
       .not('contact_user_id', 'is', null);
 
     if (!contacts || contacts.length === 0) return;
@@ -478,6 +481,7 @@ export async function notifyJourneyArrived(params: {
       .select('contact_user_id')
       .eq('user_id', user.id)
       .eq('is_on_app', true)
+      .eq('status', 'accepted')  // Only notify contacts who have accepted the request
       .not('contact_user_id', 'is', null);
 
     if (!contacts || contacts.length === 0) return;

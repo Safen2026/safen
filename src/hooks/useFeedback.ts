@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Alert } from 'react-native';
 import { useSession } from '../context/SessionContext';
@@ -8,9 +8,17 @@ export const useFeedback = () => {
   const session = useSession();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submitFeedback = async (message: string) => {
-    if (!message.trim()) {
+  const submitFeedback = useCallback(async (message: string) => {
+    const trimmedMessage = message.trim();
+    
+    if (!trimmedMessage) {
       Alert.alert('Error', 'Please enter a message before submitting.');
+      return false;
+    }
+
+    // Application-layer DoS protection
+    if (trimmedMessage.length > 1000) {
+      Alert.alert('Error', 'Feedback cannot exceed 1000 characters.');
       return false;
     }
 
@@ -26,7 +34,7 @@ export const useFeedback = () => {
         .from('feedback')
         .insert({
           user_id: userId,
-          message: message.trim(),
+          message: trimmedMessage,
         });
 
       if (error) {
@@ -46,7 +54,7 @@ export const useFeedback = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }, [session?.user?.id]);
 
   return { submitFeedback, isSubmitting };
 };

@@ -11,6 +11,7 @@ import type { ThemeColors } from '../constants/Theme';
 import { useSession } from '../context/SessionContext';
 import { useAvatar } from '../hooks/useAvatar';
 import { ConfirmationModal } from './ConfirmationModal';
+import { Avatar } from './Avatar';
 
 export const WelcomeCard = React.memo(() => {
   const insets = useSafeAreaInsets();
@@ -26,12 +27,10 @@ export const WelcomeCard = React.memo(() => {
   });
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
-  const firstName = React.useMemo(() => {
-    const fullName = session?.user?.user_metadata?.full_name
-      ?? session?.user?.email?.split('@')[0]
-      ?? 'User';
-    return fullName.split(' ')[0];
-  }, [session?.user?.id]);
+  const fullName = session?.user?.user_metadata?.full_name
+    ?? session?.user?.email?.split('@')[0]
+    ?? 'User';
+  const firstName = fullName.split(' ')[0];
 
   const openPicker = useCallback(() => setPickerVisible(true), []);
   const closePicker = useCallback(() => setPickerVisible(false), []);
@@ -115,19 +114,16 @@ export const WelcomeCard = React.memo(() => {
         activeOpacity={0.8}
         onPress={openPicker}
         disabled={uploading}
+        accessibilityRole="button"
         accessibilityLabel="Update profile picture"
+        accessibilityHint="Double tap to open photo options"
       >
-        {uploading ? (
-          <View style={[styles.avatarFallback, { backgroundColor: colors.white }]}>
-            <ActivityIndicator color={colors.primary} size="small" />
-          </View>
-        ) : avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatarFallback, { backgroundColor: colors.white }]}>
-            <Ionicons name="person" size={26} color={colors.text.secondary} />
-          </View>
-        )}
+        <Avatar 
+          name={fullName} 
+          avatarUrl={avatarUrl} 
+          isLoading={uploading} 
+          size={56} 
+        />
 
         {/* Small Camera badge */}
         {!uploading && (
@@ -138,7 +134,7 @@ export const WelcomeCard = React.memo(() => {
       </TouchableOpacity>
 
       {/* Text Greeting */}
-      <View style={styles.textBlock}>
+      <View style={styles.textBlock} accessible={true} accessibilityRole="header">
         <Text style={[styles.greeting, { color: colors.text.secondary }]}>Welcome back,</Text>
         <Text style={[styles.name, { color: colors.text.primary }]} numberOfLines={1}>
           {firstName}
@@ -153,7 +149,12 @@ export const WelcomeCard = React.memo(() => {
         statusBarTranslucent
         onRequestClose={closePicker}
       >
-        <Pressable style={styles.modalOverlay} onPress={closePicker}>
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={closePicker}
+          accessibilityRole="button"
+          accessibilityLabel="Close photo menu"
+        >
           <Pressable
             style={[styles.bottomSheet, { backgroundColor: colors.white, paddingBottom: Math.max(insets.bottom + 20, 36) }]}
             onPress={e => e.stopPropagation()}
@@ -161,7 +162,11 @@ export const WelcomeCard = React.memo(() => {
             <Text style={[styles.sheetTitle, { color: colors.text.primary }]}>Update Profile Picture</Text>
 
             {Platform.OS !== 'ios' || !__DEV__ ? (
-              <TouchableOpacity style={[styles.sheetOption, { borderBottomColor: colors.border }]} onPress={handleCamera}>
+              <TouchableOpacity 
+                style={[styles.sheetOption, { borderBottomColor: colors.border }]} 
+                onPress={handleCamera}
+                accessibilityRole="button"
+              >
                 <View style={[styles.sheetIconBox, { backgroundColor: colors.primary + '15' }]}>
                   <Ionicons name="camera" size={22} color={colors.primary} />
                 </View>
@@ -169,14 +174,22 @@ export const WelcomeCard = React.memo(() => {
               </TouchableOpacity>
             ) : null}
 
-            <TouchableOpacity style={[styles.sheetOption, { borderBottomColor: colors.border }]} onPress={handleGallery}>
+            <TouchableOpacity 
+              style={[styles.sheetOption, { borderBottomColor: colors.border }]} 
+              onPress={handleGallery}
+              accessibilityRole="button"
+            >
               <View style={[styles.sheetIconBox, { backgroundColor: (colors.icon?.activeTab || colors.primary) + '15' }]}>
                 <Ionicons name="images" size={22} color={colors.icon?.activeTab || colors.primary} />
               </View>
               <Text style={[styles.sheetOptionText, { color: colors.text.primary }]}>Choose from Gallery</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.sheetCancel, { backgroundColor: colors.border }]} onPress={closePicker}>
+            <TouchableOpacity 
+              style={[styles.sheetCancel, { backgroundColor: colors.border }]} 
+              onPress={closePicker}
+              accessibilityRole="button"
+            >
               <Text style={[styles.sheetCancelText, { color: colors.text.primary }]}>Cancel</Text>
             </TouchableOpacity>
           </Pressable>

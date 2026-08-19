@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
 import { Shadows } from '../constants/Theme';
 import { TripShareContact } from '../hooks/useShareLiveTrip';
+import { Avatar } from './Avatar';
 
 interface ShareTripModalProps {
   visible: boolean;
@@ -27,7 +28,37 @@ const DURATIONS: { label: string; minutes: number; icon: IoniconsName }[] = [
   { label: 'Until I stop', minutes: 0, icon: 'infinite-outline' },
 ];
 
-export const ShareTripModal = ({
+const DurationCard = React.memo(({ item, isSelected, colors, styles, onSelect }: any) => {
+  const handlePress = useCallback(() => onSelect(item.minutes), [item.minutes, onSelect]);
+  return (
+    <TouchableOpacity
+      style={[
+        styles.durationCard,
+        { borderColor: isSelected ? colors.primary : colors.border },
+        isSelected && { backgroundColor: `${colors.primary}12` },
+      ]}
+      onPress={handlePress}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={`Share for ${item.label}`}
+      accessibilityState={{ selected: isSelected }}
+    >
+      <Ionicons
+        name={item.icon}
+        size={22}
+        color={isSelected ? colors.primary : colors.text.secondary}
+      />
+      <Text style={[styles.durationText, { color: isSelected ? colors.primary : colors.text.secondary }]}>
+        {item.label}
+      </Text>
+      {isSelected && (
+        <View style={[styles.selectedDot, { backgroundColor: colors.primary }]} />
+      )}
+    </TouchableOpacity>
+  );
+});
+
+export const ShareTripModalComponent = ({
   visible,
   contact,
   isStarting,
@@ -57,9 +88,7 @@ export const ShareTripModal = ({
 
           {/* Header */}
           <View style={styles.header}>
-            <View style={[styles.contactAvatar, { backgroundColor: `${colors.primary}20` }]}>
-              <Ionicons name="person" size={26} color={colors.primary} />
-            </View>
+            <Avatar name={contact.name} size={52} />
             <View style={styles.headerText}>
               <Text style={styles.title}>Share Live Location</Text>
               <Text style={styles.subtitle} numberOfLines={1}>
@@ -79,33 +108,16 @@ export const ShareTripModal = ({
           {/* Duration picker */}
           <Text style={styles.sectionLabel}>How long do you want to share?</Text>
           <View style={styles.durationGrid}>
-            {DURATIONS.map(d => {
-              const isSelected = selectedDuration === d.minutes;
-              return (
-                <TouchableOpacity
-                  key={d.minutes}
-                  style={[
-                    styles.durationCard,
-                    { borderColor: isSelected ? colors.primary : colors.border },
-                    isSelected && { backgroundColor: `${colors.primary}12` },
-                  ]}
-                  onPress={() => setSelectedDuration(d.minutes)}
-                  activeOpacity={0.75}
-                >
-                  <Ionicons
-                    name={d.icon}
-                    size={22}
-                    color={isSelected ? colors.primary : colors.text.secondary}
-                  />
-                  <Text style={[styles.durationText, { color: isSelected ? colors.primary : colors.text.secondary }]}>
-                    {d.label}
-                  </Text>
-                  {isSelected && (
-                    <View style={[styles.selectedDot, { backgroundColor: colors.primary }]} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
+            {DURATIONS.map(d => (
+              <DurationCard
+                key={d.minutes}
+                item={d}
+                isSelected={selectedDuration === d.minutes}
+                colors={colors}
+                styles={styles}
+                onSelect={setSelectedDuration}
+              />
+            ))}
           </View>
 
           {/* What the contact sees note */}
@@ -122,6 +134,8 @@ export const ShareTripModal = ({
               style={[styles.cancelBtn, { borderColor: colors.border }]}
               onPress={onClose}
               disabled={isStarting}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel sharing"
             >
               <Text style={[styles.cancelText, { color: colors.text.secondary }]}>Cancel</Text>
             </TouchableOpacity>
@@ -131,6 +145,8 @@ export const ShareTripModal = ({
               onPress={handleStart}
               disabled={isStarting}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Start sharing live location"
             >
               <Ionicons name="navigate" size={18} color="#fff" />
               <Text style={styles.startText}>
@@ -143,6 +159,8 @@ export const ShareTripModal = ({
     </Modal>
   );
 };
+
+export const ShareTripModal = React.memo(ShareTripModalComponent);
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {

@@ -78,7 +78,12 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
         <TouchableOpacity style={styles.modalContent} activeOpacity={1}>
           
           <View style={styles.header}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+            <TouchableOpacity 
+              style={styles.closeBtn} 
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close Contact Details"
+            >
               <Ionicons name="close" size={24} color={colors.text.secondary} />
             </TouchableOpacity>
             <TouchableOpacity 
@@ -87,6 +92,9 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
               onPress={() => {
                 if (contact.avatar_url) setImageViewerVisible(true);
               }}
+              accessibilityRole="button"
+              accessibilityLabel={contact.avatar_url ? "View Fullscreen Avatar" : undefined}
+              disabled={!contact.avatar_url}
             >
               {contact.avatar_url ? (
                 <Image source={{ uri: contact.avatar_url }} style={styles.avatarImage} />
@@ -116,14 +124,24 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
           </View>
 
           <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.quickBtn} onPress={handleCall}>
+            <TouchableOpacity 
+              style={styles.quickBtn} 
+              onPress={handleCall}
+              accessibilityRole="button"
+              accessibilityLabel={`Call ${contact.name}`}
+            >
               <View style={[styles.quickIcon, { backgroundColor: colors.primary + '15' }]}>
                 <Ionicons name="call" size={24} color={colors.primary} />
               </View>
               <Text style={styles.quickLabel}>Call</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.quickBtn} onPress={handleSMS}>
+            <TouchableOpacity 
+              style={styles.quickBtn} 
+              onPress={handleSMS}
+              accessibilityRole="button"
+              accessibilityLabel={`Send Message to ${contact.name}`}
+            >
               <View style={[styles.quickIcon, { backgroundColor: colors.primary + '15' }]}>
                 <Ionicons name="chatbubble" size={24} color={colors.primary} />
               </View>
@@ -131,7 +149,12 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
             </TouchableOpacity>
 
             {contact.is_on_app && contact.is_protector && (
-              <TouchableOpacity style={styles.quickBtn} onPress={handlePing}>
+              <TouchableOpacity 
+                style={styles.quickBtn} 
+                onPress={handlePing}
+                accessibilityRole="button"
+                accessibilityLabel={`Send Ping to ${contact.name}`}
+              >
                 <View style={[styles.quickIcon, { backgroundColor: '#F59E0B15' }]}>
                   <Ionicons name="notifications" size={24} color="#F59E0B" />
                 </View>
@@ -141,7 +164,12 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
           </View>
 
           {contact.is_on_app && (
-            <TouchableOpacity style={styles.premiumAction} onPress={handleShareTrip}>
+            <TouchableOpacity 
+              style={styles.premiumAction} 
+              onPress={handleShareTrip}
+              accessibilityRole="button"
+              accessibilityLabel="Share Live Trip"
+            >
               <View style={styles.premiumIconBox}>
                 <Ionicons name="navigate" size={24} color={colors.primary} />
               </View>
@@ -155,12 +183,22 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
 
           {!contact.is_protector && (
             <View style={styles.manageSection}>
-              <TouchableOpacity style={styles.manageBtn} onPress={() => { onClose(); onEdit(); }}>
+              <TouchableOpacity 
+                style={styles.manageBtn} 
+                onPress={() => { onClose(); onEdit(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Edit Contact Details"
+              >
                 <Ionicons name="pencil" size={20} color={colors.text.secondary} />
                 <Text style={styles.manageText}>Edit Contact Details</Text>
               </TouchableOpacity>
               
-              <TouchableOpacity style={[styles.manageBtn, { borderBottomWidth: 0 }]} onPress={() => { onClose(); onDelete(); }}>
+              <TouchableOpacity 
+                style={[styles.manageBtn, { borderBottomWidth: 0 }]} 
+                onPress={() => { onClose(); onDelete(); }}
+                accessibilityRole="button"
+                accessibilityLabel="Remove Contact"
+              >
                 <Ionicons name="trash" size={20} color="#DC2626" />
                 <Text style={[styles.manageText, { color: '#DC2626' }]}>Remove Contact</Text>
               </TouchableOpacity>
@@ -172,8 +210,13 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
 
       {/* Fullscreen Image Viewer Modal */}
       <Modal visible={imageViewerVisible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setImageViewerVisible(false)}>
-        <TouchableOpacity style={styles.imageViewerOverlay} activeOpacity={1} onPress={() => setImageViewerVisible(false)}>
-          <TouchableOpacity style={styles.imageViewerCloseBtn} onPress={() => setImageViewerVisible(false)}>
+        <TouchableOpacity style={styles.imageViewerOverlay} activeOpacity={1} onPress={() => setImageViewerVisible(false)} accessibilityRole="button" accessibilityLabel="Close Fullscreen Avatar">
+          <TouchableOpacity 
+            style={styles.imageViewerCloseBtn} 
+            onPress={() => setImageViewerVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close Fullscreen Avatar"
+          >
             <Ionicons name="close" size={32} color="#FFF" />
           </TouchableOpacity>
           {contact.avatar_url && (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
   ActivityIndicator, Alert, Image, ScrollView, Linking,
@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
 import { notifyContactRequestResult, sendPingAck } from '../lib/notifications';
 import { Shadows } from '../constants/Theme';
+import { getMediaType } from '../utils/mediaUtils';
 
 interface NotificationDetailsModalProps {
   visible: boolean;
@@ -26,41 +27,90 @@ type AlertDetails = {
   media_paths?: string[] | null;
 };
 
-// Detect whether a URL is a video or audio file.
-// IMPORTANT: Cloudinary puts ALL media (including audio) under /video/upload/,
-// so we must check the actual file extension from the URL tail FIRST.
-const getMediaType = (url: string): 'video' | 'audio' | 'image' => {
-  const lower = url.toLowerCase();
-  // Extract just the filename from the end of the URL (strip query params)
-  const pathPart = lower.split('?')[0];
-  const filename = pathPart.split('/').pop() ?? '';
-
-  // Cloudinary sometimes forces `.mp4` for audio files, so we MUST check our explicit prefix FIRST.
-  if (filename.startsWith('video_')) return 'video';
-  if (filename.startsWith('audio_') || filename.startsWith('recording')) return 'audio';
-
-  // Fallback: Extension-based detection
-  if (filename.endsWith('.mp4') || filename.endsWith('.mov') || filename.endsWith('.webm')) return 'video';
-  if (filename.endsWith('.m4a') || filename.endsWith('.mp3') || filename.endsWith('.wav') || filename.endsWith('.caf') || filename.endsWith('.aac')) return 'audio';
-
-  // Last resort: path keywords (least reliable — avoid matching /video/upload/)
-  if (lower.includes('.mp4') || lower.includes('.mov')) return 'video';
-  if (lower.includes('.m4a') || lower.includes('.mp3') || lower.includes('.wav')) return 'audio';
-
-  return 'image';
+// ─── Sub-Components (DRY & Reusability) ───────────────────────────────────────
+type MediaListProps = {
+  items: string[];
+  label: string;
+  clipName: string;
+  icon: any;
+  color: string;
+  onOpen: (url: string) => void;
+  styles: any;
 };
 
-export const NotificationDetailsModal = ({
+const MediaList = React.memo(({ items, label, clipName, icon, color, onOpen, styles }: MediaListProps) => {
+  if (items.length === 0) return null;
+  return (
+    <View style={styles.mediaGroup}>
+      <Text style={styles.mediaGroupLabel}>{label}</Text>
+      <View style={styles.mediaList}>
+        {items.map((url, i) => (
+          <TouchableOpacity
+            key={`${clipName}-${i}`}
+            style={styles.mediaFileRow}
+            onPress={() => onOpen(url)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`Play ${clipName} ${i + 1}`}
+          >
+            <View style={[styles.mediaFileIcon, { backgroundColor: color + '18' }]}>
+              <Ionicons name={icon} size={20} color={color} />
+            </View>
+            <View style={styles.mediaFileInfo}>
+              <Text style={styles.mediaFileName}>{clipName} {i + 1}</Text>
+              <Text style={styles.mediaFileHint}>Tap to play</Text>
+            </View>
+            <Ionicons name="play-circle-outline" size={24} color={color} />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+});
+MediaList.displayName = 'MediaList';
+
+type SnapshotListProps = {
+  images: string[];
+  label: string;
+  onExpand: (url: string) => void;
+  styles: any;
+};
+
+const SnapshotList = React.memo(({ images, label, onExpand, styles }: SnapshotListProps) => {
+  if (images.length === 0) return null;
+  return (
+    <View style={styles.mediaGroup}>
+      <Text style={styles.mediaGroupLabel}>{label}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageRow}>
+        {images.map((uri, i) => (
+          <TouchableOpacity
+            key={`img-${i}`}
+            activeOpacity={0.8}
+            onPress={() => onExpand(uri)}
+            accessibilityRole="button"
+            accessibilityLabel={`View image ${i + 1}`}
+          >
+            <Image source={{ uri }} style={styles.thumbnail} resizeMode="cover" />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+});
+SnapshotList.displayName = 'SnapshotList';
+
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+const NotificationDetailsModalComponent = ({
   visible, notification, onClose, onStatusChange,
 }: NotificationDetailsModalProps) => {
   const { colors } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors), [colors]);
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [details, setDetails] = useState<AlertDetails | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
-  // Use a ref for the current notification to avoid stale closure issues in fetch
   const notificationRef = useRef(notification);
   notificationRef.current = notification;
 
@@ -119,7 +169,6 @@ export const NotificationDetailsModal = ({
     }
   }, []);
 
-  // Fetch when modal becomes visible or notification changes
   useEffect(() => {
     if (!visible || !notification) return;
     setDetails(null);
@@ -132,13 +181,13 @@ export const NotificationDetailsModal = ({
     if (needsFetch) {
       doFetch(notification, false);
     }
-  }, [visible, notification?.id]); // Only re-fetch when the modal opens or a DIFFERENT notification is selected
+  }, [visible, notification?.id, doFetch]); 
 
   const handleRefresh = useCallback(() => {
     if (notificationRef.current) doFetch(notificationRef.current, true);
   }, [doFetch]);
 
-  const handleAction = async (action: 'accepted' | 'declined') => {
+  const handleAction = useCallback(async (action: 'accepted' | 'declined') => {
     if (!notification || notification.type !== 'contact_added' || notification.title !== 'Contact Request' || !notification.sender_id) return;
     setLoading(true);
     try {
@@ -161,9 +210,9 @@ export const NotificationDetailsModal = ({
       Alert.alert('Error', 'Could not process request');
     }
     setLoading(false);
-  };
+  }, [notification, onClose, onStatusChange]);
 
-  const handleViewMap = () => {
+  const handleViewMap = useCallback(() => {
     const lat = details?.latitude ?? notification?.latitude;
     const lng = details?.longitude ?? notification?.longitude;
     if (lat && lng) {
@@ -172,9 +221,9 @@ export const NotificationDetailsModal = ({
     } else {
       Alert.alert('Location Unavailable', 'No coordinates were attached to this alert.');
     }
-  };
+  }, [details?.latitude, details?.longitude, notification?.latitude, notification?.longitude, onClose]);
 
-  const handleAcknowledgePing = async () => {
+  const handleAcknowledgePing = useCallback(async () => {
     if (!notification || !notification.sender_id) return;
     setLoading(true);
     try {
@@ -186,17 +235,39 @@ export const NotificationDetailsModal = ({
       Alert.alert('Error', 'Could not send acknowledgement');
     }
     setLoading(false);
-  };
+  }, [notification, onClose, onStatusChange]);
 
-  const handleOpenMedia = async (url: string) => {
+  const handleOpenMedia = useCallback(async (url: string) => {
     try {
+      // SECURITY FIX: Prevent malicious deep links (e.g. javascript:, file:)
+      const lowerUrl = url.toLowerCase();
+      if (!lowerUrl.startsWith('http://') && !lowerUrl.startsWith('https://')) {
+        Alert.alert('Security Alert', 'This media link is not secure and cannot be opened.');
+        return;
+      }
+      
       const canOpen = await Linking.canOpenURL(url);
       if (canOpen) await Linking.openURL(url);
       else Alert.alert('Cannot Open', 'Your device cannot open this media file.');
     } catch {
       Alert.alert('Error', 'Failed to open the media file.');
     }
-  };
+  }, []);
+
+  // Performance Fix: Memoize heavy media filtering
+  const { images, videos, audios } = useMemo(() => {
+    const mediaPaths = details?.media_paths ?? [];
+    const imgs: string[] = [];
+    const vids: string[] = [];
+    const auds: string[] = [];
+    mediaPaths.forEach(u => {
+      const type = getMediaType(u);
+      if (type === 'image') imgs.push(u);
+      else if (type === 'video') vids.push(u);
+      else auds.push(u);
+    });
+    return { images: imgs, videos: vids, audios: auds };
+  }, [details?.media_paths]);
 
   if (!notification) return null;
 
@@ -205,29 +276,23 @@ export const NotificationDetailsModal = ({
   const isPingAck = notification.type === 'ping_ack';
   const isCheckInMissed = notification.type === 'check_in_missed';
   const hasLocation = !!(details?.latitude ?? notification?.latitude);
-
-  const mediaPaths = details?.media_paths ?? [];
-  const images = mediaPaths.filter(u => getMediaType(u) === 'image');
-  const videos = mediaPaths.filter(u => getMediaType(u) === 'video');
-  const audios = mediaPaths.filter(u => getMediaType(u) === 'audio');
   const hasEvidence = images.length > 0 || videos.length > 0 || audios.length > 0;
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.modalContent}>
+        <View style={styles.modalContent} accessibilityRole="alert" aria-live="polite">
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>
               {isContactAdded ? 'Contact Request' : isPing ? 'Check-in Ping' : isPingAck ? 'Ping Acknowledged' : 'Emergency Details'}
             </Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close modal">
               <Ionicons name="close" size={24} color={colors.text.secondary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} bounces={false} showsVerticalScrollIndicator={false}>
-
             {/* Sender */}
             <View style={styles.senderRow}>
               <View style={styles.avatar}>
@@ -244,7 +309,7 @@ export const NotificationDetailsModal = ({
               <Text style={styles.notificationBody}>{notification.body}</Text>
 
               {!isContactAdded && !isPing && !isPingAck && loading && (
-                <View style={styles.loadingRow}>
+                <View style={styles.loadingRow} aria-live="polite">
                   <ActivityIndicator color={colors.primary} size="small" />
                   <Text style={styles.loadingText}>Loading details…</Text>
                 </View>
@@ -272,6 +337,9 @@ export const NotificationDetailsModal = ({
                     onPress={handleRefresh}
                     disabled={refreshing}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Refresh evidence"
+                    aria-busy={refreshing}
                   >
                     {refreshing
                       ? <ActivityIndicator size="small" color={colors.primary} />
@@ -284,7 +352,7 @@ export const NotificationDetailsModal = ({
                 </View>
 
                 {!hasEvidence && !refreshing && (
-                  <View style={styles.noEvidenceBox}>
+                  <View style={styles.noEvidenceBox} aria-live="polite">
                     <MaterialCommunityIcons name="clock-outline" size={28} color={colors.text.secondary} />
                     <Text style={styles.noEvidenceTitle}>Evidence uploading…</Text>
                     <Text style={styles.noEvidenceBody}>
@@ -293,109 +361,48 @@ export const NotificationDetailsModal = ({
                   </View>
                 )}
 
-                {/* Videos */}
-                {videos.length > 0 && (
-                  <View style={styles.mediaGroup}>
-                    <Text style={styles.mediaGroupLabel}>📹 Video ({videos.length})</Text>
-                    <View style={styles.mediaList}>
-                      {videos.map((url, i) => (
-                        <TouchableOpacity key={`v${i}`} style={styles.mediaFileRow} onPress={() => handleOpenMedia(url)} activeOpacity={0.7}>
-                          <View style={[styles.mediaFileIcon, { backgroundColor: '#2563EB18' }]}>
-                            <Ionicons name="videocam" size={20} color="#2563EB" />
-                          </View>
-                          <View style={styles.mediaFileInfo}>
-                            <Text style={styles.mediaFileName}>Video Clip {i + 1}</Text>
-                            <Text style={styles.mediaFileHint}>Tap to play</Text>
-                          </View>
-                          <Ionicons name="play-circle-outline" size={24} color="#2563EB" />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {/* Audio */}
-                {audios.length > 0 && (
-                  <View style={styles.mediaGroup}>
-                    <Text style={styles.mediaGroupLabel}>🎙️ Audio ({audios.length} clip{audios.length > 1 ? 's' : ''})</Text>
-                    <View style={styles.mediaList}>
-                      {audios.map((url, i) => (
-                        <TouchableOpacity key={`a${i}`} style={styles.mediaFileRow} onPress={() => handleOpenMedia(url)} activeOpacity={0.7}>
-                          <View style={[styles.mediaFileIcon, { backgroundColor: '#EA580C18' }]}>
-                            <Ionicons name="mic" size={20} color="#EA580C" />
-                          </View>
-                          <View style={styles.mediaFileInfo}>
-                            <Text style={styles.mediaFileName}>Audio Clip {i + 1}</Text>
-                            <Text style={styles.mediaFileHint}>Tap to play</Text>
-                          </View>
-                          <Ionicons name="play-circle-outline" size={24} color="#EA580C" />
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {/* Snapshots */}
-                {images.length > 0 && (
-                  <View style={styles.mediaGroup}>
-                    <Text style={styles.mediaGroupLabel}>📷 Snapshots ({images.length})</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageRow}>
-                      {images.map((uri, i) => (
-                        <TouchableOpacity key={`i${i}`} activeOpacity={0.8} onPress={() => setExpandedImage(uri)}>
-                          <Image source={{ uri }} style={styles.thumbnail} resizeMode="cover" />
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
+                <MediaList items={videos} label={`📹 Video (${videos.length})`} clipName="Video Clip" icon="videocam" color="#2563EB" onOpen={handleOpenMedia} styles={styles} />
+                <MediaList items={audios} label={`🎙️ Audio (${audios.length} clip${audios.length > 1 ? 's' : ''})`} clipName="Audio Clip" icon="mic" color="#EA580C" onOpen={handleOpenMedia} styles={styles} />
+                <SnapshotList images={images} label={`📷 Snapshots (${images.length})`} onExpand={setExpandedImage} styles={styles} />
               </View>
             )}
 
             {/* Report media */}
             {notification.type === 'report' && !loading && images.length > 0 && (
-              <View style={styles.mediaGroup}>
-                <Text style={styles.mediaGroupLabel}>📎 Attached Media</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.imageRow}>
-                  {images.map((uri, i) => (
-                    <TouchableOpacity key={`ri${i}`} activeOpacity={0.8} onPress={() => setExpandedImage(uri)}>
-                      <Image source={{ uri }} style={styles.thumbnail} resizeMode="cover" />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
+              <SnapshotList images={images} label="📎 Attached Media" onExpand={setExpandedImage} styles={styles} />
             )}
 
             {/* Actions */}
             <View style={styles.actions}>
               {isContactAdded ? (
                 <>
-                  <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={() => handleAction('accepted')} disabled={loading}>
+                  <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={() => handleAction('accepted')} disabled={loading} accessibilityRole="button">
                     <Ionicons name="checkmark" size={20} color="#fff" />
                     <Text style={styles.btnTextLight}>Accept</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={() => handleAction('declined')} disabled={loading}>
+                  <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={() => handleAction('declined')} disabled={loading} accessibilityRole="button">
                     <Ionicons name="close" size={20} color={colors.text.primary} />
                     <Text style={styles.btnTextDark}>Decline</Text>
                   </TouchableOpacity>
                 </>
               ) : isPing ? (
-                <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={handleAcknowledgePing} disabled={loading}>
+                <TouchableOpacity style={[styles.actionBtn, styles.acceptBtn]} onPress={handleAcknowledgePing} disabled={loading} accessibilityRole="button">
                   {loading ? <ActivityIndicator color="#fff" /> : <Ionicons name="checkmark-circle" size={20} color="#fff" />}
                   <Text style={styles.btnTextLight}>I'm Safe</Text>
                 </TouchableOpacity>
               ) : isPingAck ? (
-                <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={onClose}>
+                <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={onClose} accessibilityRole="button">
                   <Text style={styles.btnTextDark}>Dismiss</Text>
                 </TouchableOpacity>
               ) : isCheckInMissed ? (
                 <>
                   {hasLocation && (
-                    <TouchableOpacity style={[styles.actionBtn, styles.mapBtn]} onPress={handleViewMap}>
+                    <TouchableOpacity style={[styles.actionBtn, styles.mapBtn]} onPress={handleViewMap} accessibilityRole="button">
                       <Ionicons name="map" size={20} color="#fff" />
                       <Text style={styles.btnTextLight}>View on Map</Text>
                     </TouchableOpacity>
                   )}
-                  <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={onClose}>
+                  <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={onClose} accessibilityRole="button">
                     <Text style={styles.btnTextDark}>Dismiss</Text>
                   </TouchableOpacity>
                 </>
@@ -404,6 +411,7 @@ export const NotificationDetailsModal = ({
                   style={[styles.actionBtn, styles.mapBtn, !hasLocation && styles.disabledBtn]}
                   onPress={handleViewMap}
                   disabled={!hasLocation}
+                  accessibilityRole="button"
                 >
                   <Ionicons name="map" size={20} color="#fff" />
                   <Text style={styles.btnTextLight}>View on Map</Text>
@@ -417,7 +425,7 @@ export const NotificationDetailsModal = ({
       {/* Full-screen image viewer */}
       <Modal visible={!!expandedImage} transparent animationType="fade" onRequestClose={() => setExpandedImage(null)}>
         <View style={styles.imageViewer}>
-          <TouchableOpacity style={styles.imageViewerClose} onPress={() => setExpandedImage(null)}>
+          <TouchableOpacity style={styles.imageViewerClose} onPress={() => setExpandedImage(null)} accessibilityRole="button" accessibilityLabel="Close image">
             <Ionicons name="close" size={30} color="#fff" />
           </TouchableOpacity>
           {expandedImage ? <Image source={{ uri: expandedImage }} style={styles.imageViewerImg} resizeMode="contain" /> : null}
@@ -426,6 +434,8 @@ export const NotificationDetailsModal = ({
     </Modal>
   );
 };
+
+export const NotificationDetailsModal = React.memo(NotificationDetailsModalComponent);
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },

@@ -1,31 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useFeedback } from '../hooks/useFeedback';
+import { ThemeColors } from '../constants/Theme';
 
 interface FeedbackModalProps {
   visible: boolean;
   onClose: () => void;
 }
 
-export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
+interface ModalActionButtonsProps {
+  colors: ThemeColors;
+  isSubmitting: boolean;
+  message: string;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+const ModalActionButtons = memo(function ModalActionButtons({ colors, isSubmitting, message, onCancel, onSubmit }: ModalActionButtonsProps) {
+  const isSubmitDisabled = !message.trim() || isSubmitting;
+  
+  return (
+    <View style={styles.footer}>
+      <TouchableOpacity 
+        style={[styles.cancelBtn, { borderColor: colors.border }]} 
+        onPress={onCancel}
+        disabled={isSubmitting}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel Feedback Submission"
+      >
+        <Text style={[styles.cancelText, { color: colors.text.secondary }]}>Cancel</Text>
+      </TouchableOpacity>
+      
+      <TouchableOpacity 
+        style={[styles.submitBtn, { backgroundColor: colors.icon.activeTab, opacity: isSubmitDisabled ? 0.6 : 1 }]} 
+        onPress={onSubmit}
+        disabled={isSubmitDisabled}
+        accessibilityRole="button"
+        accessibilityLabel="Submit Feedback"
+      >
+        {isSubmitting ? (
+          <ActivityIndicator color="#FFF" size="small" />
+        ) : (
+          <Text style={styles.submitText}>Submit</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+export const FeedbackModal = memo(function FeedbackModal({ visible, onClose }: FeedbackModalProps) {
   const { colors } = useTheme();
   const { submitFeedback, isSubmitting } = useFeedback();
   const [message, setMessage] = useState('');
 
-  const handleSubmit = async () => {
+  const handleClose = useCallback(() => {
+    setMessage('');
+    onClose();
+  }, [onClose]);
+
+  const handleSubmit = useCallback(async () => {
     const success = await submitFeedback(message);
     if (success) {
       setMessage('');
       onClose();
     }
-  };
-
-  const handleClose = () => {
-    setMessage('');
-    onClose();
-  };
+  }, [message, submitFeedback, onClose]);
 
   return (
     <Modal
@@ -34,6 +75,7 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
       animationType="slide"
       statusBarTranslucent
       onRequestClose={handleClose}
+      accessibilityViewIsModal={true}
     >
       <KeyboardAvoidingView 
         style={styles.overlay} 
@@ -42,7 +84,12 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
         <View style={[styles.content, { backgroundColor: colors.white }]}>
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.text.primary }]}>Send Feedback</Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
+            <TouchableOpacity 
+              onPress={handleClose} 
+              style={styles.closeButton}
+              accessibilityRole="button"
+              accessibilityLabel="Close Feedback Form"
+            >
               <Ionicons name="close" size={24} color={colors.text.secondary} />
             </TouchableOpacity>
           </View>
@@ -64,34 +111,23 @@ export const FeedbackModal = ({ visible, onClose }: FeedbackModalProps) => {
             value={message}
             onChangeText={setMessage}
             editable={!isSubmitting}
+            maxLength={1000}
+            accessibilityLabel="Feedback Input Field"
+            accessibilityHint="Enter up to 1000 characters of feedback to send to the team."
           />
 
-          <View style={styles.footer}>
-            <TouchableOpacity 
-              style={[styles.cancelBtn, { borderColor: colors.border }]} 
-              onPress={handleClose}
-              disabled={isSubmitting}
-            >
-              <Text style={[styles.cancelText, { color: colors.text.secondary }]}>Cancel</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.submitBtn, { backgroundColor: colors.icon.activeTab, opacity: (!message.trim() || isSubmitting) ? 0.6 : 1 }]} 
-              onPress={handleSubmit}
-              disabled={!message.trim() || isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#FFF" size="small" />
-              ) : (
-                <Text style={styles.submitText}>Submit</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          <ModalActionButtons 
+            colors={colors}
+            isSubmitting={isSubmitting}
+            message={message}
+            onCancel={handleClose}
+            onSubmit={handleSubmit}
+          />
         </View>
       </KeyboardAvoidingView>
     </Modal>
   );
-};
+});
 
 const styles = StyleSheet.create({
   overlay: {

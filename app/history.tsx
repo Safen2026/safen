@@ -42,7 +42,7 @@ export default function HistoryScreen() {
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.text.primary }]}>History</Text>
         </View>
-        <View style={{ width: 24 }} /> {/* Empty spacer to balance header */}
+        <View style={{ width: 24 }} />
       </View>
 
       {/* Filter Chips */}

@@ -1,9 +1,10 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
 import { Shadows } from '../constants/Theme';
+import { Avatar } from './Avatar';
 
 interface ActiveTripShareCardProps {
   contactName: string;
@@ -13,7 +14,7 @@ interface ActiveTripShareCardProps {
   onExtend: (minutes: number) => void;
 }
 
-export const ActiveTripShareCard = ({
+export const ActiveTripShareCardComponent = ({
   contactName,
   remainingStr,
   isEnding,
@@ -54,7 +55,7 @@ export const ActiveTripShareCard = ({
           <View style={styles.liveDot} />
           <Text style={styles.liveText}>SHARING</Text>
         </View>
-        <TouchableOpacity style={styles.extendBtn} onPress={handleExtend} disabled={isEnding}>
+        <TouchableOpacity style={styles.extendBtn} onPress={handleExtend} disabled={isEnding} accessibilityRole="button" accessibilityLabel="Extend sharing time">
           <Ionicons name="add-circle-outline" size={15} color={colors.primary} />
           <Text style={[styles.extendText, { color: colors.primary }]}>Extend</Text>
         </TouchableOpacity>
@@ -62,9 +63,7 @@ export const ActiveTripShareCard = ({
 
       {/* Contact row */}
       <View style={styles.contactRow}>
-        <View style={[styles.contactAvatar, { backgroundColor: `${colors.primary}15` }]}>
-          <Ionicons name="person" size={20} color={colors.primary} />
-        </View>
+        <Avatar name={contactName} size={42} />
         <View style={styles.contactInfo}>
           <Text style={styles.sharingWith}>Sharing location with</Text>
           <Text style={styles.contactName} numberOfLines={1}>{contactName}</Text>
@@ -81,6 +80,8 @@ export const ActiveTripShareCard = ({
         onPress={handleStop}
         disabled={isEnding}
         activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Stop sharing location"
       >
         {isEnding ? (
           <ActivityIndicator size="small" color="#EF4444" />
@@ -94,6 +95,8 @@ export const ActiveTripShareCard = ({
     </View>
   );
 };
+
+export const ActiveTripShareCard = React.memo(ActiveTripShareCardComponent);
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {

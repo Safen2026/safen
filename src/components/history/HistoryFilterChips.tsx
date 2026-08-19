@@ -9,7 +9,7 @@ type Props = {
   onSelectFilter: (filter: string) => void;
 };
 
-export function HistoryFilterChips({ activeFilter, onSelectFilter }: Props) {
+const HistoryFilterChipsComponent = ({ activeFilter, onSelectFilter }: Props) => {
   const { colors } = useTheme();
 
   return (
@@ -26,16 +26,22 @@ export function HistoryFilterChips({ activeFilter, onSelectFilter }: Props) {
             key={filter}
             style={[
               styles.chip,
-              isActive ? styles.chipActive : styles.chipInactive,
+              isActive ? styles.chipActive : undefined,
               !isActive && { borderColor: colors.border, backgroundColor: colors.background }
             ]}
             onPress={() => onSelectFilter(filter)}
             activeOpacity={0.7}
+            role="button"
+            aria-label={`Filter by ${filter}`}
+            accessibilityState={{ selected: isActive }}
           >
-            <Text style={[
-              styles.chipText,
-              isActive ? styles.chipTextActive : [styles.chipTextInactive, { color: colors.text.secondary }]
-            ]}>
+            <Text 
+              style={[
+                styles.chipText,
+                isActive ? styles.chipTextActive : { color: colors.text.secondary }
+              ]}
+              numberOfLines={1}
+            >
               {filter}
             </Text>
           </TouchableOpacity>
@@ -64,9 +70,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#E02B2B', // Matches SOS red from TYPE_META
     borderColor: '#E02B2B',
   },
-  chipInactive: {
-    // Dynamic styles applied in component
-  },
   chipText: {
     fontSize: 14,
     fontWeight: '600',
@@ -75,7 +78,7 @@ const styles = StyleSheet.create({
   chipTextActive: {
     color: '#FFFFFF',
   },
-  chipTextInactive: {
-    // Dynamic styles applied in component
-  },
 });
+
+export const HistoryFilterChips = React.memo(HistoryFilterChipsComponent);
+HistoryFilterChips.displayName = 'HistoryFilterChips';

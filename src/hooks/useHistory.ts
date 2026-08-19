@@ -13,6 +13,7 @@ export type HistoryItem = {
   address?: string;
   status?: string;
   created_at: string;
+  media_paths?: string[];
 };
 
 export type IoniconsName = ComponentProps<typeof Ionicons>['name'];
@@ -47,7 +48,7 @@ export function useHistory() {
       // Fetch alerts
       const { data: alertsData, error: alertsError } = await supabase
         .from('alerts')
-        .select('id, type, status, created_at')
+        .select('id, type, status, created_at, media_paths')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(30);
@@ -57,7 +58,7 @@ export function useHistory() {
       // Fetch reports
       const { data: reportsData, error: reportsError } = await supabase
         .from('reports')
-        .select('id, category, description, address, status, created_at')
+        .select('id, category, description, address, status, created_at, media_paths')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
         .limit(30);
@@ -74,6 +75,7 @@ export function useHistory() {
           title: TYPE_META[a.type]?.label || 'Emergency Alert',
           status: a.status || 'Resolved',
           created_at: a.created_at,
+          media_paths: a.media_paths || [],
         });
       });
 
@@ -87,6 +89,7 @@ export function useHistory() {
           address: r.address,
           status: r.status || 'Resolved',
           created_at: r.created_at,
+          media_paths: r.media_paths || [],
         });
       });
 

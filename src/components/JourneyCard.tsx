@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -10,7 +10,7 @@ interface JourneyCardProps {
   isLoading?: boolean;
 }
 
-export const JourneyCard = ({ onStart, isLoading = false }: JourneyCardProps) => {
+export const JourneyCardComponent = ({ onStart, isLoading = false }: JourneyCardProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
 
@@ -19,6 +19,9 @@ export const JourneyCard = ({ onStart, isLoading = false }: JourneyCardProps) =>
       style={styles.container} 
       onPress={onStart}
       activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel="Start a Safe Journey"
+      accessibilityHint="Share your live route with contacts"
     >
       <View style={[styles.iconBox, { backgroundColor: `${colors.primary}15` }]}>
         {isLoading ? (
@@ -47,6 +50,8 @@ export const JourneyCard = ({ onStart, isLoading = false }: JourneyCardProps) =>
     </TouchableOpacity>
   );
 };
+
+export const JourneyCard = React.memo(JourneyCardComponent);
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {

@@ -13,14 +13,14 @@ interface ConfirmationModalProps {
   onClose: () => void;
 }
 
-export const ConfirmationModal = ({ 
+export const ConfirmationModal = React.memo(function ConfirmationModal({ 
   visible, 
   title, 
   message, 
   iconName, 
   iconColor,
   onClose 
-}: ConfirmationModalProps) => {
+}: ConfirmationModalProps) {
   const { colors } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const activeIconColor = iconColor || colors.primary;
@@ -71,7 +71,7 @@ export const ConfirmationModal = ({
       </View>
     </Modal>
   );
-};
+});
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: {

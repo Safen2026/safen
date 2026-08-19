@@ -56,6 +56,7 @@ export async function getEmergencyContactPhones(userId: string): Promise<SmsCont
       .from('emergency_contacts')
       .select('name, phone')
       .eq('user_id', userId)
+      .eq('status', 'accepted')  // Only SMS contacts who have accepted the request
       .not('phone', 'is', null);
 
     if (error || !data) return [];

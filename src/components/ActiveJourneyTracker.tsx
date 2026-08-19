@@ -1,4 +1,4 @@
-﻿import React, { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -14,7 +14,7 @@ interface ActiveJourneyTrackerProps {
   onCancelJourney: () => void;
 }
 
-export const ActiveJourneyTracker = ({
+export const ActiveJourneyTrackerComponent = ({
   destination,
   mode,
   elapsedStr,
@@ -64,6 +64,8 @@ export const ActiveJourneyTracker = ({
           style={[styles.cancelBtn, { borderColor: colors.border }]}
           onPress={onCancelJourney}
           disabled={isEnding}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel Journey"
         >
           <Text style={[styles.cancelText, { color: colors.text.secondary }]}>Cancel</Text>
         </TouchableOpacity>
@@ -71,6 +73,8 @@ export const ActiveJourneyTracker = ({
           style={[styles.arrivedBtn, { backgroundColor: '#10B981' }, isEnding && { opacity: 0.7 }]}
           onPress={onEndJourney}
           disabled={isEnding}
+          accessibilityRole="button"
+          accessibilityLabel="Mark Journey as Arrived Safely"
         >
           {isEnding ? (
             <ActivityIndicator color="#fff" size="small" />
@@ -85,6 +89,8 @@ export const ActiveJourneyTracker = ({
     </View>
   );
 };
+
+export const ActiveJourneyTracker = React.memo(ActiveJourneyTrackerComponent);
 
 const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {

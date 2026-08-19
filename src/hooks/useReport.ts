@@ -75,14 +75,16 @@ export function useReport() {
 
       setLoading(false);
 
-      // 3. Let emergency contacts know
-      notifyEmergencyContacts({
-        type: 'report',
-        reportId: report.id,
-        latitude: payload.latitude ?? null,
-        longitude: payload.longitude ?? null,
-        detailsSnippet: payload.details ? payload.details.slice(0, 120) : null,
-      });
+      // 3. Let emergency contacts know (ONLY if not anonymous)
+      if (!payload.isAnonymous) {
+        notifyEmergencyContacts({
+          type: 'report',
+          reportId: report.id,
+          latitude: payload.latitude ?? null,
+          longitude: payload.longitude ?? null,
+          detailsSnippet: payload.details ? payload.details.slice(0, 120) : null,
+        });
+      }
 
       // 4. Notify if any media failed to attach
       if (payload.media && payload.media.length > 0) {
