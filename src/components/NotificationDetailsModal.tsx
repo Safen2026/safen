@@ -188,7 +188,9 @@ const NotificationDetailsModalComponent = ({
   }, [doFetch]);
 
   const handleAction = useCallback(async (action: 'accepted' | 'declined') => {
-    if (!notification || notification.type !== 'contact_added' || notification.title !== 'Contact Request' || !notification.sender_id) return;
+    if (!notification || notification.type !== 'contact_added' || !notification.sender_id) return;
+    // Accept/decline any contact_added notification where we have a sender — not just those titled 'Contact Request'
+    // The 'Contact Request' title comes from sendContactRequest(); notifyContactAdded() uses a different title but same action.
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -215,13 +217,20 @@ const NotificationDetailsModalComponent = ({
   const handleViewMap = useCallback(() => {
     const lat = details?.latitude ?? notification?.latitude;
     const lng = details?.longitude ?? notification?.longitude;
+    const senderName = notification?.sender_name;
     if (lat && lng) {
       onClose();
-      router.push(`/map?lat=${lat}&lng=${lng}`);
+      const params = new URLSearchParams();
+      params.append('lat', lat.toString());
+      params.append('lng', lng.toString());
+      if (senderName) params.append('senderName', senderName);
+      if (notification?.type) params.append('alertType', notification.type);
+      if (notification?.title) params.append('alertTitle', notification.title);
+      router.push(`/map?${params.toString()}`);
     } else {
       Alert.alert('Location Unavailable', 'No coordinates were attached to this alert.');
     }
-  }, [details?.latitude, details?.longitude, notification?.latitude, notification?.longitude, onClose]);
+  }, [details?.latitude, details?.longitude, notification?.latitude, notification?.longitude, notification?.sender_name, onClose]);
 
   const handleAcknowledgePing = useCallback(async () => {
     if (!notification || !notification.sender_id) return;
@@ -271,10 +280,14 @@ const NotificationDetailsModalComponent = ({
 
   if (!notification) return null;
 
-  const isContactAdded = notification.type === 'contact_added' && notification.title === 'Contact Request';
+  const isContactAdded = notification.type === 'contact_added' && !!notification.sender_id;
   const isPing = notification.type === 'ping';
   const isPingAck = notification.type === 'ping_ack';
   const isCheckInMissed = notification.type === 'check_in_missed';
+  // Journey notifications are stored as type='report' to bypass the DB enum — detect them by title prefix
+  const isJourneyNotif = notification.type === 'report' && (
+    notification.title?.startsWith('🗺️') || notification.title?.startsWith('✅')
+  );
   const hasLocation = !!(details?.latitude ?? notification?.latitude);
   const hasEvidence = images.length > 0 || videos.length > 0 || audios.length > 0;
 
@@ -285,7 +298,7 @@ const NotificationDetailsModalComponent = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>
-              {isContactAdded ? 'Contact Request' : isPing ? 'Check-in Ping' : isPingAck ? 'Ping Acknowledged' : 'Emergency Details'}
+              {isContactAdded ? 'Contact Request' : isPing ? 'Check-in Ping' : isPingAck ? 'Ping Acknowledged' : isJourneyNotif ? 'Journey Update' : 'Emergency Details'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close modal">
               <Ionicons name="close" size={24} color={colors.text.secondary} />
@@ -368,7 +381,8 @@ const NotificationDetailsModalComponent = ({
             )}
 
             {/* Report media */}
-            {notification.type === 'report' && !loading && images.length > 0 && (
+            {/* Report media — only for actual reports, not journey notifications */}
+            {notification.type === 'report' && !isJourneyNotif && !loading && images.length > 0 && (
               <SnapshotList images={images} label="📎 Attached Media" onExpand={setExpandedImage} styles={styles} />
             )}
 
@@ -406,6 +420,11 @@ const NotificationDetailsModalComponent = ({
                     <Text style={styles.btnTextDark}>Dismiss</Text>
                   </TouchableOpacity>
                 </>
+              ) : isJourneyNotif ? (
+                // Journey start/arrival: informational only — just a Dismiss button
+                <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={onClose} accessibilityRole="button">
+                  <Text style={styles.btnTextDark}>Dismiss</Text>
+                </TouchableOpacity>
               ) : (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.mapBtn, !hasLocation && styles.disabledBtn]}

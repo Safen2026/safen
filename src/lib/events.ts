@@ -28,6 +28,7 @@ export interface TripSharePayload {
   contactUserId: string;
   contactName: string;
   contactId: string;
+  avatarUrl?: string | null;
 }
 
 type TripListener = (payload: TripSharePayload) => void;

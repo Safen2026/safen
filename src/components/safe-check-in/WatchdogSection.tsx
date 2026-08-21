@@ -5,16 +5,12 @@ import type { ThemeColors } from '../../constants/Theme';
 import { Shadows } from '../../constants/Theme';
 
 interface WatchdogSectionProps {
-  notifyContacts: boolean;
-  setNotifyContacts: (val: boolean) => void;
   deadlineStr: string;
   initialSession: boolean;
   colors: ThemeColors;
 }
 
 export const WatchdogSection = React.memo(({
-  notifyContacts,
-  setNotifyContacts,
   deadlineStr,
   initialSession,
   colors,
@@ -51,20 +47,12 @@ export const WatchdogSection = React.memo(({
         </View>
         <View style={styles.watchdogTextContainer}>
           <Text style={[styles.watchdogTitle, { color: colors.text.primary }]}>
-            Alert Emergency Contacts
+            Emergency Contacts Watchdog
           </Text>
           <Text style={[styles.watchdogSub, { color: colors.text.secondary }]}>
-            Sends SMS + live location if missed
+            Your emergency contacts will automatically be alerted with your live location if you miss this check-in.
           </Text>
         </View>
-        <Switch
-          value={notifyContacts}
-          onValueChange={setNotifyContacts}
-          trackColor={{ false: colors.border, true: '#10B981' }}
-          thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
-          accessibilityRole="switch"
-          accessibilityLabel="Alert emergency contacts if check-in is missed"
-        />
       </View>
     </View>
   );

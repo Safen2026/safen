@@ -47,7 +47,9 @@ export function useJourneyTracking() {
       try {
         const restored: JourneySession = JSON.parse(raw);
         setSession(restored);
-      } catch {}
+      } catch (e: any) {
+        console.error('[useJourneyTracking] Failed to parse restored session:', e);
+      }
     });
   }, []);
 

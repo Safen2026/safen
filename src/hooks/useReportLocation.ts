@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
 import { Region } from 'react-native-maps';
 import MapView from 'react-native-maps';
+import { formatAddress } from '../utils/location';
 
 export function useReportLocation() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -32,18 +33,7 @@ export function useReportLocation() {
       try {
         let geocode = await Location.reverseGeocodeAsync(loc.coords);
         if (geocode && geocode.length > 0) {
-          const place = geocode[0];
-          
-          let primaryName = place.street;
-          if (!primaryName && place.name && !place.name.includes('+')) {
-            primaryName = place.name;
-          }
-          if (!primaryName) {
-            primaryName = place.district || 'Unnamed Road';
-          }
-
-          const formattedAddress = `${place.streetNumber ? place.streetNumber + ' ' : ''}${primaryName}, ${place.city || place.subregion || place.region}`;
-          setAddress(formattedAddress);
+          setAddress(formatAddress(geocode[0]));
         } else {
           setAddress('Unnamed Location');
         }
@@ -83,19 +73,7 @@ export function useReportLocation() {
         longitude: region.longitude
       });
       if (geocode && geocode.length > 0) {
-        const place = geocode[0];
-        
-        let primaryName = place.street;
-        if (!primaryName && place.name && !place.name.includes('+')) {
-          primaryName = place.name;
-        }
-        
-        if (!primaryName) {
-          primaryName = place.district || 'Unnamed Road';
-        }
-
-        const formattedAddress = `${place.streetNumber ? place.streetNumber + ' ' : ''}${primaryName}, ${place.city || place.subregion || place.region}`;
-        setAddress(formattedAddress);
+        setAddress(formatAddress(geocode[0]));
       } else {
         setAddress('Unnamed Location');
       }

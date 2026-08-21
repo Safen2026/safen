@@ -43,8 +43,6 @@ export const SafeCheckInModal = ({
   const [selectedDuration, setSelectedDuration] = useState(45);
   const [isCustomMode, setIsCustomMode] = useState(false);
   const [customMinutes, setCustomMinutes] = useState(90);
-  const [notifyContacts, setNotifyContacts] = useState(true);
-  
   const [pickerMode, setPickerMode] = useState<'date' | 'time' | 'datetime' | null>(null);
   const [tempDate, setTempDate] = useState<Date>(new Date());
 
@@ -52,7 +50,6 @@ export const SafeCheckInModal = ({
     if (visible) {
       if (initialSession) {
         setDestination(initialSession.destination);
-        setNotifyContacts(initialSession.notifyContacts);
         setSelectedDuration(30);
         setIsCustomMode(false);
       } else {
@@ -60,7 +57,6 @@ export const SafeCheckInModal = ({
         setSelectedDuration(30);
         setIsCustomMode(false);
         setCustomMinutes(90);
-        setNotifyContacts(true);
       }
     }
   }, [visible, initialSession]);
@@ -89,10 +85,10 @@ export const SafeCheckInModal = ({
     onStartCheckIn?.({
       destination: destination.trim(),
       durationMinutes: effectiveMinutes,
-      notifyContacts,
+      notifyContacts: true,
     });
     onClose();
-  }, [isFormValid, destination, effectiveMinutes, notifyContacts, onStartCheckIn, onClose]);
+  }, [isFormValid, destination, effectiveMinutes, onStartCheckIn, onClose]);
 
   const adjustCustom = useCallback((delta: number) => {
     setCustomMinutes(prev => Math.max(1, Math.min(43200, prev + delta)));
@@ -225,8 +221,6 @@ export const SafeCheckInModal = ({
           />
 
           <WatchdogSection 
-            notifyContacts={notifyContacts}
-            setNotifyContacts={setNotifyContacts}
             deadlineStr={deadlineStr}
             initialSession={!!initialSession}
             colors={colors}

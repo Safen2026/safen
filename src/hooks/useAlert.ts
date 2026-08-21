@@ -102,7 +102,7 @@ export function useAlert() {
       setLoading(false);
       setLoadingMessage(null);
       const result = await sendEmergencySms(smsContacts, senderName, coords);
-      return result.success ? 'sms' : 'sms';
+      return result.success ? 'sms' : false;
     }
 
     setLoadingMessage('Activating SOS protocol...');

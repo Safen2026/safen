@@ -9,6 +9,7 @@ export interface TripShareContact {
   id: string;                     // emergency_contacts row id
   contactUserId: string;          // profiles.id of the contact
   name: string;
+  avatarUrl?: string | null;
 }
 
 export interface TripShareSession {
@@ -63,7 +64,9 @@ export function useShareLiveTrip() {
           return;
         }
         setSession(restored);
-      } catch {}
+      } catch (e: any) {
+        console.error('[useShareLiveTrip] Failed to parse restored session:', e);
+      }
     });
   }, []);
 

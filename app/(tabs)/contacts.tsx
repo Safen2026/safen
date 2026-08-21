@@ -4,6 +4,8 @@ import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
+import type { ThemeColors } from '../../src/constants/Theme';
+
 import { supabase } from '../../src/lib/supabase';
 import { showToast } from '../../src/utils/toast';
 import { sendContactRequest } from '../../src/lib/notifications';
@@ -362,7 +364,7 @@ export default function ContactsScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',

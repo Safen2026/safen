@@ -8,8 +8,8 @@
 // isn't linked yet. Static imports are hoisted and can't be caught.
 // require() inside try/catch handles this correctly.
 
-let firebaseApp: any = null;
-let firebaseAuth: any = null;
+let firebaseApp: ReturnType<typeof import('@react-native-firebase/app').getApp> | null = null;
+let firebaseAuth: ReturnType<typeof import('@react-native-firebase/auth').getAuth> | null = null;
 
 try {
   const { getApp } = require('@react-native-firebase/app');

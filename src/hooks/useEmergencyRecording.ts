@@ -6,19 +6,10 @@ import { uploadToCloudinary } from '../lib/cloudinary';
 
 /** Minimal interface for the CameraView imperative handle we actually use. */
 interface CameraRef {
-  recordAsync?: (
-    options?: CameraRecordingOptions
-  ) => Promise<{ uri: string } | undefined>;
-
-  record?: (
-    options?: CameraRecordingOptions
-  ) => Promise<{ uri: string } | undefined>;
-
-  stopRecording?: () => void | Promise<void>;
-
-  takePictureAsync?: (
-    options?: import('expo-camera').CameraPictureOptions
-  ) => Promise<{ uri: string } | undefined>;
+  recordAsync?: (options?: CameraRecordingOptions) => Promise<{ uri: string } | undefined>;
+  record?: (options?: CameraRecordingOptions) => Promise<{ uri: string } | undefined>;
+  stopRecording?: () => void;
+  takePictureAsync?: (options?: import('expo-camera').CameraPictureOptions) => Promise<{ uri: string } | undefined>;
 }
 
 export type RecordingPhase =
@@ -38,6 +29,18 @@ export interface EmergencyRecordingState {
 
 const VIDEO_MAX_DURATION_SECONDS = 60;
 const AUDIO_CHUNK_INTERVAL_SECONDS = 15;
+
+function safeStopCamera(camRef: CameraRef | null) {
+  if (!camRef?.stopRecording) return;
+  try {
+    const res = camRef.stopRecording();
+    if (res && typeof (res as any).catch === 'function') {
+      (res as any).catch(() => {});
+    }
+  } catch (e) {
+    // silently ignore
+  }
+}
 
 export function useEmergencyRecording() {
   const [isRecording, setIsRecording] = useState(false);
@@ -78,20 +81,13 @@ export function useEmergencyRecording() {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-
     if (cameraRef.current?.stopRecording) {
-      try {
-        Promise.resolve(cameraRef.current.stopRecording()).catch(() => {});
-      } catch {
-        // Camera may already have unmounted.
-      }
-    }
-
+  try { 
+    cameraRef.current.stopRecording(); 
+  } catch (e: any) {}
+}
     if (audioRecordingRef.current) {
-      try {
-        audioRecordingRef.current.stopAndUnloadAsync();
-      } catch {}
-
+      try { audioRecordingRef.current.stopAndUnloadAsync(); } catch {}
       audioRecordingRef.current = null;
     }
 
@@ -317,28 +313,20 @@ export function useEmergencyRecording() {
   );
 
   // ─── START ─────────────────────────────────────────────────────────────────
-  const startRecording = useCallback(
-    async (alertId: string) => {
-      // 1. Kill previous session's timer and camera synchronously.
-      isActiveRef.current = false;
-
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-
-      if (cameraRef.current?.stopRecording) {
-        try {
-          Promise.resolve(
-            cameraRef.current.stopRecording()
-          ).catch(() => {});
-        } catch {
-          // Camera may have unmounted between sessions.
-        }
-      }
-
-      isCyclingAudioRef.current = false;
-      isAudioReadyRef.current = false;
+  const startRecording = useCallback(async (alertId: string) => {
+    // 1. Kill previous session's timer and camera SYNCHRONOUSLY
+    //    (don't touch audioRecordingRef yet — we await-stop it below)
+    isActiveRef.current = false;
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (cameraRef.current?.stopRecording) {
+  try { 
+    cameraRef.current.stopRecording(); 
+  } catch (e: any) {
+    // Silently ignore — camera may have unmounted between timer tick and this call
+  }
+}
+    isCyclingAudioRef.current = false;
+    isAudioReadyRef.current = false;
 
       // 2. Set alert ID and evidence list.
       alertIdRef.current = alertId;
@@ -352,40 +340,30 @@ export function useEmergencyRecording() {
         setUploadedEvidence([]);
       }
 
-      // 4. Mark active and start timer immediately.
-      isActiveRef.current = true;
+    // 4. Mark active and start the countdown timer IMMEDIATELY
+    //    so the UI ticks up regardless of how long audio setup takes
+    isActiveRef.current = true;
+    let elapsed = 0;
+    elapsedSecondsRef.current = 0;
+    
+    timerRef.current = setInterval(() => {
+      if (!isActiveRef.current) {
+        clearInterval(timerRef.current!);
+        timerRef.current = null;
+        return;
+      }
+      elapsed += 1;
+      elapsedSecondsRef.current = elapsed;
+      if (isMountedRef.current) setDurationSeconds(elapsed);
 
-      let elapsed = 0;
-      elapsedSecondsRef.current = 0;
-
-      timerRef.current = setInterval(() => {
-        if (!isActiveRef.current) {
-          clearInterval(timerRef.current!);
-          timerRef.current = null;
-          return;
+      // Video Chunking: Every 15s during the first minute, stop the camera.
+      // This forces the current 15s video segment to save and upload immediately.
+      // The 600ms cool-down in startVideoRecording's .finally() then cleanly starts the next 15s chunk!
+      if (elapsed > 0 && elapsed <= VIDEO_MAX_DURATION_SECONDS && elapsed % AUDIO_CHUNK_INTERVAL_SECONDS === 0) {
+        if (cameraRef.current?.stopRecording) {
+          try { cameraRef.current.stopRecording(); } catch {}
         }
-
-        elapsed += 1;
-        elapsedSecondsRef.current = elapsed;
-
-        if (isMountedRef.current) {
-          setDurationSeconds(elapsed);
-        }
-
-        // Video chunking every 15 seconds.
-        if (
-          elapsed > 0 &&
-          elapsed <= VIDEO_MAX_DURATION_SECONDS &&
-          elapsed % AUDIO_CHUNK_INTERVAL_SECONDS === 0
-        ) {
-          if (cameraRef.current?.stopRecording) {
-            try {
-              Promise.resolve(
-                cameraRef.current.stopRecording()
-              ).catch(() => {});
-            } catch {}
-          }
-        }
+      }
 
         if (elapsed % AUDIO_CHUNK_INTERVAL_SECONDS === 0) {
           const isDuringFirst60s =
@@ -401,15 +379,12 @@ export function useEmergencyRecording() {
         }
       }, 1000);
 
-      // 5. Properly stop any previous audio recording.
-      const oldRec = audioRecordingRef.current;
-      audioRecordingRef.current = null;
-
-      if (oldRec) {
-        try {
-          await oldRec.stopAndUnloadAsync();
-        } catch {}
-      }
+    // 5. Properly await cleanup of ANY previous audio recording before starting new one
+    const oldRec = audioRecordingRef.current;
+    audioRecordingRef.current = null;
+    if (oldRec) {
+      try { await oldRec.stopAndUnloadAsync(); } catch {}
+    }
 
       // 6. Request permissions and start fresh audio recording.
       try {
@@ -481,17 +456,14 @@ export function useEmergencyRecording() {
       timerRef.current = null;
     }
 
-    // 2. Stop camera.
+    // 2. Stop camera (this triggers camera.recordAsync promise to resolve and upload)
     if (cameraRef.current?.stopRecording) {
-      try {
-        // Catch asynchronous native errors.
-        Promise.resolve(
-          cameraRef.current.stopRecording()
-        ).catch(() => {});
-      } catch {
-        // Camera may already have unmounted.
-      }
-    }
+  try { 
+    cameraRef.current.stopRecording(); 
+  } catch (e: any) {
+    // Silently ignore — camera may have unmounted between timer tick and this call
+  }
+}
 
     // 3. Finalise audio slice.
     const rec = audioRecordingRef.current;

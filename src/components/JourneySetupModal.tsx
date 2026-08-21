@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, TouchableWithoutFeedback, TextInput 
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
 import { Shadows } from '../constants/Theme';
@@ -90,6 +91,8 @@ const ModeCard = React.memo(({ item, isSelected, colors, styles, onSelect }: any
 export const JourneySetupModalComponent = ({ visible, onClose, onStart }: JourneySetupModalProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 20);
   const [destination, setDestination] = useState('Home');
   const [customDest, setCustomDest] = useState('');
   const [mode, setMode] = useState('driving');
@@ -135,6 +138,14 @@ export const JourneySetupModalComponent = ({ visible, onClose, onStart }: Journe
           <Text style={styles.title}>Start a Journey</Text>
           <Text style={styles.subtitle}>Share your progress with your emergency contacts in real time.</Text>
 
+          {/* Foreground warning */}
+          <View style={[styles.infoBox, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5', borderWidth: 1 }]}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#EA580C" />
+            <Text style={[styles.infoText, { color: '#C2410C' }]}>
+              Please leave the app open! If you minimize Safen or lock your phone, your location will stop updating.
+            </Text>
+          </View>
+
           <Text style={styles.sectionLabel}>Where are you going?</Text>
           <View style={styles.presetRow}>
             {PRESETS.map(p => (
@@ -175,7 +186,7 @@ export const JourneySetupModalComponent = ({ visible, onClose, onStart }: Journe
             ))}
           </View>
 
-          <View style={styles.actions}>
+          <View style={[styles.actions, { paddingBottom: bottomPadding }]}>
             <TouchableOpacity 
               style={[styles.cancelBtn, { borderColor: colors.border }]} 
               onPress={onClose}
@@ -243,6 +254,20 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text.primary,
     marginBottom: 12,
   },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 22,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
   presetRow: {
     flexDirection: 'row',
     gap: 12,
@@ -292,7 +317,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 12,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 0,
   },
   cancelBtn: {
     flex: 1,

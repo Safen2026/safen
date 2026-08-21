@@ -67,6 +67,7 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
       contactUserId: contact.contact_user_id,
       contactName: contact.name,
       contactId: contact.id,
+      avatarUrl: contact.avatar_url,
     });
     // Navigate to map tab so the user sees the sharing start
     router.push('/(tabs)/map');
