@@ -1,4 +1,4 @@
-import Anthropic from "npm:@anthropic-ai/sdk@^0.68.0";
+import Anthropic from "npm:@anthropic-ai/sdk@^0.120.0";
 import type { CheckInput } from "./prefilter.ts";
 
 const MODEL = "claude-haiku-4-5";
@@ -84,6 +84,12 @@ export function parseVerdict(raw: string): Verdict {
  * open — a broken dependency must not stand between someone and reporting an
  * emergency.
  *
+ * SDK floor: @anthropic-ai/sdk >= 0.72.0. `output_config` is only present in the
+ * published types from that version on; below it the request needs a cast, and a
+ * cast means a future rename of the field fails silently at runtime instead of
+ * at build time. Keep the pin at or above the floor and keep this call cast-free
+ * — if a bump ever makes it stop compiling, that error is the feature working.
+ *
  * Model notes (claude-haiku-4-5):
  *   - output_config.effort is NOT supported and errors. Do not add it.
  *   - thinking is omitted deliberately: this model does not think when omitted.
@@ -111,24 +117,20 @@ export async function assessQuality(
       system: RUBRIC,
       messages: [{ role: "user", content: buildUserMessage(input) }],
       output_config: { format: { type: "json_schema", schema: VERDICT_SCHEMA } },
-    } as never);
+    });
 
-    const message = res as unknown as {
-      stop_reason?: string;
-      content: Array<{ type: string; text?: string }>;
-      usage?: { input_tokens?: number; output_tokens?: number };
-    };
     const usage = {
-      input_tokens: message.usage?.input_tokens ?? 0,
-      output_tokens: message.usage?.output_tokens ?? 0,
+      input_tokens: res.usage.input_tokens,
+      output_tokens: res.usage.output_tokens,
     };
 
-    if (message.stop_reason === "refusal") {
+    if (res.stop_reason === "refusal") {
       return { verdict: null, degraded: true, error: "model refused",
                usage, latencyMs: Date.now() - started };
     }
 
-    const text = message.content.find((b) => b.type === "text")?.text ?? "";
+    const block = res.content.find((b) => b.type === "text");
+    const text = block?.type === "text" ? block.text : "";
     return { verdict: parseVerdict(text), degraded: false, usage,
              latencyMs: Date.now() - started };
   } catch (err) {
