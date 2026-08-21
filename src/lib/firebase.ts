@@ -1,25 +1,25 @@
-import { getApp } from '@react-native-firebase/app';
-import { getAuth } from '@react-native-firebase/auth';
-
 // React Native Firebase automatically initializes using the native
 // google-services.json and GoogleService-Info.plist files injected
 // by Expo during the native build process.
 //
-// If the native module isn't linked yet (e.g. running in Expo Go or
-// before a rebuild), getAuth() will throw. We catch that here so the
-// rest of the app doesn't crash on import.
+// IMPORTANT: We use require() instead of import here because
+// @react-native-firebase throws during the import statement itself
+// (not during getApp/getAuth calls) when the native TurboModule
+// isn't linked yet. Static imports are hoisted and can't be caught.
+// require() inside try/catch handles this correctly.
 
-let firebaseAuth: ReturnType<typeof getAuth> | null = null;
-let firebaseApp: ReturnType<typeof getApp> | null = null;
+let firebaseApp: any = null;
+let firebaseAuth: any = null;
 
 try {
+  const { getApp } = require('@react-native-firebase/app');
+  const { getAuth } = require('@react-native-firebase/auth');
   firebaseApp = getApp();
   firebaseAuth = getAuth();
 } catch (e) {
   console.warn(
-    '[firebase.ts] Native Firebase module not available. ' +
-    'Run `npx expo run:ios --device` to rebuild with Firebase linked. ' +
-    'Error:', e
+    '[firebase.ts] Firebase native module not available. ' +
+    'Run `npx expo run:ios --device` to rebuild with Firebase linked.',
   );
 }
 

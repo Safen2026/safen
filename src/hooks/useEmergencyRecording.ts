@@ -65,8 +65,10 @@ export function useEmergencyRecording() {
       timerRef.current = null;
     }
     if (cameraRef.current?.stopRecording) {
-      try { cameraRef.current.stopRecording(); } catch {}
-    }
+  try { 
+    cameraRef.current.stopRecording(); 
+  } catch (e: any) {}
+}
     if (audioRecordingRef.current) {
       try { audioRecordingRef.current.stopAndUnloadAsync(); } catch {}
       audioRecordingRef.current = null;
@@ -187,7 +189,15 @@ export function useEmergencyRecording() {
         }
       })
       .catch((err: Error) => {
-        if (err?.message?.toLowerCase().includes('stopped') || err?.message?.toLowerCase().includes('cancel')) {
+        const msg = err?.message?.toLowerCase() ?? '';
+        if (
+          msg.includes('stopped') ||
+          msg.includes('cancel') ||
+          msg.includes('cannot be cast') ||
+          msg.includes('unable to find') ||
+          msg.includes('cameraview')
+        ) {
+          // Camera unmounted or recording stopped cleanly — not an error
           console.log('[Recording] Camera recording chunk finished/stopped.');
         } else {
           console.warn('[Recording] Camera recordAsync error:', err);
@@ -212,7 +222,13 @@ export function useEmergencyRecording() {
     //    (don't touch audioRecordingRef yet — we await-stop it below)
     isActiveRef.current = false;
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (cameraRef.current?.stopRecording) { try { cameraRef.current.stopRecording(); } catch {} }
+    if (cameraRef.current?.stopRecording) {
+  try { 
+    cameraRef.current.stopRecording(); 
+  } catch (e: any) {
+    // Silently ignore — camera may have unmounted between timer tick and this call
+  }
+}
     isCyclingAudioRef.current = false;
     isAudioReadyRef.current = false;
 
@@ -320,11 +336,12 @@ export function useEmergencyRecording() {
 
     // 2. Stop camera (this triggers camera.recordAsync promise to resolve and upload)
     if (cameraRef.current?.stopRecording) {
-      try {
-        console.log('[Recording] Stopping camera recording…');
-        cameraRef.current.stopRecording();
-      } catch {}
-    }
+  try { 
+    cameraRef.current.stopRecording(); 
+  } catch (e: any) {
+    // Silently ignore — camera may have unmounted between timer tick and this call
+  }
+}
 
     // 3. Finalise audio slice and upload in background
     const rec = audioRecordingRef.current;
