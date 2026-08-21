@@ -9,6 +9,8 @@ import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import { TopToast } from '../src/components/TopToast';
 import { toastRef } from '../src/utils/toast';
+import { useAppUpdates } from '../src/hooks/useAppUpdates';
+import { AppUpdateModal } from '../src/components/AppUpdateModal';
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -48,6 +50,7 @@ import { ThemeProvider as NavThemeProvider, DefaultTheme, DarkTheme as NavDarkTh
 // and can safely call useTheme() to dynamically control the StatusBar and Loading colors.
 function RootNavigator({ loading }: { loading: boolean }) {
   const { isDark, colors } = useTheme();
+  const { isUpdateReady, applyUpdate, dismissUpdate } = useAppUpdates();
 
   if (loading) {
     return (
@@ -83,6 +86,13 @@ function RootNavigator({ loading }: { loading: boolean }) {
         </View>
       </NavThemeProvider>
       <TopToast ref={toastRef} />
+      
+      {/* Global In-App OTA Update Prompt */}
+      <AppUpdateModal 
+        visible={isUpdateReady} 
+        onApply={applyUpdate} 
+        onDismiss={dismissUpdate} 
+      />
     </>
   );
 }

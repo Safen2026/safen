@@ -13,7 +13,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { firebaseAuth } from '../src/lib/firebase';
 import { signInWithPhoneNumber } from '@react-native-firebase/auth';
@@ -122,9 +122,18 @@ export default function AuthScreen() {
   }, [mode, phone, loginPhone, firstName, lastName, email]);
 
   return (
-    <View style={styles.flex}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={[styles.brand, { marginTop: insets.top + 24 }]}>
+    <SafeAreaView style={styles.flex} edges={['top']}>
+      <KeyboardAvoidingView 
+        style={styles.flex} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView 
+        style={styles.flex} 
+        contentContainerStyle={styles.scroll} 
+        keyboardShouldPersistTaps="handled" 
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.brand}>
           <Image
             source={require('../assets/images/logo.png')}
             style={styles.logo}
@@ -132,13 +141,6 @@ export default function AuthScreen() {
           />
           <Text style={styles.tagline}>Your personal safety companion</Text>
         </View>
-
-      <ScrollView 
-        style={styles.flex} 
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]} 
-        keyboardShouldPersistTaps="handled" 
-        showsVerticalScrollIndicator={false}
-      >
         <View style={styles.card}>
           <View style={styles.tabRow} accessibilityRole="tablist">
             <TouchableOpacity 
@@ -228,14 +230,17 @@ export default function AuthScreen() {
 
         </View>
 
+        {/* Flexible spacer pushes the notice to the bottom, but collapses smoothly when the keyboard opens */}
+        <View style={{ flex: 1, minHeight: 24 }} />
+
         <View style={styles.notice}>
           <MaterialCommunityIcons name="shield-check-outline" size={16} color="#1B5E20" />
-          <Text style={styles.noticeText}>Your data is encrypted and never shared with third parties.</Text>
+          <Text style={styles.noticeText}>Your data is protected and never shared with third parties.</Text>
         </View>
 
       </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -243,7 +248,7 @@ const BRAND_BLUE = '#0A2463';
 
 const getStyles = (colors: import('../src/constants/Theme').ThemeColors) => StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
-  scroll: { flexGrow: 1, paddingHorizontal: 24 },
+  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 },
   brand: { alignItems: 'center', marginBottom: 32 },
   logo: { width: 180, height: 120, marginBottom: 8 },
   tagline: { marginTop: 4, fontSize: 14, color: colors.text.secondary, fontWeight: '500' },
@@ -257,6 +262,6 @@ const getStyles = (colors: import('../src/constants/Theme').ThemeColors) => Styl
   cta: { backgroundColor: BRAND_BLUE, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginTop: 8, shadowColor: BRAND_BLUE, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 },
   ctaDisabled: { opacity: 0.7 },
   ctaText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
-  notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24, gap: 6 },
+  notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 12, marginBottom: 12, gap: 6 },
   noticeText: { fontSize: 12, color: colors.text.secondary, flexShrink: 1, lineHeight: 18 },
 });

@@ -28,14 +28,18 @@ export function useAlert() {
   useEffect(() => {
     let isMounted = true;
     const fetchActiveAlert = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return;
+
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
       const { data } = await supabase
         .from('alerts')
         .select('id, type')
         .eq('user_id', user.id)
         .eq('status', 'active')
+        .gte('created_at', twentyFourHoursAgo)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -77,7 +81,8 @@ export function useAlert() {
     setLoading(true);
     setLoadingMessage('Acquiring secure location...');
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) { setLoading(false); return false; }
 
     // 1. Location — fast via getLastKnownPositionAsync
@@ -145,6 +150,16 @@ export function useAlert() {
 
     setActiveAlert({ id: data.id, type });
 
+    // Insert initial event into the feed (fire-and-forget)
+    supabase.from('sos_events').insert({
+      alert_id: data.id,
+      event_type: 'system',
+      message: 'Emergency triggered. Alerting your network...',
+      actor_id: user.id
+    }).then(({ error: insertErr }) => {
+      if (insertErr) console.warn('Failed to insert initial SOS event:', insertErr);
+    });
+
     // Fan out in-app notifications to contacts (fire-and-forget)
     notifyEmergencyContacts({
       type,
@@ -174,6 +189,17 @@ export function useAlert() {
     if (error) return false;
 
     setActiveAlert(null);
+
+    // Insert cancellation event into the feed (fire-and-forget)
+    supabase.from('sos_events').insert({
+      alert_id: activeAlert.id,
+      event_type: 'system',
+      message: 'Emergency resolved and cancelled by user.',
+      actor_id: (await supabase.auth.getSession()).data.session?.user?.id
+    }).then(({ error: insertErr }) => {
+      if (insertErr) console.warn('Failed to insert cancellation event:', insertErr);
+    });
+
     return true;
   };
 

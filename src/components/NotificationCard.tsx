@@ -73,7 +73,8 @@ const NotificationCardComponent = ({
 
   const isRequest = n.type === 'contact_added' && n.title === 'Contact Request';
   const isSos = n.type === 'sos';
-  const isOld = (new Date().getTime() - new Date(n.created_at).getTime()) > 24 * 60 * 60 * 1000;
+  // Hide the SOS response buttons if the alert is older than 5 hours
+  const isOld = (Date.now() - new Date(n.created_at).getTime()) > 5 * 60 * 60 * 1000;
 
   const getResponseMeta = (res: SosAckResponse) => {
     switch (res) {
@@ -148,6 +149,7 @@ const NotificationCardComponent = ({
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Respond: On my way"
+                accessibilityState={{ disabled: isSubmitting }}
                 disabled={isSubmitting}
               >
                 {isSubmitting && selectedResponse === 'on_my_way' ? (
@@ -163,6 +165,7 @@ const NotificationCardComponent = ({
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Respond: Calling you"
+                accessibilityState={{ disabled: isSubmitting }}
                 disabled={isSubmitting}
               >
                 {isSubmitting && selectedResponse === 'calling_you' ? (
@@ -178,6 +181,7 @@ const NotificationCardComponent = ({
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Respond: Alerting Authorities"
+                accessibilityState={{ disabled: isSubmitting }}
                 disabled={isSubmitting}
               >
                 {isSubmitting && selectedResponse === 'alerting_authorities' ? (
@@ -193,6 +197,7 @@ const NotificationCardComponent = ({
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Respond: Can't Help"
+                accessibilityState={{ disabled: isSubmitting }}
                 disabled={isSubmitting}
               >
                 {isSubmitting && selectedResponse === 'cant_help' ? (

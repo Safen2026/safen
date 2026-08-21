@@ -17,6 +17,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEmergencyRecording } from '../hooks/useEmergencyRecording';
 import { cinematicScroll } from '../utils/scrollUtils';
 import { formatDuration } from '../utils/dateUtils';
+import { useTheme } from '../context/ThemeContext';
+import { CancelSOSModal } from './CancelSOSModal';
+import { SOSFeed } from './SOSFeed';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface ActiveSOSModalProps {
@@ -42,7 +45,10 @@ export const ActiveSOSModal = React.memo(({
     bindCameraRef,
   } = useEmergencyRecording();
 
+  const { colors } = useTheme();
+
   const [loadingCancel, setLoadingCancel] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   // Only start recording once per alertId
   const startedForRef = useRef<string | null>(null);
@@ -68,7 +74,6 @@ export const ActiveSOSModal = React.memo(({
 
   // Staggered slide-in for checklist
   const rowAnims = useRef([
-    new Animated.Value(0),
     new Animated.Value(0),
     new Animated.Value(0),
     new Animated.Value(0),
@@ -138,7 +143,11 @@ export const ActiveSOSModal = React.memo(({
     };
   }, [visible, sonar1, sonar2, sonar3, rowAnims]);
 
-  const handleCancel = useCallback(async () => {
+  const handleCancelRequest = useCallback(() => {
+    setShowCancelModal(true);
+  }, []);
+
+  const handleConfirmCancel = useCallback(async () => {
     setLoadingCancel(true);
     stopRecording();
 
@@ -150,6 +159,8 @@ export const ActiveSOSModal = React.memo(({
 
     if (!cancelled) {
       Alert.alert('Error', 'Could not cancel SOS. Please try again.');
+    } else {
+      setShowCancelModal(false);
     }
   }, [onCancel, stopRecording]);
 
@@ -164,7 +175,7 @@ export const ActiveSOSModal = React.memo(({
       visible={visible}
       animationType="slide"
       transparent={false}
-      onRequestClose={handleCancel}
+      onRequestClose={handleCancelRequest}
       statusBarTranslucent={true}
     >
       <View style={styles.modalContainer}>
@@ -191,9 +202,7 @@ export const ActiveSOSModal = React.memo(({
         >
           {/* Header */}
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={handleCancel} accessibilityLabel="Cancel SOS" accessibilityRole="button" disabled={loadingCancel}>
-              <Ionicons name="chevron-back" size={28} color="#fff" />
-            </TouchableOpacity>
+            <View style={{ width: 28 }} />
             <Text style={styles.modalHeaderText}>EMERGENCY SOS</Text>
             {/* Placeholder to keep header centred */}
             <View style={{ width: 28 }} />
@@ -230,7 +239,7 @@ export const ActiveSOSModal = React.memo(({
             <View style={{ flex: 1 }}>
               <Text style={styles.helpBannerTitle}>Help is on the way!</Text>
               <Text style={styles.helpBannerSub}>
-                Your location and details have been shared with your contacts and authorities.
+                Your location and details have been shared with your emergency contacts.
               </Text>
             </View>
           </View>
@@ -251,42 +260,27 @@ export const ActiveSOSModal = React.memo(({
               <Ionicons name="checkmark" size={24} color="#27AE60" />
             </Animated.View>
 
-            {/* SMS */}
+
+
+            {/* Contacts */}
             <Animated.View style={[styles.checklistItem, {
               opacity: rowAnims[1],
               transform: [{ translateY: rowAnims[1].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
             }]}>
-              <View style={[styles.checklistIconWrapper, { backgroundColor: smsMode ? '#D97706' : '#2980B9' }]}>
-                <Ionicons name={smsMode ? 'chatbubble-ellipses' : 'chatbubble'} size={16} color="#fff" />
-              </View>
-              <View style={styles.checklistTextContainer}>
-                <Text style={styles.checklistTitle}>{smsMode ? 'SMS Fallback Opened' : 'SMS Alerts Sent'}</Text>
-                <Text style={styles.checklistSub}>{smsMode ? 'No internet — SMS composer opened' : 'To your trusted contacts'}</Text>
-              </View>
-              {smsMode
-                ? <Ionicons name="warning" size={22} color="#D97706" />
-                : <Ionicons name="checkmark" size={24} color="#27AE60" />}
-            </Animated.View>
-
-            {/* Authorities */}
-            <Animated.View style={[styles.checklistItem, {
-              opacity: rowAnims[2],
-              transform: [{ translateY: rowAnims[2].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-            }]}>
               <View style={[styles.checklistIconWrapper, { backgroundColor: '#8E44AD' }]}>
-                <Ionicons name="shield" size={16} color="#fff" />
+                <Ionicons name="people" size={16} color="#fff" />
               </View>
               <View style={styles.checklistTextContainer}>
-                <Text style={styles.checklistTitle}>Authorities Notified</Text>
-                <Text style={styles.checklistSub}>Local security & Police</Text>
+                <Text style={styles.checklistTitle}>Contacts Notified</Text>
+                <Text style={styles.checklistSub}>Your trusted network</Text>
               </View>
               <Ionicons name="checkmark" size={24} color="#27AE60" />
             </Animated.View>
 
             {/* Video Clip */}
             <Animated.View style={[styles.checklistItem, {
-              opacity: rowAnims[3],
-              transform: [{ translateY: rowAnims[3].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+              opacity: rowAnims[2],
+              transform: [{ translateY: rowAnims[2].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
             }]}>
               <View style={[styles.checklistIconWrapper, { backgroundColor: isVideoPhase ? '#C0392B' : '#27AE60' }]}>
                 <Ionicons name={isVideoPhase ? 'videocam' : 'videocam-outline'} size={16} color="#fff" />
@@ -302,8 +296,8 @@ export const ActiveSOSModal = React.memo(({
 
             {/* Audio */}
             <Animated.View style={[styles.checklistItem, {
-              opacity: rowAnims[4],
-              transform: [{ translateY: rowAnims[4].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+              opacity: rowAnims[3],
+              transform: [{ translateY: rowAnims[3].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
             }]}>
               <View style={[styles.checklistIconWrapper, { backgroundColor: isVideoPhase ? '#555' : '#E67E22' }]}>
                 <Ionicons name="mic" size={16} color="#fff" />
@@ -316,22 +310,30 @@ export const ActiveSOSModal = React.memo(({
             </Animated.View>
           </View>
 
+          {/* Real-time SOS Feed */}
+          {alertId ? <SOSFeed alertId={alertId} /> : null}
+
           <View style={{ flex: 1 }} />
 
           {/* Cancel Button */}
           <TouchableOpacity
             style={styles.modalCancelBtn}
-            onPress={handleCancel}
+            onPress={handleCancelRequest}
             disabled={loadingCancel}
             accessibilityRole="button"
             accessibilityLabel="Cancel SOS"
-            aria-busy={loadingCancel}
           >
-            {loadingCancel
-              ? <ActivityIndicator size="small" color="#E74C3C" />
-              : <Text style={styles.modalCancelBtnText}>Cancel SOS</Text>}
+            <Text style={styles.modalCancelBtnText}>Cancel SOS</Text>
           </TouchableOpacity>
         </ScrollView>
+
+        <CancelSOSModal 
+          visible={showCancelModal} 
+          loading={loadingCancel} 
+          colors={colors} 
+          onKeepActive={() => setShowCancelModal(false)} 
+          onConfirmCancel={handleConfirmCancel} 
+        />
       </View>
     </Modal>
   );

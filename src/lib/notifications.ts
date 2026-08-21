@@ -585,6 +585,18 @@ export async function sendSosAcknowledgement(params: {
       console.warn('[SosAck] notify failed:', notifyError.message);
     }
 
+    // 3. Insert into Live SOS Feed (sos_events) so it appears in the timeline
+    const { error: eventError } = await supabase.from('sos_events').insert({
+      alert_id: params.alertId,
+      event_type: 'contact_ack',
+      message: `${myName}: ${meta.label}`,
+      actor_id: user.id
+    });
+
+    if (eventError) {
+      console.warn('[SosAck] feed insert failed:', eventError.message);
+    }
+
     return true;
   } catch (err) {
     console.warn('[SosAck] error:', err);
