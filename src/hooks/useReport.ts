@@ -34,16 +34,12 @@ export function useReport() {
 
       // 1. Upload media to Cloudinary FIRST
       const uploadedUrls: string[] = [];
-      console.log('[useReport] Media URIs received:', payload.media?.length ?? 0, payload.media);
       if (payload.media && payload.media.length > 0) {
         for (const uri of payload.media) {
-          console.log('[useReport] Uploading URI:', uri);
           const url = await uploadToCloudinary(uri);
-          console.log('[useReport] Upload result for URI:', uri, '→', url);
           if (url) uploadedUrls.push(url);
         }
       }
-      console.log('[useReport] All uploaded URLs:', uploadedUrls);
 
       // 2. Insert report row with media_paths included
       const insertPayload = {
@@ -57,15 +53,11 @@ export function useReport() {
         media_paths: uploadedUrls.length > 0 ? uploadedUrls : null,
         status: 'open',
       };
-      console.log('[useReport] Inserting into DB with media_paths:', insertPayload.media_paths);
-
       const { data: report, error: reportError } = await supabase
         .from('reports')
         .insert(insertPayload)
         .select('id')
         .single();
-
-      console.log('[useReport] DB insert result:', { report, error: reportError?.message });
 
       if (reportError || !report) {
         console.error('[useReport] Report insert failed:', reportError?.message);

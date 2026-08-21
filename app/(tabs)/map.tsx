@@ -13,6 +13,7 @@ import { ActiveTripShareCard } from '../../src/components/ActiveTripShareCard';
 import { useJourneyTracking } from '../../src/hooks/useJourneyTracking';
 import { useShareLiveTrip, TripShareContact } from '../../src/hooks/useShareLiveTrip';
 import { tripEvents, TripSharePayload } from '../../src/lib/events';
+import { PinDetailsModal, PinData } from '../../src/components/PinDetailsModal';
 
 export default function MapScreen() {
   const { colors } = useTheme();
@@ -29,7 +30,18 @@ export default function MapScreen() {
   const [shareTripContact, setShareTripContact] = useState<TripShareContact | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
-  const { lat, lng } = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  // Pin Details state
+  const [selectedPin, setSelectedPin] = useState<PinData | null>(null);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const handlePinClose = useCallback(() => setShowPinModal(false), []);
+
+  const { lat, lng, senderName, alertType, alertTitle } = useLocalSearchParams<{ 
+    lat?: string; 
+    lng?: string; 
+    senderName?: string;
+    alertType?: string;
+    alertTitle?: string;
+  }>();
   const mapRef = React.useRef<MapView>(null);
 
   // Hooks
@@ -75,6 +87,7 @@ export default function MapScreen() {
         id: payload.contactId,
         contactUserId: payload.contactUserId,
         name: payload.contactName,
+        avatarUrl: payload.avatarUrl,
       });
       setShowShareModal(true);
     });
@@ -156,18 +169,49 @@ export default function MapScreen() {
         initialRegion={initialRegion}
         showsUserLocation={true}
         showsMyLocationButton={true}
+        toolbarEnabled={false}
         onMapReady={handleMapReady}
+        mapPadding={{ top: 0, right: 0, bottom: 180, left: 0 }}
       >
         {/* Alert pin — navigated from notification */}
         {lat && lng && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng)) && (
           <Marker
             coordinate={{ latitude: parseFloat(lat), longitude: parseFloat(lng) }}
-            title="Emergency Location"
-            description="Tap here to get directions"
             pinColor={colors.primary}
-            onCalloutPress={() => {
-              const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-              Linking.openURL(url);
+            onPress={(e) => {
+              // Prevent default callout behavior
+              e.stopPropagation();
+              
+              let pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Location` : 'Location';
+              let pinSubtitle = alertTitle ? decodeURIComponent(alertTitle) : 'Alert';
+              
+              if (alertType === 'sos') {
+                pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Emergency` : 'Emergency Location';
+                pinSubtitle = 'Active SOS Alert';
+              } else if (alertType === 'medical') {
+                pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Emergency` : 'Medical Emergency';
+                pinSubtitle = 'Active Medical Alert';
+              } else if (alertType === 'fire') {
+                pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Alert` : 'Fire Alert';
+                pinSubtitle = 'Active Fire Alert';
+              } else if (alertType === 'police') {
+                pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Alert` : 'Security Alert';
+                pinSubtitle = 'Active Police/Security Alert';
+              } else if (alertType === 'report') {
+                pinTitle = alertTitle ? decodeURIComponent(alertTitle) : (senderName ? `${decodeURIComponent(senderName)}'s Live Location` : 'Shared Live Location');
+                pinSubtitle = 'Live Location (Updates only when their app is open)';
+              } else if (alertType === 'check_in_missed') {
+                pinTitle = senderName ? `${decodeURIComponent(senderName)} Missed Check-In` : 'Missed Check-In';
+                pinSubtitle = 'Safety Watchdog Alert';
+              }
+
+              setSelectedPin({
+                latitude: parseFloat(lat),
+                longitude: parseFloat(lng),
+                title: pinTitle,
+                subtitle: pinSubtitle,
+              });
+              setShowPinModal(true);
             }}
           />
         )}
@@ -179,8 +223,17 @@ export default function MapScreen() {
               latitude: journeySession.startLatitude,
               longitude: journeySession.startLongitude,
             }}
-            title="Journey started here"
             pinColor="#10B981"
+            onPress={(e) => {
+              e.stopPropagation();
+              setSelectedPin({
+                latitude: journeySession.startLatitude!,
+                longitude: journeySession.startLongitude!,
+                title: 'Journey Start Point',
+                subtitle: `Destination: ${journeySession.destination}`,
+              });
+              setShowPinModal(true);
+            }}
           />
         )}
       </MapView>
@@ -225,6 +278,12 @@ export default function MapScreen() {
         isStarting={isShareStarting}
         onClose={handleShareClose}
         onStart={handleShareStart}
+      />
+
+      <PinDetailsModal
+        visible={showPinModal}
+        pin={selectedPin}
+        onClose={handlePinClose}
       />
     </View>
   );

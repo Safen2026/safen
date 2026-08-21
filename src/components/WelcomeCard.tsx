@@ -163,7 +163,7 @@ export const WelcomeCard = React.memo(() => {
           >
             <Text style={[styles.sheetTitle, { color: colors.text.primary }]}>Update Profile Picture</Text>
 
-            {Platform.OS !== 'ios' || !__DEV__ ? (
+            {!(Platform.OS === 'ios' && __DEV__) ? (
               <TouchableOpacity 
                 style={[styles.sheetOption, { borderBottomColor: colors.border }]} 
                 onPress={handleCamera}

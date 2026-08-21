@@ -150,7 +150,9 @@ export function useSafeCheckIn() {
           setIsExpired(true);
           AsyncStorage.removeItem(STORAGE_KEY);
         }
-      } catch {}
+      } catch (e: any) {
+        console.error('[useSafeCheckIn] Failed to parse restored session:', e);
+      }
     });
   }, []);
 
@@ -174,12 +176,12 @@ export function useSafeCheckIn() {
     };
 
     tick(); // Run once immediately
-    tickRef.current = setInterval(tick, 30_000); // Update every 30s
+    tickRef.current = setInterval(tick, 1_000); // Update every second for smooth countdown
 
     return () => {
       if (tickRef.current) clearInterval(tickRef.current);
     };
-  }, [session, isExpired]);
+  }, [session]); // isExpired is only written inside tick — removing it prevents interval from resetting at deadline
 
   // ── At T-5 min → self-notify via Supabase (works in Expo Go) ──────────
   useEffect(() => {

@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
@@ -67,6 +68,8 @@ export const ShareTripModalComponent = ({
 }: ShareTripModalProps) => {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 20);
   const [selectedDuration, setSelectedDuration] = useState(30);
 
   const handleStart = useCallback(() => {
@@ -88,7 +91,7 @@ export const ShareTripModalComponent = ({
 
           {/* Header */}
           <View style={styles.header}>
-            <Avatar name={contact.name} size={52} />
+            <Avatar name={contact.name} avatarUrl={contact.avatarUrl} size={52} />
             <View style={styles.headerText}>
               <Text style={styles.title}>Share Live Location</Text>
               <Text style={styles.subtitle} numberOfLines={1}>
@@ -102,6 +105,14 @@ export const ShareTripModalComponent = ({
             <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
             <Text style={[styles.infoText, { color: colors.primary }]}>
               Only {contact.name.split(' ')[0]} will see your location. Sharing stops automatically.
+            </Text>
+          </View>
+
+          {/* Foreground warning */}
+          <View style={[styles.infoBox, { backgroundColor: '#FFF7ED', borderColor: '#FFEDD5', borderWidth: 1 }]}>
+            <Ionicons name="warning-outline" size={18} color="#EA580C" />
+            <Text style={[styles.infoText, { color: '#C2410C' }]}>
+              Please leave the app open! If you minimize Safen or lock your phone, your location will stop updating.
             </Text>
           </View>
 
@@ -129,7 +140,7 @@ export const ShareTripModalComponent = ({
           </View>
 
           {/* Actions */}
-          <View style={styles.actions}>
+          <View style={[styles.actions, { paddingBottom: bottomPadding }]}>
             <TouchableOpacity
               style={[styles.cancelBtn, { borderColor: colors.border }]}
               onPress={onClose}
@@ -278,7 +289,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 12,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 0,
   },
   cancelBtn: {
     flex: 1,
