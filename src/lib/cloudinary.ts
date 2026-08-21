@@ -41,7 +41,6 @@ const attemptUpload = async (
       console.warn('[Cloudinary] File is 0 bytes — skipping upload:', uri);
       return null;
     }
-    console.log(`[Cloudinary] File ready: ${size} bytes → ${uri}`);
   } catch (statErr) {
     // getInfoAsync can fail for content:// URIs on some Android versions — proceed anyway
     console.warn('[Cloudinary] Could not stat file (proceeding anyway):', statErr);
@@ -63,8 +62,6 @@ const attemptUpload = async (
   
   if (options?.folder) parameters.folder = options.folder;
 
-  console.log(`[Cloudinary] Uploading to ${uploadUrl} (public_id: ${parameters.public_id})…`);
-
   // ── Upload via FileSystem.uploadAsync (most reliable on Android) ───────────
   const response = await uploadAsync(uploadUrl, uri, {
     fieldName:  'file',
@@ -73,18 +70,12 @@ const attemptUpload = async (
     parameters,
   });
 
-  console.log('[Cloudinary] HTTP status:', response.status);
-  if (response.body) {
-    console.log('[Cloudinary] Response (first 500 chars):', response.body.substring(0, 500));
-  }
-
   if (response.status >= 200 && response.status < 300) {
     let parsed: any;
     try { parsed = JSON.parse(response.body); } catch {
       throw new Error(`[Cloudinary] Could not parse response: ${response.body.substring(0, 200)}`);
     }
     if (parsed?.secure_url) {
-      console.log('[Cloudinary] Upload SUCCESS:', parsed.secure_url);
       return parsed.secure_url;
     }
     throw new Error(`[Cloudinary] No secure_url in response: ${response.body.substring(0, 200)}`);
@@ -97,7 +88,6 @@ export const uploadToCloudinary = async (
   uri: string,
   options?: { public_id?: string; folder?: string }
 ): Promise<string | null> => {
-  console.log('[Cloudinary] Starting upload for:', uri);
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -108,7 +98,6 @@ export const uploadToCloudinary = async (
     } catch (err) {
       console.warn(`[Cloudinary] Attempt ${attempt}/${MAX_ATTEMPTS} failed:`, err);
       if (attempt < MAX_ATTEMPTS) {
-        console.log(`[Cloudinary] Retrying in ${attempt}s…`);
         await sleep(attempt * 1000);
       }
     }

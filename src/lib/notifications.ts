@@ -163,8 +163,6 @@ export async function notifyCheckInMissed(params: {
     const { error: insertError } = await supabase.from('notifications').insert(rows);
     if (insertError) {
       console.warn('notifyCheckInMissed: failed to insert notifications', insertError.message);
-    } else {
-      console.log('[SafeCheckIn] Contact notifications sent for missed check-in.');
     }
 
     // ── Send actual push notifications to each contact's device ──────────
