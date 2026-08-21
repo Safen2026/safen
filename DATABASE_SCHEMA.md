@@ -283,9 +283,13 @@ profiles
 # 5. Open questions
 
 - Does `profiles.id` actually have a FK to `auth.users.id`? Still unconfirmed.
-- `verification_status`, `cluster_id` and `triage_reason` are **client-writable**
-  via PostgREST — no column-level REVOKE. Harmless today; must be locked down
-  before a safety feed filters on `verification_status`.
+- ~~`verification_status`, `cluster_id` and `triage_reason` are client-writable
+  via PostgREST.~~ **Closed** by `20260812121000_lock_down_report_columns.sql`:
+  `anon`/`authenticated` lost table-level INSERT and UPDATE on `reports`, and
+  INSERT came back as a 12-column grant covering only what the report form
+  sends. Every other column is server-owned. Note a column-level `REVOKE` alone
+  would *not* have worked — it is accepted silently and does nothing while the
+  table-level grant stands. Guarded by `supabase/tests/10_report_column_lockdown.sql`.
 - `ai_calls_today` uses `date_trunc('day', now())` in the session timezone (UTC
   on Supabase), so the daily ceiling resets at 01:00 WAT, not local midnight.
 - `reports_confirmed` counts confirmed-cluster *participations*, not reports.
