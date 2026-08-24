@@ -64,8 +64,8 @@ fail**, and that is the entire point of doing it here.
 npx deno@2 run -A supabase/tests/run_sql_tests.ts
 ```
 
-Ten files: `00_seed` (creates three reporters — the cluster tests need three
-distinct ones), then `01`–`09`. Every file must print `ok`.
+Eleven files: `00_seed` (creates three reporters — the cluster tests need three
+distinct ones), then `01`–`10`. Every file must print `ok`.
 
 ## 5. Two things to check by hand while you are connected
 
@@ -108,8 +108,8 @@ update public.app_settings set quality_gate_mode = 'advisory';
 
 ## Known gaps this rehearsal will NOT cover
 
-- `assessQuality`'s network/timeout/refusal branches — no injectable client yet.
-- `verification_status` / `cluster_id` are client-writable via PostgREST. Harmless
-  now; must be locked down before Spec 2's feed filters on them.
+- `assessQuality`'s network/timeout branches. The refusal and response-parsing
+  branches are now covered in `claude_test.ts` by stubbing `globalThis.fetch`;
+  timeout and connection failure still are not.
 - Concurrency: the `FOR UPDATE` token race was reasoned through, not exercised.
   Two simultaneous submits with one token would be the test.
