@@ -1,6 +1,6 @@
 {
   "imports": {
-    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.71.0",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.120.0",
     "fast-xml-parser": "npm:fast-xml-parser@^4.5.1",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.110.0"
   }
