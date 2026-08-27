@@ -21,3 +21,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/ingest-news/index.ts"
+
+[functions.enrich-news]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/enrich-news/index.ts"
