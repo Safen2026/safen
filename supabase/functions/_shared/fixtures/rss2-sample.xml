@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Sample Nigerian Daily</title>
+    <item>
+      <title>Police repel robbery attempt on Allen Avenue, Ikeja</title>
+      <link>https://example.ng/allen-avenue-robbery/?utm_source=rss</link>
+      <description><![CDATA[<p>Officers <b>repelled</b> an attack in Ikeja, Lagos State.</p>]]></description>
+      <pubDate>Wed, 27 Aug 2026 08:30:00 +0100</pubDate>
+    </item>
+    <item>
+      <title>Traffic diversion announced for Wuse II</title>
+      <link>https://example.ng/wuse-diversion</link>
+      <description>Road closure in Abuja from Monday.</description>
+    </item>
+  </channel>
+</rss>

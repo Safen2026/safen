@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Sample Atom Outlet</title>
+  <entry>
+    <title>Kidnapping reported along Kaduna-Abuja highway</title>
+    <link href="https://example.ng/kaduna-highway"/>
+    <summary>Travellers advised to avoid night journeys.</summary>
+    <updated>2026-08-27T09:15:00Z</updated>
+  </entry>
+</feed>
