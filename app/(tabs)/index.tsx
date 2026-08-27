@@ -9,10 +9,13 @@ import { SafeCheckInModal } from '../../src/components/SafeCheckInModal';
 import { SafetyNetworkRow } from '../../src/components/SafetyNetworkRow';
 import { QuickActions }     from '../../src/components/QuickActions';
 import { useSafeCheckIn }   from '../../src/hooks/useSafeCheckIn';
+import { useRouter }        from 'expo-router';
+import { SafetyFeed }       from '../../src/components/SafetyFeed';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
   const [checkInModalVisible, setCheckInModalVisible] = useState(false);
+  const router = useRouter();
 
   const {
     session,
@@ -66,6 +69,9 @@ export default function HomeScreen() {
 
         {/* 5. Quick Actions — Security, Medical, Fire (below the fold by design) */}
         <QuickActions />
+
+        {/* 6. Blended security feed — news + community, scoped to the user's area */}
+        <SafetyFeed limit={4} onSeeAll={() => router.push('/feed')} />
       </ScrollView>
 
       {/* Full-Screen Safe Check-In Modal */}
