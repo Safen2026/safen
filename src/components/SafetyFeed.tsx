@@ -1,96 +1,117 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 import { useTheme } from '../context/ThemeContext';
 import { Shadows } from '../constants/Theme';
+import { useSafetyFeed } from '../hooks/useSafetyFeed';
+import { FeedEmptyState } from './feed/FeedEmptyState';
+import type { FeedRow, FeedSeverity } from '../lib/feed';
+import { timeAgo } from '../utils/dateUtils';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type FeedSeverity = 'warning' | 'security' | 'medical' | 'fire' | 'info';
-
-interface FeedItem {
-  id          : string;
-  title       : string;
-  description : string;
-  time        : string;
-  severity    : FeedSeverity;
-  icon        : React.ComponentProps<typeof MaterialCommunityIcons>['name'];
-}
-
-// ─── Severity → visual config ─────────────────────────────────────────────────
-const SEVERITY_CONFIG: Record<FeedSeverity, { border: string; icon: string }> = {
-  warning  : { border: '#F59E0B', icon: '#F59E0B' },
-  security : { border: '#8B5CF6', icon: '#8B5CF6' },
-  medical  : { border: '#EF4444', icon: '#EF4444' },
-  fire     : { border: '#F97316', icon: '#F97316' },
-  info     : { border: '#3B82F6', icon: '#3B82F6' },
+// Severity drives the accent colour; category drives the icon. The previous
+// version conflated the two into a single enum.
+const SEVERITY_COLOR: Record<FeedSeverity, string> = {
+  critical: '#EF4444',
+  warning : '#F97316',
+  caution : '#F59E0B',
+  info    : '#3B82F6',
 };
 
-// ─── Mock data (replaced by backend feed once the AI pipeline is live) ────────
-const MOCK_FEED: FeedItem[] = [
-  {
-    id          : '1',
-    title       : 'Roadblock Alert',
-    description : 'Reported on Allen Avenue, Ikeja. Heavy traffic expected.',
-    time        : '15 mins ago',
-    severity    : 'warning',
-    icon        : 'alert-rhombus-outline',
-  },
-  {
-    id          : '2',
-    title       : 'Suspicious Activity',
-    description : 'Unmarked vehicle loitering near Maryland Mall.',
-    time        : '1 hour ago',
-    severity    : 'security',
-    icon        : 'shield-alert-outline',
-  },
-];
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
-// ─── Component ────────────────────────────────────────────────────────────────
+const CATEGORY_ICON: Record<string, IconName> = {
+  armed_robbery  : 'pistol',
+  kidnapping     : 'account-alert-outline',
+  banditry       : 'shield-alert-outline',
+  unrest_protest : 'bullhorn-outline',
+  road_incident  : 'car-emergency',
+  fire           : 'fire',
+  flood          : 'waves',
+  cult_clash     : 'account-group-outline',
+  police_activity: 'police-badge-outline',
+  fraud_scam     : 'credit-card-off-outline',
+  terrorism      : 'alert-octagon-outline',
+  herder_farmer  : 'cow',
+  other          : 'information-outline',
+};
+
 interface SafetyFeedProps {
-  /** Live feed items from the backend AI pipeline. Falls back to mock data when empty. */
-  items?: FeedItem[];
+  limit?: number;
+  onSeeAll?: () => void;
 }
 
-export const SafetyFeed = ({ items }: SafetyFeedProps) => {
+export const SafetyFeed = ({ limit = 4, onSeeAll }: SafetyFeedProps) => {
   const { colors } = useTheme();
-  const feed = items && items.length > 0 ? items : MOCK_FEED;
+  const { items, loading, isNationalOnly } = useSafetyFeed(limit);
+
+  const open = (row: FeedRow) => {
+    if (row.kind === 'news' && row.deep_link) void Linking.openURL(row.deep_link);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.text.primary }]}>Recent in your area</Text>
+      <View style={styles.headerRow}>
+        <Text style={[styles.title, { color: colors.text.primary }]}>
+          {isNationalOnly ? 'Security updates' : 'Recent in your area'}
+        </Text>
+        {onSeeAll && items.length > 0 && (
+          <TouchableOpacity onPress={onSeeAll} accessibilityRole="button">
+            <Text style={[styles.seeAll, { color: colors.status.safeText }]}>See all</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
-      {feed.map(item => {
-        const cfg = SEVERITY_CONFIG[item.severity];
+      {loading && items.length === 0 && (
+        <ActivityIndicator style={styles.loader} color={colors.text.secondary} />
+      )}
+
+      {!loading && items.length === 0 && <FeedEmptyState nationalOnly={isNationalOnly} />}
+
+      {items.map((item) => {
+        const accent = SEVERITY_COLOR[item.severity] ?? SEVERITY_COLOR.info;
         return (
           <TouchableOpacity
             key={item.id}
             activeOpacity={0.7}
+            onPress={() => open(item)}
             style={[
               styles.card,
               {
-                backgroundColor : colors.white,
-                borderColor     : colors.border,
-                borderLeftColor : cfg.border,
+                backgroundColor: colors.white,
+                borderColor    : colors.border,
+                borderLeftColor: accent,
               },
             ]}
-            accessibilityLabel={`${item.title}: ${item.description}`}
+            accessibilityLabel={`${item.headline}: ${item.summary}`}
           >
             <MaterialCommunityIcons
-              name={item.icon}
+              name={CATEGORY_ICON[item.category] ?? 'information-outline'}
               size={22}
-              color={cfg.icon}
+              color={accent}
               style={styles.icon}
             />
             <View style={styles.content}>
               <Text style={[styles.alertTitle, { color: colors.text.primary }]}>
-                {item.title}
+                {item.headline}
               </Text>
               <Text style={[styles.alertDesc, { color: colors.text.secondary }]}>
-                {item.description}
+                {item.summary}
               </Text>
-              <Text style={[styles.alertTime, { color: colors.text.secondary }]}>
-                {item.time}
-              </Text>
+              <View style={styles.metaRow}>
+                {/* News and community reports must never look alike. */}
+                <Text
+                  style={[
+                    styles.badge,
+                    { color: colors.text.secondary, borderColor: colors.border },
+                  ]}
+                >
+                  {item.kind === 'news' ? item.source_label : 'Safen user report'}
+                </Text>
+                <Text style={[styles.alertTime, { color: colors.text.secondary }]}>
+                  {timeAgo(item.occurred_at)}
+                </Text>
+              </View>
             </View>
           </TouchableOpacity>
         );
@@ -99,19 +120,18 @@ export const SafetyFeed = ({ items }: SafetyFeedProps) => {
   );
 };
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    paddingTop    : 14,
-    paddingHorizontal: 16,
-    paddingBottom : 8,
+  container : { paddingTop: 14, paddingHorizontal: 16, paddingBottom: 8 },
+  headerRow : {
+    flexDirection : 'row',
+    alignItems    : 'center',
+    justifyContent: 'space-between',
+    marginBottom  : 12,
   },
-  title: {
-    fontSize    : 16,
-    fontWeight  : '700',
-    marginBottom: 12,
-  },
-  card: {
+  title     : { fontSize: 16, fontWeight: '700' },
+  seeAll    : { fontSize: 13, fontWeight: '600' },
+  loader    : { marginVertical: 20 },
+  card      : {
     flexDirection  : 'row',
     alignItems     : 'flex-start',
     borderRadius   : 12,
@@ -122,23 +142,19 @@ const styles = StyleSheet.create({
     gap            : 12,
     ...Shadows.sm,
   },
-  icon: {
-    marginTop: 1,
+  icon      : { marginTop: 1 },
+  content   : { flex: 1 },
+  alertTitle: { fontSize: 14, fontWeight: '700', marginBottom: 3 },
+  alertDesc : { fontSize: 13, lineHeight: 18, marginBottom: 6 },
+  metaRow   : { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badge     : {
+    fontSize         : 10,
+    fontWeight       : '700',
+    borderWidth      : 1,
+    borderRadius     : 4,
+    paddingHorizontal: 5,
+    paddingVertical  : 1,
+    overflow         : 'hidden',
   },
-  content: {
-    flex: 1,
-  },
-  alertTitle: {
-    fontSize    : 14,
-    fontWeight  : '700',
-    marginBottom: 3,
-  },
-  alertDesc: {
-    fontSize    : 13,
-    lineHeight  : 18,
-    marginBottom: 5,
-  },
-  alertTime: {
-    fontSize: 11,
-  },
+  alertTime : { fontSize: 11 },
 });
