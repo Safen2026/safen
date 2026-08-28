@@ -61,3 +61,6 @@ supabase/.temp/
 
 # One-shot secret drop file for `supabase secrets set --env-file`
 .env.secrets
+
+# Deno lockfile generated at repo root by npx deno; the real one lives in supabase/functions/
+/deno.lock
