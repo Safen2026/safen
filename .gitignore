@@ -56,3 +56,6 @@ test*.png
 CLAUDE.md
 # Supabase CLI scratch state (local keys, container config)
 supabase/.temp/
+
+# One-shot secret drop file for `supabase secrets set --env-file`
+.env.secrets
