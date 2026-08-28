@@ -1,3 +1,29 @@
+# Local dev ports are offset +20 from the Supabase defaults because another
+# local Supabase project on this machine occupies 54321-54327.
+project_id = "safen"
+
+[api]
+enabled = true
+port = 54341
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54342
+shadow_port = 54340
+major_version = 17
+
+[studio]
+enabled = true
+port = 54343
+
+[inbucket]
+enabled = true
+port = 54344
+
+[analytics]
+enabled = false
 
 [functions.get-cloudinary-signature]
 enabled = true

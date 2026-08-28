@@ -21,6 +21,12 @@ create table if not exists public.alert_acknowledgements (
 -- The contact can insert/update their own row. Nobody can delete.
 alter table public.alert_acknowledgements enable row level security;
 
+-- Replay-safe: the remote_baseline snapshot already contains these policies,
+-- so a bare create would abort `supabase db reset`.
+drop policy if exists "Alert owner can read acknowledgements"        on public.alert_acknowledgements;
+drop policy if exists "Contact can upsert their own acknowledgement" on public.alert_acknowledgements;
+drop policy if exists "Contact can update their own acknowledgement" on public.alert_acknowledgements;
+
 create policy "Alert owner can read acknowledgements"
   on public.alert_acknowledgements for select
   using (
@@ -46,6 +52,7 @@ begin
 end;
 $$;
 
+drop trigger if exists alert_acknowledgements_updated_at on public.alert_acknowledgements;
 create trigger alert_acknowledgements_updated_at
   before update on public.alert_acknowledgements
   for each row execute function public.set_updated_at();
