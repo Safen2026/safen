@@ -87,7 +87,7 @@ export default function ReportScreen() {
       ? `Location Note: ${locationDetails.trim()}\n\nIncident Details: ${detailsText}`
       : detailsText;
 
-    const success = await submitReport({
+    const result = await submitReport({
       category: selectedType,
       address: address,
       details: combinedDetails,
@@ -96,17 +96,40 @@ export default function ReportScreen() {
       latitude: location?.coords.latitude,
       longitude: location?.coords.longitude
     });
-    
-    if (success) {
+
+    // Switch on result.ok explicitly. `if (result)` would always be truthy —
+    // it is an object union — so TypeScript cannot catch that mistake, and a
+    // rejected report would show the success toast.
+    if (result.ok) {
       showToast({
         title: 'Report Submitted',
-        subtitle: 'Your report has been securely transmitted.',
+        subtitle: result.degraded
+          ? 'Report sent. We could not fully verify it, so it may be reviewed.'
+          : 'Your report has been securely transmitted.',
         icon: 'checkmark-circle',
       });
       // Reset form immediately
       handleCloseSuccess();
-    } else {
-      showError('Error', 'Failed to submit report. Please try again.');
+      return;
+    }
+
+    switch (result.reason) {
+      case 'quality':
+        showError(
+          'More detail needed',
+          result.strikesLeft > 0
+            ? `${result.feedback} (${result.strikesLeft} attempt(s) left)`
+            : result.feedback,
+        );
+        break;
+      case 'paused':
+        showError('Too many attempts', 'Reporting is paused for a short while. Please try again later.');
+        break;
+      case 'gate':
+        showError('Report not accepted', result.message);
+        break;
+      default:
+        showError('Error', 'Failed to submit report. Please try again.');
     }
   }, [selectedType, locationDetails, detailsText, address, isAnonymous, mediaFiles, location, submitReport, showError]);
 

@@ -53,3 +53,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/deno.json"
 entrypoint = "./functions/notify-news/index.ts"
+
+[functions.check-report-quality]
+enabled = true
+verify_jwt = true
+import_map = "./functions/deno.json"
+entrypoint = "./functions/check-report-quality/index.ts"
