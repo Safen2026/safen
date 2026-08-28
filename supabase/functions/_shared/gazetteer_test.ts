@@ -13,11 +13,11 @@ const tables: GazetteerTables = {
     { code: "LA-eti-osa", state_code: "LA", name: "Eti-Osa" },
     { code: "KN-fagge", state_code: "KN", name: "Fagge" },
     { code: "KD-zaria", state_code: "KD", name: "Zaria" },
-    { code: "FC-municipal", state_code: "FC", name: "Municipal" },
+    { code: "FC-abuja", state_code: "FC", name: "Abuja" },
   ],
   aliases: [
     { alias_norm: "allen avenue", state_code: "LA", lga_code: "LA-ikeja" },
-    { alias_norm: "wuse ii", state_code: "FC", lga_code: "FC-municipal" },
+    { alias_norm: "wuse ii", state_code: "FC", lga_code: "FC-abuja" },
     { alias_norm: "sabon gari", state_code: "KN", lga_code: "KN-fagge" },
     { alias_norm: "sabon gari", state_code: "KD", lga_code: "KD-zaria" },
   ],
@@ -63,7 +63,7 @@ Deno.test("state context disambiguates Sabon Gari", () => {
 Deno.test("Abuja maps to the FCT", () => {
   assertEquals(
     resolveLocations([{ state: "Abuja", lga: null, landmark: "Wuse II" }], tables),
-    [{ state_code: "FC", lga_code: "FC-municipal" }],
+    [{ state_code: "FC", lga_code: "FC-abuja" }],
   );
 });
 
