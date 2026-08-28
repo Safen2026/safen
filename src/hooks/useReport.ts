@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import * as Device from 'expo-device';
+import * as NotificationsType from 'expo-notifications';
+import { useSession } from '../context/SessionContext';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
 import { uploadToCloudinary } from '../lib/cloudinary';
@@ -19,6 +22,23 @@ if (!isExpoGo) {
   } catch {}
 }
 
+export type ReportPayload = {
+  category: string;
+  address: string;
+  details: string;
+  isAnonymous: boolean;
+  media?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
+<<<<<<< HEAD
+  lastSeenAt?: string | null;
+  policeReference?: string | null;
+=======
+  /** Missing-person fields; the schema carries them, the current UI does not collect them yet. */
+  lastSeenAt?: string | null;
+  policeReference?: string | null;
+};
+
 export type SubmitResult =
   | { ok: true; degraded: boolean }
   | { ok: false; reason: 'quality'; missing: string[]; feedback: string; strikesLeft: number }
@@ -37,18 +57,7 @@ const GATE_MESSAGES: Record<string, string> = {
   QUALITY_GATE_TOKEN_EXPIRED: 'Your report took too long to upload. Please submit it again.',
   QUALITY_GATE_TOKEN_WRONG_USER: 'Your report could not be verified. Please try submitting again.',
   QUALITY_GATE_PAYLOAD_MISMATCH: 'Your report changed after it was checked. Please submit it again.',
-};
-
-export type ReportPayload = {
-  category: string;
-  address: string;
-  details: string;
-  isAnonymous: boolean;
-  media?: string[];
-  latitude?: number | null;
-  longitude?: number | null;
-  lastSeenAt?: string | null;
-  policeReference?: string | null;
+>>>>>>> b6c6912 (feat(reports): restore the quality-gate client half onto current main)
 };
 
 export function useReport() {
@@ -126,7 +135,8 @@ export function useReport() {
 
       if (reportError || !report) {
         setLoading(false);
-        // Surface quality-gate DB constraint errors as structured results
+        // The gate rejects by raising, so its reason code arrives in the
+        // insert error message rather than as a status.
         const code = Object.keys(GATE_MESSAGES).find((k) =>
           (reportError?.message ?? '').includes(k));
         if (code) {

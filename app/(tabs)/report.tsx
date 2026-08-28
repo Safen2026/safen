@@ -100,11 +100,13 @@ export default function ReportScreen() {
       lastSeenAt: selectedType === 'missing_person' ? lastSeenAt?.toISOString() ?? null : null,
       policeReference: selectedType === 'missing_person' ? policeReference.trim() : null,
     });
-    
+
     if (result.ok) {
       showToast({
         title: 'Report Submitted',
-        subtitle: 'Your report has been securely transmitted.',
+        subtitle: result.degraded
+          ? 'Report sent. We could not fully verify it, so it may be reviewed.'
+          : 'Your report has been securely transmitted.',
         icon: 'checkmark-circle',
       });
       // Reset form immediately
