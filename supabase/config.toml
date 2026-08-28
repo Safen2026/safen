@@ -47,3 +47,9 @@ enabled = true
 verify_jwt = true
 import_map = "./functions/deno.json"
 entrypoint = "./functions/enrich-news/index.ts"
+
+[functions.notify-news]
+enabled = true
+verify_jwt = false
+import_map = "./functions/deno.json"
+entrypoint = "./functions/notify-news/index.ts"
