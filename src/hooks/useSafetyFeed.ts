@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
-import { fetchAreaFeed, type FeedRow } from '../lib/feed';
+import { fetchAreaFeed, type AreaRef, type FeedRow } from '../lib/feed';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -17,10 +17,7 @@ export function useSafetyFeed(limit = 20) {
   const [error, setError]             = useState<string | null>(null);
   const [isNationalOnly, setNational] = useState(false);
 
-  const area = useRef<{ stateCode: string | null; lgaCode: string | null }>({
-    stateCode: null,
-    lgaCode  : null,
-  });
+  const area = useRef<AreaRef>({ stateCode: null, lgaCode: null, lat: null, lng: null });
 
   const resolveArea = useCallback(async () => {
     try {
@@ -30,6 +27,11 @@ export function useSafetyFeed(limit = 20) {
       const pos = (await Location.getLastKnownPositionAsync())
         ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
       if (!pos) { setNational(true); return; }
+
+      // Record coordinates before reverse-geocoding: community incidents match
+      // by distance, so they still work even if the state lookup fails.
+      area.current.lat = pos.coords.latitude;
+      area.current.lng = pos.coords.longitude;
 
       const [place] = await Location.reverseGeocodeAsync({
         latitude : pos.coords.latitude,
@@ -70,7 +72,7 @@ export function useSafetyFeed(limit = 20) {
   const load = useCallback(async (mode: 'initial' | 'refresh') => {
     if (mode === 'refresh') setRefreshing(true);
     try {
-      const rows = await fetchAreaFeed({ ...area.current, limit });
+      const rows = await fetchAreaFeed(area.current, limit);
       setItems(rows);
       setError(null);
     } catch (e) {
@@ -91,7 +93,7 @@ export function useSafetyFeed(limit = 20) {
     if (items.length === 0) return;
     const before = items[items.length - 1].occurred_at;
     try {
-      const more = await fetchAreaFeed({ ...area.current, limit, before });
+      const more = await fetchAreaFeed(area.current, limit, before);
       if (more.length > 0) setItems((prev) => [...prev, ...more]);
     } catch {
       // Keep the current page.
