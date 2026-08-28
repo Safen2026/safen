@@ -58,4 +58,4 @@ entrypoint = "./functions/notify-news/index.ts"
 enabled = true
 verify_jwt = true
 import_map = "./functions/deno.json"
-entrypoint = "./functions/check-report-quality/index.ts"
+entrypoint = "./functions/check-report-quality/main.ts"

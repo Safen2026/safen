@@ -154,3 +154,100 @@ Deno.test("thinking blocks before the text block do not break parsing", async ()
   assertEquals(out.degraded, false);
   assertEquals(out.verdict?.feedback, "What time did it happen?");
 });
+
+// ---------------------------------------------------------------------------
+// Finding I7: assessQuality's transport failure paths were previously verified
+// by reading only. These exercise them against the real SDK, so a future change
+// that lets one of them throw fails the suite instead of failing a user's
+// emergency report.
+// ---------------------------------------------------------------------------
+
+/** Like stubFetch, but the caller controls the promise so rejections can be modelled. */
+function stubFetchRaw(handler: () => Promise<Response>) {
+  const real = globalThis.fetch;
+  globalThis.fetch = (() => handler()) as typeof fetch;
+  return { restore: () => { globalThis.fetch = real; } };
+}
+
+function errorResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+Deno.test("a network failure fails open rather than throwing", async () => {
+  const { restore } = stubFetchRaw(() => Promise.reject(new TypeError("network error")));
+  try {
+    const out = await assessQuality(input, "test-key");
+    assertEquals(out.degraded, true);
+    assertEquals(out.verdict, null);
+    assert(out.error, "a degraded outcome should carry an error string");
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("a request timeout fails open", async () => {
+  const { restore } = stubFetchRaw(() =>
+    Promise.reject(new DOMException("The signal has been aborted", "AbortError")));
+  try {
+    const out = await assessQuality(input, "test-key");
+    assertEquals(out.degraded, true);
+    assertEquals(out.verdict, null);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("an HTTP 500 fails open", async () => {
+  const { restore } = stubFetchRaw(() =>
+    Promise.resolve(errorResponse(500, { type: "error", error: { type: "api_error", message: "boom" } })));
+  try {
+    const out = await assessQuality(input, "test-key");
+    assertEquals(out.degraded, true);
+    assertEquals(out.verdict, null);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("an exhausted credit balance fails open rather than blocking reports", async () => {
+  // Observed in the wild: a 400 invalid_request_error, not a 401. A reporter
+  // must never be blocked because the Anthropic account is out of credit.
+  const { restore } = stubFetchRaw(() =>
+    Promise.resolve(errorResponse(400, {
+      type: "error",
+      error: { type: "invalid_request_error", message: "Your credit balance is too low" },
+    })));
+  try {
+    const out = await assessQuality(input, "test-key");
+    assertEquals(out.degraded, true);
+    assertEquals(out.verdict, null);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("a response with no text block fails open", async () => {
+  const { restore } = stubFetch(() => messageResponse({ content: [] }));
+  try {
+    const out = await assessQuality(input, "test-key");
+    assertEquals(out.degraded, true);
+    assertEquals(out.verdict, null);
+  } finally {
+    restore();
+  }
+});
+
+Deno.test("malformed JSON in the text block fails open", async () => {
+  const { restore } = stubFetch(() =>
+    messageResponse({ content: [{ type: "text", text: "I cannot help with that." }] }));
+  try {
+    const out = await assessQuality(input, "test-key");
+    assertEquals(out.degraded, true);
+    assertEquals(out.verdict, null);
+  } finally {
+    restore();
+  }
+});

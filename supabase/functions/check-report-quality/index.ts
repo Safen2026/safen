@@ -89,7 +89,10 @@ export async function decide(
     priority: out.verdict.priority, quality_status: "passed" } };
 }
 
-Deno.serve(async (req) => {
+/** HTTP handler. Deno.serve lives in main.ts so importing this module for
+ *  tests does not bind a port — two test files sharing a CI process would
+ *  otherwise collide on it. */
+export const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   const json = (body: unknown, status = 200) =>
@@ -124,4 +127,4 @@ Deno.serve(async (req) => {
     // the error; the client's own catch turns it into a degraded pass.
     return json({ error: (err as Error).message }, 500);
   }
-});
+};
