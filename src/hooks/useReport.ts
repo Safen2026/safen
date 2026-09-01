@@ -30,10 +30,6 @@ export type ReportPayload = {
   media?: string[];
   latitude?: number | null;
   longitude?: number | null;
-<<<<<<< HEAD
-  lastSeenAt?: string | null;
-  policeReference?: string | null;
-=======
   /** Missing-person fields; the schema carries them, the current UI does not collect them yet. */
   lastSeenAt?: string | null;
   policeReference?: string | null;
@@ -57,7 +53,6 @@ const GATE_MESSAGES: Record<string, string> = {
   QUALITY_GATE_TOKEN_EXPIRED: 'Your report took too long to upload. Please submit it again.',
   QUALITY_GATE_TOKEN_WRONG_USER: 'Your report could not be verified. Please try submitting again.',
   QUALITY_GATE_PAYLOAD_MISMATCH: 'Your report changed after it was checked. Please submit it again.',
->>>>>>> b6c6912 (feat(reports): restore the quality-gate client half onto current main)
 };
 
 export function useReport() {
