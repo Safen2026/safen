@@ -5,12 +5,8 @@ import * as Location from 'expo-location';
 import { useTheme } from '../../src/context/ThemeContext';
 import type { ThemeColors } from '../../src/constants/Theme';
 import { useLocalSearchParams } from 'expo-router';
-import { JourneyCard } from '../../src/components/JourneyCard';
-import { JourneySetupModal } from '../../src/components/JourneySetupModal';
-import { ActiveJourneyTracker } from '../../src/components/ActiveJourneyTracker';
 import { ShareTripModal } from '../../src/components/ShareTripModal';
 import { ActiveTripShareCard } from '../../src/components/ActiveTripShareCard';
-import { useJourneyTracking } from '../../src/hooks/useJourneyTracking';
 import { useShareLiveTrip, TripShareContact } from '../../src/hooks/useShareLiveTrip';
 import { tripEvents, TripSharePayload } from '../../src/lib/events';
 import { PinDetailsModal, PinData } from '../../src/components/PinDetailsModal';
@@ -23,8 +19,6 @@ export default function MapScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
-  // Journey Tracking state
-  const [showJourneyModal, setShowJourneyModal] = useState(false);
 
   // Share Live Trip state
   const [shareTripContact, setShareTripContact] = useState<TripShareContact | null>(null);
@@ -43,18 +37,6 @@ export default function MapScreen() {
     alertTitle?: string;
   }>();
   const mapRef = React.useRef<MapView>(null);
-
-  // Hooks
-  const {
-    session: journeySession,
-    elapsedStr,
-    isActive: isJourneyActive,
-    isStarting: isJourneyStarting,
-    isEnding: isJourneyEnding,
-    startJourney,
-    endJourney,
-    cancelJourney,
-  } = useJourneyTracking();
 
   const {
     session: shareSession,
@@ -113,13 +95,6 @@ export default function MapScreen() {
   }, [isMapReady, lat, lng]);
 
 
-  // ── Journey handlers ───────────────────────────────────────────────────────
-  const handleJourneyStartPrompt = useCallback(() => setShowJourneyModal(true), []);
-  const handleJourneyClose = useCallback(() => setShowJourneyModal(false), []);
-  const handleJourneyStart = useCallback(async (dest: string, mode: string) => {
-    setShowJourneyModal(false);
-    await startJourney(dest, mode);
-  }, [startJourney]);
 
   // ── Share trip handlers ────────────────────────────────────────────────────
   const handleShareClose = useCallback(() => setShowShareModal(false), []);
@@ -216,31 +191,13 @@ export default function MapScreen() {
           />
         )}
 
-        {/* Journey start pin */}
-        {isJourneyActive && journeySession?.startLatitude && journeySession?.startLongitude && (
-          <Marker
-            coordinate={{
-              latitude: journeySession.startLatitude,
-              longitude: journeySession.startLongitude,
-            }}
-            pinColor="#10B981"
-            onPress={(e) => {
-              e.stopPropagation();
-              setSelectedPin({
-                latitude: journeySession.startLatitude!,
-                longitude: journeySession.startLongitude!,
-                title: 'Journey Start Point',
-                subtitle: `Destination: ${journeySession.destination}`,
-              });
-              setShowPinModal(true);
-            }}
-          />
-        )}
+
+
       </MapView>
 
-      {/* Floating bottom panel — priority: share > journey > idle */}
+      {/* Floating bottom panel */}
       <View style={styles.floatingPanel}>
-        {isShareActive && shareSession ? (
+        {isShareActive && shareSession && (
           <ActiveTripShareCard
             contactName={shareSession.contactName}
             remainingStr={remainingStr}
@@ -248,30 +205,10 @@ export default function MapScreen() {
             onStopSharing={handleStopSharing}
             onExtend={extendSharing}
           />
-        ) : isJourneyActive && journeySession ? (
-          <ActiveJourneyTracker
-            destination={journeySession.destination}
-            mode={journeySession.mode}
-            elapsedStr={elapsedStr}
-            isEnding={isJourneyEnding}
-            onEndJourney={endJourney}
-            onCancelJourney={cancelJourney}
-          />
-        ) : (
-          <JourneyCard
-            onStart={handleJourneyStartPrompt}
-            isLoading={isJourneyStarting || isShareStarting}
-          />
         )}
       </View>
 
       {/* Modals */}
-      <JourneySetupModal
-        visible={showJourneyModal}
-        onClose={handleJourneyClose}
-        onStart={handleJourneyStart}
-      />
-
       <ShareTripModal
         visible={showShareModal}
         contact={shareTripContact}

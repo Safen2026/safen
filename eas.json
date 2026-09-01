@@ -9,12 +9,6 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://ujbknxfvatvtwthxtytu.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_a3re3cHHH3ICwvgMmMFR3A_FqzgL7Tn",
-        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "didixws6x",
-        "GOOGLE_MAPS_API_KEY": "AIzaSyAuH-qsLxKZ_8cOJr3sHJbL-k0TZ1F5fOw"
       }
     },
     "preview": {
@@ -22,22 +16,10 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://ujbknxfvatvtwthxtytu.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_a3re3cHHH3ICwvgMmMFR3A_FqzgL7Tn",
-        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "didixws6x",
-        "GOOGLE_MAPS_API_KEY": "AIzaSyAuH-qsLxKZ_8cOJr3sHJbL-k0TZ1F5fOw"
       }
     },
     "production": {
-      "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://ujbknxfvatvtwthxtytu.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_a3re3cHHH3ICwvgMmMFR3A_FqzgL7Tn",
-        "EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME": "didixws6x",
-        "GOOGLE_MAPS_API_KEY": "AIzaSyAuH-qsLxKZ_8cOJr3sHJbL-k0TZ1F5fOw"
-      }
+      "autoIncrement": true
     }
   },
   "submit": {

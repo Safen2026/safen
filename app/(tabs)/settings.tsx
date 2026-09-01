@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Mod
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../src/context/ThemeContext';
+import { useHaptics } from '../../src/context/HapticsContext';
 import { supabase } from '../../src/lib/supabase';
 import { firebaseAuth } from '../../src/lib/firebase';
 import { signOut } from '@react-native-firebase/auth';
@@ -31,7 +31,7 @@ export default function SettingsScreen() {
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [pushModalVisible, setPushModalVisible] = useState(false);
-  const [hapticsEnabled, setHapticsEnabled] = useState(true);
+  const { hapticsEnabled, toggleHaptics, triggerHaptic } = useHaptics();
   const fullName = session?.user?.user_metadata?.full_name || session?.user?.user_metadata?.first_name || 'User';
 
   // Fetch initial preference from Supabase
@@ -51,12 +51,6 @@ export default function SettingsScreen() {
     }
     fetchPreferences();
   }, [session?.user?.id]);
-
-  const triggerHaptic = React.useCallback(() => {
-    if (hapticsEnabled) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  }, [hapticsEnabled]);
 
   const updatePushInSupabase = React.useCallback(async (val: boolean) => {
     if (!session?.user?.id) return;
@@ -92,7 +86,7 @@ export default function SettingsScreen() {
   const handleSignOut = React.useCallback(() => {
     triggerHaptic();
     setSignOutModalVisible(true);
-  }, [hapticsEnabled]);
+  }, [triggerHaptic]);
 
   const confirmSignOut = React.useCallback(async () => {
     setSigningOut(true);
@@ -125,7 +119,7 @@ export default function SettingsScreen() {
     setDeleting(false);
     setDeleteModalVisible(false);
     router.replace('/auth');
-  }, [hapticsEnabled]);
+  }, [triggerHaptic]);
 
   const openLink = React.useCallback(async (url: string) => {
     try {
@@ -151,19 +145,14 @@ export default function SettingsScreen() {
   }, [triggerHaptic, toggleTheme]);
 
   const handleToggleHaptics = React.useCallback((val: boolean) => {
-    if (val) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setHapticsEnabled(val);
-  }, []);
+    toggleHaptics(val);
+  }, [toggleHaptics]);
 
   const handleOpenMedicalProfile = React.useCallback(() => {
     triggerHaptic();
     router.push('/medical-profile');
   }, [triggerHaptic]);
 
-  const handleOpenSafetyGuidelines = React.useCallback(() => {
-    triggerHaptic();
-    router.push('/safety-guidelines');
-  }, [triggerHaptic]);
 
   const handleOpenFeedback = React.useCallback(() => {
     triggerHaptic();
@@ -274,14 +263,7 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>SUPPORT & ABOUT</Text>
           <View style={styles.card}>
-            <SettingsRow
-              icon="book-outline"
-              title="Safety Guidelines"
-              colors={colors}
-              onPress={handleOpenSafetyGuidelines}
-              rightContent={<Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />}
-            />
-            <View style={styles.divider} />
+
             <SettingsRow
               icon="share-social-outline"
               title="Share SAFEN"

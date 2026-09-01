@@ -1,9 +1,11 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Switch, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import type { ThemeColors } from '../../constants/Theme';
 import { SwipeButton } from '../SwipeButton';
 import { Shadows } from '../../constants/Theme';
+import type { IncidentType } from './IncidentTypeSelection';
 
 interface EvidenceCollectionProps {
   mediaFiles: string[];
@@ -11,6 +13,11 @@ interface EvidenceCollectionProps {
   setDetailsText: (text: string) => void;
   isAnonymous: boolean;
   setIsAnonymous: (val: boolean) => void;
+  selectedType: IncidentType | null;
+  lastSeenAt: Date | null;
+  setLastSeenAt: (d: Date | null) => void;
+  policeReference: string;
+  setPoliceReference: (s: string) => void;
   handleTakePhoto: () => void;
   handleRecordVideo: () => void;
   handlePickLibrary: () => void;
@@ -28,6 +35,11 @@ export const EvidenceCollection = React.memo(function EvidenceCollection({
   setDetailsText,
   isAnonymous,
   setIsAnonymous,
+  selectedType,
+  lastSeenAt,
+  setLastSeenAt,
+  policeReference,
+  setPoliceReference,
   handleTakePhoto,
   handleRecordVideo,
   handlePickLibrary,
@@ -147,6 +159,36 @@ export const EvidenceCollection = React.memo(function EvidenceCollection({
           accessibilityLabel="Additional details input"
         />
 
+        {selectedType === 'missing_person' && (
+          <View style={{ marginBottom: 24, gap: 12 }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text.primary }}>When were they last seen?</Text>
+            <DateTimePicker
+              value={lastSeenAt ?? new Date()}
+              mode="datetime"
+              maximumDate={new Date()}
+              onChange={(_e, d) => d && setLastSeenAt(d)}
+              style={{ alignSelf: 'flex-start' }}
+            />
+            
+            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text.primary, marginTop: 8 }}>Police station and case reference</Text>
+            <TextInput
+              value={policeReference}
+              onChangeText={setPoliceReference}
+              placeholder="e.g. Ikeja Division / CR-1123"
+              placeholderTextColor={colors.text.secondary}
+              style={{
+                borderWidth: 1, borderColor: colors.border, borderRadius: 12,
+                padding: 16, color: colors.text.primary, backgroundColor: colors.white,
+                ...Shadows.sm
+              }}
+            />
+            
+            <Text style={{ fontSize: 13, color: colors.text.secondary, marginTop: 4, lineHeight: 18 }}>
+              A photo, the time last seen, the location, and a police reference are all required before a missing-person report can be filed.
+            </Text>
+          </View>
+        )}
+
         <View style={styles.anonymousCard}>
           <View style={styles.anonymousTextContainer}>
             <Text style={styles.anonymousTitle}>Report Anonymously</Text>
@@ -175,6 +217,7 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   scrollContent: {
     padding: 24,
     paddingTop: 32,
+    paddingBottom: 60, // Prevents SwipeButton from tucking into bottom tabs
   },
   titleLeft: {
     fontSize: 24,

@@ -1,9 +1,16 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { notifyContactAdded } from '../lib/notifications';
 import { toE164Nigeria } from '../utils/contactUtils';
 import { Contact } from '../components/ContactDetailsModal';
 import { contactEvents } from '../lib/events';
+import { getUserDisplayName } from '../utils/userUtils';
+
+const getContactsCacheKey = (userId: string) => `safen_cached_contacts_${userId}`;
+
+/** Shape stored in AsyncStorage for offline SMS fallback. */
+export type CachedContact = { name: string; phone: string; status: string };
 
 export function useContacts() {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -48,6 +55,38 @@ export function useContacts() {
         avatar_url: c.profiles?.avatar_url || undefined
       }));
       setContacts(mappedContacts);
+      // Persist a lightweight snapshot for offline SOS fallback
+      const snapshot: CachedContact[] = mappedContacts.map(c => ({
+        name: c.name,
+        phone: c.phone,
+        status: c.status,
+      }));
+      const cacheKey = getContactsCacheKey(user.id);
+      AsyncStorage.setItem(cacheKey, JSON.stringify(snapshot)).catch((err) => {
+        console.warn('Failed to cache contacts:', err);
+      });
+    } else if (myContactsRes.error) {
+      // Offline path: hydrate from cache so the UI still shows something
+      try {
+        const cacheKey = getContactsCacheKey(user.id);
+        const raw = await AsyncStorage.getItem(cacheKey);
+        if (raw) {
+          const cached: CachedContact[] = JSON.parse(raw);
+          // Map cache to the Contact shape expected by the UI
+          const asContacts = cached.map((c, i) => ({
+            id: `cached_${i}`,
+            name: c.name,
+            phone: c.phone,
+            status: c.status,
+            relationship: null,
+            is_on_app: false,
+            contact_user_id: null,
+          } as unknown as Contact));
+          setContacts(asContacts);
+        }
+      } catch (cacheErr) {
+        console.warn('Failed to load contacts from cache:', cacheErr);
+      }
     }
 
     interface RawProtectingContact {
@@ -141,7 +180,7 @@ export function useContacts() {
 
           const { data: { user: me } } = await supabase.auth.getUser();
           if (me) {
-            const myName = me.user_metadata?.full_name || me.user_metadata?.first_name || 'A Safen user';
+            const myName = getUserDisplayName(me);
             notifyContactAdded(foundId, myName);
           }
         }
@@ -154,5 +193,10 @@ export function useContacts() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
 
-  return { contacts, protectingContacts, loading, fetchContacts };
+  return useMemo(() => ({
+    contacts,
+    protectingContacts,
+    loading,
+    fetchContacts
+  }), [contacts, protectingContacts, loading, fetchContacts]);
 }

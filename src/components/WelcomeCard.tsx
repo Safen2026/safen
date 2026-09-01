@@ -12,6 +12,7 @@ import { useSession } from '../context/SessionContext';
 import { useAvatar } from '../hooks/useAvatar';
 import { Avatar } from './Avatar';
 import { showToast } from '../utils/toast';
+import { getUserDisplayName } from '../utils/userUtils';
 
 export const WelcomeCard = React.memo(() => {
   const insets = useSafeAreaInsets();
@@ -22,10 +23,8 @@ export const WelcomeCard = React.memo(() => {
 
   const [pickerVisible, setPickerVisible] = useState(false);
 
-  const fullName = session?.user?.user_metadata?.full_name
-    ?? session?.user?.email?.split('@')[0]
-    ?? 'User';
-  const firstName = fullName.split(' ')[0];
+  const fullName = getUserDisplayName(session?.user);
+  const firstName = fullName === 'A Safen user' ? 'User' : fullName.split(' ')[0];
 
   const openPicker = useCallback(() => setPickerVisible(true), []);
   const closePicker = useCallback(() => setPickerVisible(false), []);

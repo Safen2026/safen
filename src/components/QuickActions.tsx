@@ -138,7 +138,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    ...Shadows.sm,
   },
   sectionTitle: {
     fontSize: 16,
@@ -160,7 +159,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: 10,
     borderWidth: 1,
     borderColor: colors.border,
-    ...Shadows.sm,
   },
   iconCircle: {
     width: 48,

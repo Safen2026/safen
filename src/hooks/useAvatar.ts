@@ -1,7 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { uploadToCloudinary } from '../lib/cloudinary';
 import { useSession } from '../context/SessionContext';
+
+const getAvatarCacheKey = (userId: string) => `safen_cached_avatar_url_${userId}`;
 
 export function useAvatar() {
   // Pull the session from the Water Tower (SessionContext) — free, no DB call.
@@ -15,7 +18,7 @@ export function useAvatar() {
   const loadAvatar = useCallback(async () => {
     if (!session?.user) return;
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('avatar_url')
         .eq('id', session.user.id)
@@ -23,10 +26,28 @@ export function useAvatar() {
 
       // avatar_url stores the full Cloudinary secure_url directly, so
       // it can be used as-is (no signed/public URL lookup needed).
-      if (data?.avatar_url) {
+      if (!error && data?.avatar_url) {
         setAvatarUrl(data.avatar_url);
+        // Persist for offline use
+        const cacheKey = getAvatarCacheKey(session.user.id);
+        AsyncStorage.setItem(cacheKey, data.avatar_url).catch((err) => {
+          console.warn('Failed to cache avatar URL:', err);
+        });
+      } else if (error) {
+        // Offline — use the last known avatar
+        const cacheKey = getAvatarCacheKey(session.user.id);
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) setAvatarUrl(cached);
       }
     } catch (err) {
+      // Also try cache on an unexpected exception
+      try {
+        const cacheKey = getAvatarCacheKey(session.user.id);
+        const cached = await AsyncStorage.getItem(cacheKey);
+        if (cached) setAvatarUrl(cached);
+      } catch (cacheErr) {
+        console.warn('Failed to load avatar from cache:', cacheErr);
+      }
       console.warn('loadAvatar error:', err);
     }
   }, [session?.user?.id]); // Only re-create when the user ID changes
@@ -34,7 +55,7 @@ export function useAvatar() {
   // Run once on mount (and again if the user logs out then back in).
   useEffect(() => { loadAvatar(); }, [loadAvatar]);
 
-  const uploadAvatar = async (localUri: string): Promise<boolean> => {
+  const uploadAvatar = useCallback(async (localUri: string): Promise<boolean> => {
     setUploading(true);
     try {
       if (!session?.user) {
@@ -70,7 +91,12 @@ export function useAvatar() {
       setUploading(false);
       return false;
     }
-  };
+  }, [session?.user?.id]);
 
-  return { avatarUrl, uploading, uploadAvatar, reloadAvatar: loadAvatar };
+  return useMemo(() => ({
+    avatarUrl,
+    uploading,
+    uploadAvatar,
+    reloadAvatar: loadAvatar,
+  }), [avatarUrl, uploading, uploadAvatar, loadAvatar]);
 }

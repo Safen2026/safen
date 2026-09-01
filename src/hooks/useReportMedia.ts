@@ -4,8 +4,10 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Audio } from 'expo-av';
 import { showToast } from '../utils/toast';
+import { useHaptics } from '../context/HapticsContext';
 
 export function useReportMedia() {
+  const { triggerHaptic } = useHaptics();
   const [mediaFiles, setMediaFiles] = useState<string[]>([]);
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -20,7 +22,7 @@ export function useReportMedia() {
   }, []);
 
   const handleTakePhoto = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
 
     if (mediaFiles.length >= 4) {
       showError('Limit Reached', 'You can only attach up to 4 media items per report.');
@@ -44,7 +46,7 @@ export function useReportMedia() {
   }, [mediaFiles.length, showError]);
 
   const handleRecordVideo = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
 
     if (mediaFiles.length >= 4) {
       showError('Limit Reached', 'You can only attach up to 4 media items per report.');
@@ -69,7 +71,7 @@ export function useReportMedia() {
   }, [mediaFiles.length, showError]);
 
   const handlePickLibrary = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
 
     if (mediaFiles.length >= 4) {
       showError('Limit Reached', 'You can only attach up to 4 media items per report.');
@@ -100,7 +102,7 @@ export function useReportMedia() {
   const [recordingDuration, setRecordingDuration] = useState(0);
 
   const startRecording = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
 
     if (mediaFiles.length >= 4) {
       showError('Limit Reached', 'You can only attach up to 4 media items per report.');
@@ -153,7 +155,7 @@ export function useReportMedia() {
   }, [mediaFiles.length, pulseAnim, showError]);
 
   const stopRecording = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
     if (!recording) return;
 
     try {

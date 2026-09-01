@@ -18,6 +18,7 @@ import { Audio } from 'expo-av';
 import * as Notifications from 'expo-notifications';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/context/ThemeContext';
+import { useHaptics } from '../src/context/HapticsContext';
 import { Shadows, ThemeColors } from '../src/constants/Theme';
 import { PermissionCard, PermissionItemConfig } from '../src/components/permissions/PermissionCard';
 
@@ -69,6 +70,7 @@ const PERMISSION_ITEMS: PermissionItemConfig[] = [
 export default function PermissionsScreen() {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { hapticsEnabled } = useHaptics();
   const [loading, setLoading] = useState(false);
   const [requestingKey, setRequestingKey] = useState<string | null>(null);
 
@@ -127,7 +129,7 @@ export default function PermissionsScreen() {
 
       if (granted) {
         try {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          if (hapticsEnabled) await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         } catch {} // Ignore haptic errors on unsupported devices
       } else {
         // Log rejection for security auditing or prompt user to open OS settings
@@ -141,7 +143,7 @@ export default function PermissionsScreen() {
     } finally {
       setRequestingKey(null);
     }
-  }, [requestingKey]);
+  }, [requestingKey, hapticsEnabled]);
 
   // Request all pending permissions sequentially (strict error handling)
   const handleEnableAll = useCallback(async () => {
@@ -188,7 +190,7 @@ export default function PermissionsScreen() {
       }
 
       try {
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (hapticsEnabled) await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch {}
 
       // Mark completed & proceed
@@ -200,7 +202,7 @@ export default function PermissionsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [permissions]);
+  }, [permissions, hapticsEnabled]);
 
   const completeAndProceed = async () => {
     try {

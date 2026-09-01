@@ -24,6 +24,8 @@ export default function ReportScreen() {
   const [selectedType, setSelectedType] = useState<IncidentType | null>('security');
   const [detailsText, setDetailsText] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [lastSeenAt, setLastSeenAt] = useState<Date | null>(null);
+  const [policeReference, setPoliceReference] = useState('');
 
   // Hooks
   const { loading, submitReport } = useReport();
@@ -87,17 +89,19 @@ export default function ReportScreen() {
       ? `Location Note: ${locationDetails.trim()}\n\nIncident Details: ${detailsText}`
       : detailsText;
 
-    const success = await submitReport({
+    const result = await submitReport({
       category: selectedType,
       address: address,
       details: combinedDetails,
       isAnonymous,
       media: mediaFiles,
       latitude: location?.coords.latitude,
-      longitude: location?.coords.longitude
+      longitude: location?.coords.longitude,
+      lastSeenAt: selectedType === 'missing_person' ? lastSeenAt?.toISOString() ?? null : null,
+      policeReference: selectedType === 'missing_person' ? policeReference.trim() : null,
     });
     
-    if (success) {
+    if (result.ok) {
       showToast({
         title: 'Report Submitted',
         subtitle: 'Your report has been securely transmitted.',
@@ -105,10 +109,27 @@ export default function ReportScreen() {
       });
       // Reset form immediately
       handleCloseSuccess();
-    } else {
-      showError('Error', 'Failed to submit report. Please try again.');
+      return;
     }
-  }, [selectedType, locationDetails, detailsText, address, isAnonymous, mediaFiles, location, submitReport, showError]);
+
+    switch (result.reason) {
+      case 'quality':
+        showError('A bit more detail, please', 
+          result.strikesLeft <= 1
+            ? `${result.feedback}\n\nOne more incomplete report will pause submissions for a short while.`
+            : result.feedback
+        );
+        break;
+      case 'paused':
+        showError('Submissions paused', 'Too many incomplete reports. Please try again in a little while. SOS still works normally.');
+        break;
+      case 'gate':
+        showError('Missing required information', result.message);
+        break;
+      default:
+        showError('Error', 'Failed to submit report. Please try again.');
+    }
+  }, [selectedType, locationDetails, detailsText, address, isAnonymous, mediaFiles, location, lastSeenAt, policeReference, submitReport, showError]);
 
   const handleCloseSuccess = useCallback(() => {
     setStep(1);
@@ -117,6 +138,8 @@ export default function ReportScreen() {
     setSelectedType('security');
     clearMedia();
     clearLocation();
+    setLastSeenAt(null);
+    setPoliceReference('');
   }, [clearMedia, clearLocation]);
 
   return (
@@ -166,6 +189,11 @@ export default function ReportScreen() {
             setDetailsText={setDetailsText}
             isAnonymous={isAnonymous}
             setIsAnonymous={setIsAnonymous}
+            selectedType={selectedType}
+            lastSeenAt={lastSeenAt}
+            setLastSeenAt={setLastSeenAt}
+            policeReference={policeReference}
+            setPoliceReference={setPoliceReference}
             handleTakePhoto={handleTakePhoto}
             handleRecordVideo={handleRecordVideo}
             handlePickLibrary={handlePickLibrary}

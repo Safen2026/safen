@@ -3,13 +3,14 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-nati
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../constants/Theme';
 
-export type IncidentType = 'medical' | 'fire' | 'security';
+export type IncidentType = 'medical' | 'fire' | 'security' | 'missing_person';
 type MCIName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 const INCIDENT_CATEGORIES: { id: string; label: string; icon: MCIName; color: string; bgColor: string; darkBgColor: string }[] = [
-  { id: 'medical', label: 'Medical', icon: 'medical-bag', color: '#D92D20', bgColor: '#FEF3F2', darkBgColor: '#3F1D1D' },
-  { id: 'fire',    label: 'Fire',    icon: 'fire',        color: '#DC6803', bgColor: '#FFFAEB', darkBgColor: '#3D250E' },
-  { id: 'security', label: 'Security', icon: 'shield-outline', color: '#1570EF', bgColor: '#EFF8FF', darkBgColor: '#172B4D' },
+  { id: 'medical',        label: 'Medical',        icon: 'medical-bag',       color: '#D92D20', bgColor: '#FEF3F2', darkBgColor: '#3F1D1D' },
+  { id: 'fire',          label: 'Fire',           icon: 'fire',              color: '#DC6803', bgColor: '#FFFAEB', darkBgColor: '#3D250E' },
+  { id: 'security',      label: 'Security',       icon: 'shield-outline',    color: '#1570EF', bgColor: '#EFF8FF', darkBgColor: '#172B4D' },
+  { id: 'missing_person', label: 'Missing Person', icon: 'account-search-outline', color: '#7A5AF8', bgColor: '#F4F3FF', darkBgColor: '#2A2342' },
 ];
 
 interface IncidentTypeSelectionProps {
@@ -38,41 +39,7 @@ export const IncidentTypeSelection = React.memo(function IncidentTypeSelection({
         </Text>
 
         <View style={styles.grid}>
-          {INCIDENT_CATEGORIES.slice(0, 2).map((cat) => {
-            const isSelected = selectedType === cat.id;
-            const activeBgColor = isDark ? cat.darkBgColor : cat.bgColor;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                style={[
-                  styles.card,
-                  isSelected && {
-                    borderColor: cat.color,
-                    backgroundColor: activeBgColor,
-                    borderWidth: 1.5,
-                  }
-                ]}
-                activeOpacity={0.7}
-                onPress={() => onSelectType(cat.id as IncidentType)}
-                accessibilityRole="button"
-                accessibilityLabel={`Select ${cat.label} emergency`}
-                accessibilityState={{ selected: isSelected }}
-              >
-                {isSelected && (
-                  <View style={styles.checkBadge}>
-                    <Ionicons name="checkmark-circle" size={22} color={cat.color} />
-                  </View>
-                )}
-                <View style={[styles.iconCircle, { backgroundColor: isSelected ? colors.white : activeBgColor }]}>
-                  <MaterialCommunityIcons name={cat.icon} size={32} color={cat.color} />
-                </View>
-                <Text style={[styles.cardLabel, isSelected && { color: isDark ? colors.text.primary : cat.color }]}>{cat.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <View style={[styles.grid, { justifyContent: 'center', marginTop: 16 }]}>
-          {INCIDENT_CATEGORIES.slice(2).map((cat) => {
+          {INCIDENT_CATEGORIES.map((cat) => {
             const isSelected = selectedType === cat.id;
             const activeBgColor = isDark ? cat.darkBgColor : cat.bgColor;
             return (

@@ -15,7 +15,10 @@
 import { Linking } from 'react-native';
 import * as Network from 'expo-network';
 import * as SMS from 'expo-sms';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
+
+const getContactsCacheKey = (userId: string) => `safen_cached_contacts_${userId}`;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,7 +42,8 @@ export async function isOnline(): Promise<boolean> {
   try {
     const state = await Network.getNetworkStateAsync();
     return state.isConnected === true && state.isInternetReachable === true;
-  } catch {
+  } catch (err) {
+    console.warn('Network state check failed:', err);
     return true;
   }
 }
@@ -59,13 +63,25 @@ export async function getEmergencyContactPhones(userId: string): Promise<SmsCont
       .eq('status', 'accepted')  // Only SMS contacts who have accepted the request
       .not('phone', 'is', null);
 
-    if (error || !data) return [];
+    if (!error && data) {
+      type ContactRow = { name: string | null; phone: string | null };
+      return (data as ContactRow[])
+        .filter((c) => typeof c.phone === 'string' && c.phone.trim().length > 0)
+        .map((c) => ({ name: c.name || 'Contact', phone: (c.phone as string).trim() }));
+    }
 
-    type ContactRow = { name: string | null; phone: string | null };
-    return (data as ContactRow[])
-      .filter((c) => typeof c.phone === 'string' && c.phone.trim().length > 0)
-      .map((c) => ({ name: c.name || 'Contact', phone: (c.phone as string).trim() }));
-  } catch {
+    // Supabase query failed (likely offline) — fall back to AsyncStorage cache
+    const cacheKey = getContactsCacheKey(userId);
+    const raw = await AsyncStorage.getItem(cacheKey);
+    if (!raw) return [];
+
+    type CachedContact = { name: string; phone: string; status: string };
+    const cached: CachedContact[] = JSON.parse(raw);
+    return cached
+      .filter((c) => c.status === 'accepted' && c.phone?.trim().length > 0)
+      .map((c) => ({ name: c.name || 'Contact', phone: c.phone.trim() }));
+  } catch (err) {
+    console.warn('Failed to fetch emergency contact phones:', err);
     return [];
   }
 }
@@ -75,18 +91,33 @@ export async function getEmergencyContactPhones(userId: string): Promise<SmsCont
 function buildSmsBody(
   senderName: string,
   coords: { latitude: number; longitude: number } | null,
+  type: string = 'sos',
+  description?: string,
 ): string {
   const name = senderName || 'Someone you know';
-  const locationLine = coords
-    ? `\n\u{1F4CD} Location: https://maps.google.com/?q=${coords.latitude},${coords.longitude}`
-    : '\n\u{1F4CD} Location unavailable — please call them immediately.';
+  
+  const typeMap: Record<string, string> = {
+    police: 'Police',
+    medical: 'Medical',
+    fire: 'Fire',
+    sos: 'SOS'
+  };
+  const emergencyType = typeMap[type] || 'SOS';
 
-  return (
-    `\u{1F6A8} EMERGENCY — ${name} needs help!` +
-    locationLine +
-    '\n\nSent automatically by Safen because their phone has no internet.' +
-    '\nPlease respond or call them now.'
-  );
+  let body = `\u{1F6A8} ${emergencyType} emergency - ${name} needs help!`;
+
+  if (description?.trim()) {
+    body += `\n\n\u{2139} Additional Info: ${description.trim()}`;
+  }
+
+  const locationLine = coords
+    ? `\n\n\u{1F4CD} Location: https://maps.google.com/?q=${coords.latitude},${coords.longitude}`
+    : '\n\n\u{1F4CD} Location unavailable — please call them immediately.';
+
+  body += locationLine;
+  body += '\n\nSent automatically by Safen because their phone has no internet.\nPlease respond or call them now.';
+
+  return body;
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -99,12 +130,14 @@ export async function sendEmergencySms(
   contacts: SmsContact[],
   senderName: string,
   coords: { latitude: number; longitude: number } | null,
+  type: string = 'sos',
+  description?: string,
 ): Promise<SmsSendResult> {
   if (contacts.length === 0) {
     return { success: false, reason: 'no_contacts' };
   }
 
-  const body = buildSmsBody(senderName, coords);
+  const body = buildSmsBody(senderName, coords, type, description);
   const phones = contacts.map((c) => c.phone);
 
   try {

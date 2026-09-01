@@ -12,6 +12,8 @@ expo-env.d.ts
 # Secrets
 .env
 .note.md
+google-services.json
+GoogleService-Info.plist
 
 # Native
 .kotlin/

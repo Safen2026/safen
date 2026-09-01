@@ -284,10 +284,7 @@ const NotificationDetailsModalComponent = ({
   const isPing = notification.type === 'ping';
   const isPingAck = notification.type === 'ping_ack';
   const isCheckInMissed = notification.type === 'check_in_missed';
-  // Journey notifications are stored as type='report' to bypass the DB enum — detect them by title prefix
-  const isJourneyNotif = notification.type === 'report' && (
-    notification.title?.startsWith('🗺️') || notification.title?.startsWith('✅')
-  );
+
   const hasLocation = !!(details?.latitude ?? notification?.latitude);
   const hasEvidence = images.length > 0 || videos.length > 0 || audios.length > 0;
 
@@ -298,7 +295,7 @@ const NotificationDetailsModalComponent = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>
-              {isContactAdded ? 'Contact Request' : isPing ? 'Check-in Ping' : isPingAck ? 'Ping Acknowledged' : isJourneyNotif ? 'Journey Update' : 'Emergency Details'}
+              {isContactAdded ? 'Contact Request' : isPing ? 'Check-in Ping' : isPingAck ? 'Ping Acknowledged' : 'Emergency Details'}
             </Text>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close modal">
               <Ionicons name="close" size={24} color={colors.text.secondary} />
@@ -381,8 +378,8 @@ const NotificationDetailsModalComponent = ({
             )}
 
             {/* Report media */}
-            {/* Report media — only for actual reports, not journey notifications */}
-            {notification.type === 'report' && !isJourneyNotif && !loading && images.length > 0 && (
+            {/* Report media */}
+            {notification.type === 'report' && !loading && images.length > 0 && (
               <SnapshotList images={images} label="📎 Attached Media" onExpand={setExpandedImage} styles={styles} />
             )}
 
@@ -420,11 +417,7 @@ const NotificationDetailsModalComponent = ({
                     <Text style={styles.btnTextDark}>Dismiss</Text>
                   </TouchableOpacity>
                 </>
-              ) : isJourneyNotif ? (
-                // Journey start/arrival: informational only — just a Dismiss button
-                <TouchableOpacity style={[styles.actionBtn, styles.declineBtn]} onPress={onClose} accessibilityRole="button">
-                  <Text style={styles.btnTextDark}>Dismiss</Text>
-                </TouchableOpacity>
+
               ) : (
                 <TouchableOpacity
                   style={[styles.actionBtn, styles.mapBtn, !hasLocation && styles.disabledBtn]}

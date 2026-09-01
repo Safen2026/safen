@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "strict": true, "lib": ["deno.window", "esnext"] },
+  "imports": { "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@^0.120.0" }
+}

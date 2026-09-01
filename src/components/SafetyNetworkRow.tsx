@@ -170,7 +170,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    ...Shadows.sm,
   },
   header: {
     flexDirection: 'row',

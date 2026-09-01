@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import type { PostgrestError } from '@supabase/supabase-js';
@@ -8,6 +8,7 @@ import {
   getEmergencyContactPhones,
   sendEmergencySms,
 } from '../lib/emergencySms';
+import { getUserDisplayName } from '../utils/userUtils';
 
 export type AlertType = 'sos' | 'medical' | 'police' | 'fire';
 
@@ -53,7 +54,7 @@ export function useAlert() {
   }, []);
 
   // ── Location helper ──────────────────────────────────────────────────────
-  const getLocation = async (): Promise<{ latitude: number; longitude: number } | null> => {
+  const getLocation = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return null;
@@ -74,10 +75,10 @@ export function useAlert() {
       console.warn('Location fetch failed:', e);
       return null;
     }
-  };
+  }, []);
 
   // ── Main trigger ─────────────────────────────────────────────────────────
-  const triggerAlert = async (type: AlertType, description?: string): Promise<AlertResult> => {
+  const triggerAlert = useCallback(async (type: AlertType, description?: string): Promise<AlertResult> => {
     setLoading(true);
     setLoadingMessage('Acquiring secure location...');
 
@@ -89,12 +90,14 @@ export function useAlert() {
     const coords = await getLocation();
 
     setLoadingMessage('Connecting to emergency network...');
-    // 2. Fetch sender name + contact phones upfront (needed for both paths)
+    // 2. Fetch sender name + contact phones upfront (needed for both paths).
+    // The profiles query may fail offline, so we fall back to user_metadata
+    // which is always cached by the Supabase auth session on-device.
     const [profileRes, smsContacts] = await Promise.all([
       supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
       getEmergencyContactPhones(user.id),
     ]);
-    const senderName = profileRes.data?.full_name?.trim() || 'A Safen user';
+    const senderName = getUserDisplayName(user, profileRes.data?.full_name);
 
     // 3. Check connectivity
     const online = await isOnline();
@@ -106,7 +109,7 @@ export function useAlert() {
       await new Promise(r => setTimeout(r, 600)); 
       setLoading(false);
       setLoadingMessage(null);
-      const result = await sendEmergencySms(smsContacts, senderName, coords);
+      const result = await sendEmergencySms(smsContacts, senderName, coords, type, description);
       return result.success ? 'sms' : false;
     }
 
@@ -170,10 +173,10 @@ export function useAlert() {
     });
 
     return 'ok';
-  };
+  }, [getLocation]);
 
   // ── Cancel ───────────────────────────────────────────────────────────────
-  const cancelAlert = async (): Promise<boolean> => {
+  const cancelAlert = useCallback(async (): Promise<boolean> => {
     if (!activeAlert) return false;
     setLoading(true);
 
@@ -201,8 +204,14 @@ export function useAlert() {
     });
 
     return true;
-  };
+  }, [activeAlert]);
 
-  return { loading, loadingMessage, activeAlert, triggerAlert, cancelAlert };
+  return useMemo(() => ({
+    loading,
+    loadingMessage,
+    activeAlert,
+    triggerAlert,
+    cancelAlert
+  }), [loading, loadingMessage, activeAlert, triggerAlert, cancelAlert]);
 }
 

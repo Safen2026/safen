@@ -109,7 +109,7 @@ export default function VerifyScreen() {
           await firebaseAuth?.signOut();
           return;
         }
-        await supabase.auth.signUp({
+        const { error: signUpError } = await supabase.auth.signUp({
           phone: user.phoneNumber as string,
           password: dummyPassword,
           options: {
@@ -120,6 +120,13 @@ export default function VerifyScreen() {
             }
           }
         });
+
+        if (signUpError) {
+          setLoading(false);
+          Alert.alert('Registration Error', signUpError.message);
+          await firebaseAuth?.signOut();
+          return;
+        }
       } else if (!sbError) {
         // The sign in succeeded, meaning the account ALREADY exists
         // If they provided firstName and lastName, they are in the SIGN UP flow

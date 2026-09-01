@@ -12,7 +12,20 @@
           "package_name": "com.kingdave17.safen"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "460082210195-63g3a4slnem3f6kt76j08ll2q4icts5t.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kingdave17.safen",
+            "certificate_hash": "b8e3f1db1272df9781c2d50be744754ceef61984"
+          }
+        },
+        {
+          "client_id": "460082210195-n43p7pc9tive6ui9a4sjt1melqe2cr2e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBTrI8nQFta_9Kwx2hvvD6Uvm8raMmGEWw"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "460082210195-n43p7pc9tive6ui9a4sjt1melqe2cr2e.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "460082210195-3h9rgb33se6r0tobdcs0eeuvidca7hah.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.safen.app"
+              }
+            }
+          ]
         }
       }
     }

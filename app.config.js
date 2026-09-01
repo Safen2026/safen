@@ -6,8 +6,8 @@ export default ({ config }) => {
       config: {
         ...(config.android?.config || {}),
         googleMaps: {
-          // This overrides the placeholder in app.json with your .env variable
-          apiKey: process.env.GOOGLE_MAPS_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ""
+          // This ensures we ONLY use the new key from your .env file, bypassing any old EAS Secrets
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || ""
         }
       }
     }
