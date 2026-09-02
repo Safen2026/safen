@@ -74,6 +74,24 @@ export default function HomeScreen() {
         {/* 5. Safety Network - horizontal contact row */}
         <SafetyNetworkRow />
 
+        {/* Safety Guidelines Card */}
+        <TouchableOpacity 
+          style={[styles.safetyCard, { backgroundColor: colors.white, borderColor: colors.border }]} 
+          onPress={() => router.push('/safety-guidelines')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.safetyCardContent}>
+            <View style={styles.safetyIconContainer}>
+              <Ionicons name="newspaper" size={24} color="#EF4444" />
+            </View>
+            <View style={styles.safetyTextContainer}>
+              <Text style={[styles.safetyTitle, { color: colors.text.primary }]}>Stay Safe, Stay Informed</Text>
+              <Text style={[styles.safetySubtitle, { color: colors.text.secondary }]}>Read safety tips and real-time updates</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+          </View>
+        </TouchableOpacity>
+
         {/* 6. Blended security feed - news + community, scoped to the user's area */}
         <SafetyFeed limit={4} onSeeAll={handleSeeAllFeed} />
       </ScrollView>
