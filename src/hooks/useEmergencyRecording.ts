@@ -80,7 +80,7 @@ export function useEmergencyRecording() {
     if (audioRecordingRef.current) {
       try { 
         audioRecordingRef.current.stopAndUnloadAsync(); 
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('[useEmergencyRecording] Failed to stop/unload old audio:', e);
       }
       audioRecordingRef.current = null;
@@ -102,7 +102,7 @@ export function useEmergencyRecording() {
       if (error) {
         console.warn('[Recording] DB sync error:', error.message);
       } else {
-        console.log(`[Recording] Successfully synced media to alert ${alertId}:`, url);
+        if (__DEV__) console.log(`[Recording] Successfully synced media to alert ${alertId}:`, url);
       }
     } catch (err) {
       console.warn('[Recording] DB sync failed:', err);
@@ -115,14 +115,14 @@ export function useEmergencyRecording() {
 
     if (isMountedRef.current) setIsUploading(true);
     try {
-      console.log(`[Recording] Uploading ${type} (${uri})…`);
+      if (__DEV__) console.log(`[Recording] Uploading ${type} (${uri})…`);
       const explicitPublicId = `${type}_${Date.now()}`;
       const url = await uploadToCloudinary(uri, { 
         folder: `safen/emergency_${alertId}`,
         public_id: explicitPublicId 
       });
       if (url) {
-        console.log(`[Recording] ${type} upload SUCCESS:`, url);
+        if (__DEV__) console.log(`[Recording] ${type} upload SUCCESS:`, url);
         await syncEvidenceToAlert(alertId, url);
       }
     } catch (err) {
@@ -170,7 +170,7 @@ export function useEmergencyRecording() {
       if (chunkUri && !skipUpload) {
         uploadChunk(chunkUri, 'audio', alertId);
       } else if (skipUpload) {
-        console.log('[Recording] Skipped uploading audio chunk (video covered this period).');
+        if (__DEV__) console.log('[Recording] Skipped uploading audio chunk (video covered this period).');
       }
     } catch (err) {
       console.warn('[Recording] Audio cycle error:', err);
@@ -190,11 +190,11 @@ export function useEmergencyRecording() {
       return;
     }
     
-    console.log('[Recording] Starting camera 15s video chunk recording…');
+    if (__DEV__) console.log('[Recording] Starting camera 15s video chunk recording…');
     recordFn.call(cam, {})
       .then((result: { uri: string } | undefined) => {
         if (result?.uri) {
-          console.log('[Recording] Video chunk captured, uploading:', result.uri);
+          if (__DEV__) console.log('[Recording] Video chunk captured, uploading:', result.uri);
           uploadChunk(result.uri, 'video', alertId);
         } else {
           console.warn('[Recording] recordAsync resolved with no URI:', result);
@@ -210,7 +210,7 @@ export function useEmergencyRecording() {
           msg.includes('cameraview')
         ) {
           // Camera unmounted or recording stopped cleanly — not an error
-          console.log('[Recording] Camera recording chunk finished/stopped.');
+          if (__DEV__) console.log('[Recording] Camera recording chunk finished/stopped.');
         } else {
           console.warn('[Recording] Camera recordAsync error:', err);
         }
@@ -221,7 +221,7 @@ export function useEmergencyRecording() {
         if (isActiveRef.current && elapsedSecondsRef.current < VIDEO_MAX_DURATION_SECONDS) {
           await new Promise((resolve) => setTimeout(resolve, 600));
           if (isActiveRef.current && elapsedSecondsRef.current < VIDEO_MAX_DURATION_SECONDS) {
-            console.log('[Recording] Re-starting next 15s video chunk…');
+            if (__DEV__) console.log('[Recording] Re-starting next 15s video chunk…');
             startVideoRecording(cam, alertId);
           }
         }
@@ -290,7 +290,7 @@ export function useEmergencyRecording() {
     if (oldRec) {
       try { 
         await oldRec.stopAndUnloadAsync(); 
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('[useEmergencyRecording] Failed to cleanup previous audio segment:', e);
       }
     }
@@ -314,7 +314,7 @@ export function useEmergencyRecording() {
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
       audioRecordingRef.current = recording;
-      console.log('[Recording] Audio recording started.');
+      if (__DEV__) console.log('[Recording] Audio recording started.');
     } catch (err) {
       console.warn('[Recording] Audio setup failed (SOS still active, timer running):', err);
     }
@@ -363,9 +363,9 @@ export function useEmergencyRecording() {
           // If we stopped before 60s, the video chunk covers this time period entirely.
           // Discard the audio chunk so the receiver doesn't get duplicates.
           if (elapsedSecondsRef.current <= VIDEO_MAX_DURATION_SECONDS) {
-            console.log(`[Recording] Discarding final audio chunk (cancelled at ${elapsedSecondsRef.current}s, video covers this).`);
+            if (__DEV__) console.log(`[Recording] Discarding final audio chunk (cancelled at ${elapsedSecondsRef.current}s, video covers this).`);
           } else {
-            console.log('[Recording] Uploading final audio chunk in background:', uri);
+            if (__DEV__) console.log('[Recording] Uploading final audio chunk in background:', uri);
             uploadChunk(uri, 'audio', alertId);
           }
         }
@@ -379,7 +379,7 @@ export function useEmergencyRecording() {
     cameraRef.current = ref as unknown as CameraRef | null;
     // If SOS is already active AND audio session is ready when camera mounts, start video immediately
     if (isActiveRef.current && isAudioReadyRef.current && alertIdRef.current && ref) {
-      console.log('[Recording] Camera mounted during active SOS — starting video now.');
+      if (__DEV__) console.log('[Recording] Camera mounted during active SOS — starting video now.');
       startVideoRecording(ref as unknown as CameraRef, alertIdRef.current);
     }
   }, [startVideoRecording]);

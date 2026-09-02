@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
@@ -36,18 +36,78 @@ const CATEGORY_ICON: Record<string, IconName> = {
   other          : 'information-outline',
 };
 
+// ─── FeedCard — isolated so React.memo can bail out per item ─────────────────
+type FeedCardProps = {
+  item: FeedRow;
+  onPress: (item: FeedRow) => void;
+};
+
+const FeedCard = React.memo(({ item, onPress }: FeedCardProps) => {
+  const { colors } = useTheme();
+  const accent = SEVERITY_COLOR[item.severity] ?? SEVERITY_COLOR.info;
+  const handlePress = useCallback(() => onPress(item), [item, onPress]);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onPress={handlePress}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.white,
+          borderColor    : colors.border,
+          borderLeftColor: accent,
+        },
+      ]}
+      accessibilityLabel={`${item.headline}: ${item.summary}`}
+      accessibilityRole="button"
+    >
+      <MaterialCommunityIcons
+        name={CATEGORY_ICON[item.category] ?? 'information-outline'}
+        size={22}
+        color={accent}
+        style={styles.icon}
+      />
+      <View style={styles.content}>
+        <Text style={[styles.alertTitle, { color: colors.text.primary }]}>
+          {item.headline}
+        </Text>
+        <Text style={[styles.alertDesc, { color: colors.text.secondary }]}>
+          {item.summary}
+        </Text>
+        <View style={styles.metaRow}>
+          {/* News and community reports must never look alike. */}
+          <Text
+            style={[
+              styles.badge,
+              { color: colors.text.secondary, borderColor: colors.border },
+            ]}
+          >
+            {item.kind === 'news' ? item.source_label : 'Safen user report'}
+          </Text>
+          <Text style={[styles.alertTime, { color: colors.text.secondary }]}>
+            {timeAgo(item.occurred_at)}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+// ─── SafetyFeed ───────────────────────────────────────────────────────────────
 interface SafetyFeedProps {
   limit?: number;
   onSeeAll?: () => void;
 }
 
-export const SafetyFeed = ({ limit = 4, onSeeAll }: SafetyFeedProps) => {
+const SafetyFeedComponent = ({ limit = 4, onSeeAll }: SafetyFeedProps) => {
   const { colors } = useTheme();
   const { items, loading, isNationalOnly } = useSafetyFeed(limit);
 
-  const open = (row: FeedRow) => {
+  // Stable handler: opening a deep-link only depends on the row's URL
+  const handleOpen = useCallback((row: FeedRow) => {
     if (row.kind === 'news' && row.deep_link) void Linking.openURL(row.deep_link);
-  };
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -68,57 +128,14 @@ export const SafetyFeed = ({ limit = 4, onSeeAll }: SafetyFeedProps) => {
 
       {!loading && items.length === 0 && <FeedEmptyState nationalOnly={isNationalOnly} />}
 
-      {items.map((item) => {
-        const accent = SEVERITY_COLOR[item.severity] ?? SEVERITY_COLOR.info;
-        return (
-          <TouchableOpacity
-            key={item.id}
-            activeOpacity={0.7}
-            onPress={() => open(item)}
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.white,
-                borderColor    : colors.border,
-                borderLeftColor: accent,
-              },
-            ]}
-            accessibilityLabel={`${item.headline}: ${item.summary}`}
-          >
-            <MaterialCommunityIcons
-              name={CATEGORY_ICON[item.category] ?? 'information-outline'}
-              size={22}
-              color={accent}
-              style={styles.icon}
-            />
-            <View style={styles.content}>
-              <Text style={[styles.alertTitle, { color: colors.text.primary }]}>
-                {item.headline}
-              </Text>
-              <Text style={[styles.alertDesc, { color: colors.text.secondary }]}>
-                {item.summary}
-              </Text>
-              <View style={styles.metaRow}>
-                {/* News and community reports must never look alike. */}
-                <Text
-                  style={[
-                    styles.badge,
-                    { color: colors.text.secondary, borderColor: colors.border },
-                  ]}
-                >
-                  {item.kind === 'news' ? item.source_label : 'Safen user report'}
-                </Text>
-                <Text style={[styles.alertTime, { color: colors.text.secondary }]}>
-                  {timeAgo(item.occurred_at)}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        );
-      })}
+      {items.map((item) => (
+        <FeedCard key={item.id} item={item} onPress={handleOpen} />
+      ))}
     </View>
   );
 };
+
+export const SafetyFeed = React.memo(SafetyFeedComponent);
 
 const styles = StyleSheet.create({
   container : { paddingTop: 14, paddingHorizontal: 16, paddingBottom: 8 },

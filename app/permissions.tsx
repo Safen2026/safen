@@ -191,7 +191,7 @@ export default function PermissionsScreen() {
 
       try {
         if (hapticsEnabled) await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } catch {}
+      } catch {} // Haptics not available on all devices — safe to ignore
 
       // Mark completed & proceed
       await completeAndProceed();

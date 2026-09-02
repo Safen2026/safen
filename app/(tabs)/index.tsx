@@ -38,6 +38,8 @@ export default function HomeScreen() {
     await startCheckIn(data);
   }, [startCheckIn]);
 
+  const handleSeeAllFeed = useCallback(() => router.push('/feed'), [router]);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header />
@@ -73,7 +75,7 @@ export default function HomeScreen() {
         <SafetyNetworkRow />
 
         {/* 6. Blended security feed - news + community, scoped to the user's area */}
-        <SafetyFeed limit={4} onSeeAll={() => router.push('/feed')} />
+        <SafetyFeed limit={4} onSeeAll={handleSeeAllFeed} />
       </ScrollView>
 
       {/* Full-Screen Safe Check-In Modal */}

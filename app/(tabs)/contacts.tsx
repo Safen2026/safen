@@ -298,6 +298,10 @@ export default function ContactsScreen() {
           renderItem={renderContactCard}
           ListEmptyComponent={<ContactListEmptyState type="protecting" colors={colors} />}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews
         />
       ) : (
         <FlatList
@@ -328,6 +332,10 @@ export default function ContactsScreen() {
             ) : null
           }
           showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews
         />
       )}
 

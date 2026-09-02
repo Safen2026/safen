@@ -108,15 +108,52 @@ export default function MapScreen() {
 
   const handleMapReady = useCallback(() => setIsMapReady(true), []);
 
+  // Parse pin coordinates once — stable unless search params change
+  const parsedLat = React.useMemo(() => (lat ? parseFloat(lat) : NaN), [lat]);
+  const parsedLng = React.useMemo(() => (lng ? parseFloat(lng) : NaN), [lng]);
+  const hasPinCoords = !isNaN(parsedLat) && !isNaN(parsedLng);
+
+  const handleMarkerPress = useCallback((e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    const decodedSender = senderName ? decodeURIComponent(senderName) : null;
+    const decodedTitle  = alertTitle  ? decodeURIComponent(alertTitle)  : null;
+
+    let pinTitle    = decodedSender ? `${decodedSender}'s Location` : 'Location';
+    let pinSubtitle = decodedTitle ?? 'Alert';
+
+    if (alertType === 'sos') {
+      pinTitle    = decodedSender ? `${decodedSender}'s Emergency` : 'Emergency Location';
+      pinSubtitle = 'Active SOS Alert';
+    } else if (alertType === 'medical') {
+      pinTitle    = decodedSender ? `${decodedSender}'s Emergency` : 'Medical Emergency';
+      pinSubtitle = 'Active Medical Alert';
+    } else if (alertType === 'fire') {
+      pinTitle    = decodedSender ? `${decodedSender}'s Alert` : 'Fire Alert';
+      pinSubtitle = 'Active Fire Alert';
+    } else if (alertType === 'police') {
+      pinTitle    = decodedSender ? `${decodedSender}'s Alert` : 'Security Alert';
+      pinSubtitle = 'Active Police/Security Alert';
+    } else if (alertType === 'report') {
+      pinTitle    = decodedTitle ?? (decodedSender ? `${decodedSender}'s Live Location` : 'Shared Live Location');
+      pinSubtitle = 'Live Location (Updates only when their app is open)';
+    } else if (alertType === 'check_in_missed') {
+      pinTitle    = decodedSender ? `${decodedSender} Missed Check-In` : 'Missed Check-In';
+      pinSubtitle = 'Safety Watchdog Alert';
+    }
+
+    setSelectedPin({ latitude: parsedLat, longitude: parsedLng, title: pinTitle, subtitle: pinSubtitle });
+    setShowPinModal(true);
+  }, [senderName, alertTitle, alertType, parsedLat, parsedLng]);
+
   const initialRegion = React.useMemo(() => {
     if (!location) return undefined;
     return {
-      latitude: (lat && !isNaN(parseFloat(lat))) ? parseFloat(lat) : location.coords.latitude,
-      longitude: (lng && !isNaN(parseFloat(lng))) ? parseFloat(lng) : location.coords.longitude,
+      latitude:  (hasPinCoords ? parsedLat : location.coords.latitude),
+      longitude: (hasPinCoords ? parsedLng : location.coords.longitude),
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     };
-  }, [location, lat, lng]);
+  }, [location, hasPinCoords, parsedLat, parsedLng]);
 
   if (errorMsg) {
     return (
@@ -149,45 +186,11 @@ export default function MapScreen() {
         mapPadding={{ top: 0, right: 0, bottom: 180, left: 0 }}
       >
         {/* Alert pin — navigated from notification */}
-        {lat && lng && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lng)) && (
+        {hasPinCoords && (
           <Marker
-            coordinate={{ latitude: parseFloat(lat), longitude: parseFloat(lng) }}
+            coordinate={{ latitude: parsedLat, longitude: parsedLng }}
             pinColor={colors.primary}
-            onPress={(e) => {
-              // Prevent default callout behavior
-              e.stopPropagation();
-              
-              let pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Location` : 'Location';
-              let pinSubtitle = alertTitle ? decodeURIComponent(alertTitle) : 'Alert';
-              
-              if (alertType === 'sos') {
-                pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Emergency` : 'Emergency Location';
-                pinSubtitle = 'Active SOS Alert';
-              } else if (alertType === 'medical') {
-                pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Emergency` : 'Medical Emergency';
-                pinSubtitle = 'Active Medical Alert';
-              } else if (alertType === 'fire') {
-                pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Alert` : 'Fire Alert';
-                pinSubtitle = 'Active Fire Alert';
-              } else if (alertType === 'police') {
-                pinTitle = senderName ? `${decodeURIComponent(senderName)}'s Alert` : 'Security Alert';
-                pinSubtitle = 'Active Police/Security Alert';
-              } else if (alertType === 'report') {
-                pinTitle = alertTitle ? decodeURIComponent(alertTitle) : (senderName ? `${decodeURIComponent(senderName)}'s Live Location` : 'Shared Live Location');
-                pinSubtitle = 'Live Location (Updates only when their app is open)';
-              } else if (alertType === 'check_in_missed') {
-                pinTitle = senderName ? `${decodeURIComponent(senderName)} Missed Check-In` : 'Missed Check-In';
-                pinSubtitle = 'Safety Watchdog Alert';
-              }
-
-              setSelectedPin({
-                latitude: parseFloat(lat),
-                longitude: parseFloat(lng),
-                title: pinTitle,
-                subtitle: pinSubtitle,
-              });
-              setShowPinModal(true);
-            }}
+            onPress={handleMarkerPress}
           />
         )}
 

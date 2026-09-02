@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/context/ThemeContext';
+import type { ThemeColors } from '../../src/constants/Theme';
 import { showToast } from '../../src/utils/toast';
 import { useReport } from '../../src/hooks/useReport';
 import { useReportMedia } from '../../src/hooks/useReportMedia';
@@ -226,7 +227,7 @@ export default function ReportScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.white,

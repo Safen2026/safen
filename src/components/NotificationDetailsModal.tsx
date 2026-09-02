@@ -28,14 +28,17 @@ type AlertDetails = {
 };
 
 // ─── Sub-Components (DRY & Reusability) ───────────────────────────────────────
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+type ModalStyles = ReturnType<typeof getStyles>;
+
 type MediaListProps = {
   items: string[];
   label: string;
   clipName: string;
-  icon: any;
+  icon: IoniconsName;
   color: string;
   onOpen: (url: string) => void;
-  styles: any;
+  styles: ModalStyles;
 };
 
 const MediaList = React.memo(({ items, label, clipName, icon, color, onOpen, styles }: MediaListProps) => {
@@ -73,7 +76,7 @@ type SnapshotListProps = {
   images: string[];
   label: string;
   onExpand: (url: string) => void;
-  styles: any;
+  styles: ModalStyles;
 };
 
 const SnapshotList = React.memo(({ images, label, onExpand, styles }: SnapshotListProps) => {
@@ -377,7 +380,6 @@ const NotificationDetailsModalComponent = ({
               </View>
             )}
 
-            {/* Report media */}
             {/* Report media */}
             {notification.type === 'report' && !loading && images.length > 0 && (
               <SnapshotList images={images} label="📎 Attached Media" onExpand={setExpandedImage} styles={styles} />

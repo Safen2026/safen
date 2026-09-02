@@ -107,14 +107,27 @@ export function useSafetyFeed(limit = 20) {
       if (!cancelled) await load('initial');
     })();
 
+    // Debounce the realtime reload — enrich-news can write multiple rows in quick
+    // succession; without debounce each INSERT fires a separate reload which
+    // slams slow connections and noticeably stutters the UI.
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => { void load('refresh'); }, 2000);
+    };
+
     const channel = supabase
       .channel('news_items_feed')
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'news_items' },
-        () => { void load('refresh'); })
+        debouncedReload)
       .subscribe();
 
-    return () => { cancelled = true; void supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      if (reloadTimer) clearTimeout(reloadTimer);
+      void supabase.removeChannel(channel);
+    };
   }, [resolveArea, load]);
 
   return { items, loading, refreshing, isNationalOnly, error, refresh, loadMore };

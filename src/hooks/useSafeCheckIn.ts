@@ -150,7 +150,7 @@ export function useSafeCheckIn() {
           setIsExpired(true);
           AsyncStorage.removeItem(STORAGE_KEY);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('[useSafeCheckIn] Failed to parse restored session:', e);
       }
     });

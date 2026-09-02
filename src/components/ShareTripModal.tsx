@@ -29,7 +29,18 @@ const DURATIONS: { label: string; minutes: number; icon: IoniconsName }[] = [
   { label: 'Until I stop', minutes: 0, icon: 'infinite-outline' },
 ];
 
-const DurationCard = React.memo(({ item, isSelected, colors, styles, onSelect }: any) => {
+type DurationItem = typeof DURATIONS[number];
+type DurationCardStyles = ReturnType<typeof getStyles>;
+
+type DurationCardProps = {
+  item: DurationItem;
+  isSelected: boolean;
+  colors: ThemeColors;
+  styles: DurationCardStyles;
+  onSelect: (minutes: number) => void;
+};
+
+const DurationCard = React.memo(({ item, isSelected, colors, styles, onSelect }: DurationCardProps) => {
   const handlePress = useCallback(() => onSelect(item.minutes), [item.minutes, onSelect]);
   return (
     <TouchableOpacity

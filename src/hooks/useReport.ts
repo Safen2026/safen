@@ -1,8 +1,5 @@
 import { useState } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
-import * as Device from 'expo-device';
-import * as NotificationsType from 'expo-notifications';
-import { useSession } from '../context/SessionContext';
 import { supabase } from '../lib/supabase';
 import { notifyEmergencyContacts } from '../lib/notifications';
 import { uploadToCloudinary } from '../lib/cloudinary';

@@ -23,6 +23,70 @@ type NotifyParams = {
   detailsSnippet?: string | null;
 };
 
+type PushMessage = {
+  to: string;
+  sound: 'default';
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+};
+
+// ─── Private Helpers ─────────────────────────────────────────────────────────
+
+/** Fetches the display name for a user. Falls back to a safe default. */
+async function fetchSenderName(userId: string): Promise<string> {
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', userId)
+    .maybeSingle();
+  return profile?.full_name?.trim() || 'A Safen contact';
+}
+
+type ContactWithToken = { contact_user_id: string; expo_push_token: string | null };
+
+/**
+ * Returns all accepted emergency contacts for a user that are on the app,
+ * including their Expo push token (may be null).
+ * This is the single source of truth for the security-critical `.eq('status', 'accepted')` filter.
+ */
+async function getAcceptedContactsWithTokens(userId: string): Promise<ContactWithToken[]> {
+  const { data: contacts, error: contactsError } = await supabase
+    .from('emergency_contacts')
+    .select('contact_user_id')
+    .eq('user_id', userId)
+    .eq('is_on_app', true)
+    .eq('status', 'accepted')
+    .not('contact_user_id', 'is', null);
+
+  if (contactsError || !contacts || contacts.length === 0) {
+    return [];
+  }
+
+  const contactIds = contacts.map(c => c.contact_user_id as string);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, expo_push_token')
+    .in('id', contactIds);
+
+  return (contacts as { contact_user_id: string }[]).map(c => {
+    const profile = profiles?.find(p => p.id === c.contact_user_id);
+    return { contact_user_id: c.contact_user_id, expo_push_token: profile?.expo_push_token ?? null };
+  });
+}
+
+/** Fires push messages to Expo's API. Best-effort — never throws. */
+function firePush(messages: PushMessage[]): void {
+  if (messages.length === 0) return;
+  fetch('https://exp.host/--/api/v2/push/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify(messages),
+  }).catch(err => console.warn('Push send failed:', err));
+}
+
+// ─── Public API ────────────────────────────────────────────────────────────────
+
 // Fires an in-app notification to every emergency contact the current
 // user has that is (a) on Safen and (b) linked to a real account. This
 // is a best-effort side effect: it never throws, so a notification
@@ -32,27 +96,9 @@ export async function notifyEmergencyContacts(params: NotifyParams): Promise<voi
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    const senderName = profile?.full_name?.trim() || 'A Safen contact';
-
-    const { data: contacts, error } = await supabase
-      .from('emergency_contacts')
-      .select('contact_user_id')
-      .eq('user_id', user.id)
-      .eq('is_on_app', true)
-      .eq('status', 'accepted')  // Only notify contacts who have accepted the request
-      .not('contact_user_id', 'is', null);
-
-    if (error) {
-      console.warn('notifyEmergencyContacts: failed to load contacts', error.message);
-      return;
-    }
-    if (!contacts || contacts.length === 0) return;
+    const senderName = await fetchSenderName(user.id);
+    const contacts = await getAcceptedContactsWithTokens(user.id);
+    if (contacts.length === 0) return;
 
     const label = TYPE_LABEL[params.type];
     const isEmergency = params.type !== 'report';
@@ -64,7 +110,7 @@ export async function notifyEmergencyContacts(params: NotifyParams): Promise<voi
         : `${senderName} filed a safety report near their location.`;
 
     const rows = contacts.map(c => ({
-      recipient_id: c.contact_user_id as string,
+      recipient_id: c.contact_user_id,
       sender_id: user.id,
       sender_name: senderName,
       type: params.type,
@@ -81,36 +127,17 @@ export async function notifyEmergencyContacts(params: NotifyParams): Promise<voi
       console.warn('notifyEmergencyContacts: failed to insert notifications', insertError.message);
     }
 
-    // ── Send actual push notifications to each contact's device ──────────
-    const contactIds = contacts.map(c => c.contact_user_id as string);
-    const { data: contactProfiles } = await supabase
-      .from('profiles')
-      .select('expo_push_token')
-      .in('id', contactIds)
-      .not('expo_push_token', 'is', null);
+    const pushMessages: PushMessage[] = contacts
+      .filter(c => c.expo_push_token?.startsWith('ExponentPushToken'))
+      .map(c => ({
+        to: c.expo_push_token as string,
+        sound: 'default' as const,
+        title,
+        body,
+        data: { type: params.type, alertId: params.alertId, reportId: params.reportId },
+      }));
 
-    if (contactProfiles && contactProfiles.length > 0) {
-      const pushMessages = contactProfiles
-        .filter(p => p.expo_push_token && p.expo_push_token.startsWith('ExponentPushToken'))
-        .map(p => ({
-          to: p.expo_push_token,
-          sound: 'default',
-          title,
-          body,
-          data: { type: params.type, alertId: params.alertId, reportId: params.reportId },
-        }));
-
-      if (pushMessages.length > 0) {
-        fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(pushMessages),
-        }).catch(err => console.warn('Push send failed:', err));
-      }
-    }
+    firePush(pushMessages);
   } catch (err) {
     console.warn('notifyEmergencyContacts error:', err);
   }
@@ -129,34 +156,23 @@ export async function notifyCheckInMissed(params: {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    const senderName = profile?.full_name?.trim() || 'A Safen contact';
-
-    const { data: contacts, error } = await supabase
-      .from('emergency_contacts')
-      .select('contact_user_id')
-      .eq('user_id', user.id)
-      .eq('is_on_app', true)
-      .eq('status', 'accepted')  // Only notify contacts who have accepted the request
-      .not('contact_user_id', 'is', null);
-
-    if (error || !contacts || contacts.length === 0) {
-      console.warn('notifyCheckInMissed: no contacts to notify', error?.message);
+    const senderName = await fetchSenderName(user.id);
+    const contacts = await getAcceptedContactsWithTokens(user.id);
+    if (contacts.length === 0) {
+      console.warn('notifyCheckInMissed: no contacts to notify');
       return;
     }
 
+    const title = `⚠️ Missed Check-In: ${senderName}`;
+    const body = `${senderName} was supposed to check in after heading to ${params.destination} but has not responded. Please check on them.`;
+
     const rows = contacts.map(c => ({
-      recipient_id: c.contact_user_id as string,
+      recipient_id: c.contact_user_id,
       sender_id: user.id,
       sender_name: senderName,
       type: 'check_in_missed' as NotifyType,
-      title: `⚠️ Missed Check-In: ${senderName}`,
-      body: `${senderName} was supposed to check in after heading to ${params.destination} but has not responded. Please check on them.`,
+      title,
+      body,
       latitude: params.latitude ?? null,
       longitude: params.longitude ?? null,
     }));
@@ -165,40 +181,20 @@ export async function notifyCheckInMissed(params: {
     if (insertError) {
       console.warn('notifyCheckInMissed: failed to insert notifications', insertError.message);
     } else {
-      console.log('[SafeCheckIn] Contact notifications sent for missed check-in.');
+      if (__DEV__) console.log('[SafeCheckIn] Contact notifications sent for missed check-in.');
     }
 
-    // ── Send actual push notifications to each contact's device ──────────
-    // Fetch expo_push_tokens for all contacts who have registered a token
-    const contactIds = contacts.map(c => c.contact_user_id as string);
-    const { data: contactProfiles } = await supabase
-      .from('profiles')
-      .select('expo_push_token')
-      .in('id', contactIds)
-      .not('expo_push_token', 'is', null);
+    const pushMessages: PushMessage[] = contacts
+      .filter(c => c.expo_push_token?.startsWith('ExponentPushToken'))
+      .map(c => ({
+        to: c.expo_push_token as string,
+        sound: 'default' as const,
+        title,
+        body,
+        data: { type: 'check_in_missed' },
+      }));
 
-    if (contactProfiles && contactProfiles.length > 0) {
-      const pushMessages = contactProfiles
-        .filter(p => p.expo_push_token && p.expo_push_token.startsWith('ExponentPushToken'))
-        .map(p => ({
-          to: p.expo_push_token,
-          sound: 'default',
-          title: `⚠️ Missed Check-In: ${senderName}`,
-          body: `${senderName} was supposed to check in after heading to ${params.destination} but has not responded. Please check on them.`,
-          data: { type: 'check_in_missed' },
-        }));
-
-      if (pushMessages.length > 0) {
-        fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: JSON.stringify(pushMessages),
-        }).catch(err => console.warn('Push send failed:', err));
-      }
-    }
+    firePush(pushMessages);
   } catch (err) {
     console.warn('notifyCheckInMissed error:', err);
   }
@@ -211,8 +207,7 @@ export async function notifyCheckInReminder(destination: string): Promise<void> 
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
-    const name = profile?.full_name?.trim() || 'You';
+    const name = await fetchSenderName(user.id);
     await supabase.from('notifications').insert({
       recipient_id: user.id,
       sender_id: user.id,
@@ -232,8 +227,7 @@ export async function notifyCheckInDeadline(destination: string): Promise<void> 
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
-    const name = profile?.full_name?.trim() || 'You';
+    const name = await fetchSenderName(user.id);
     await supabase.from('notifications').insert({
       recipient_id: user.id,
       sender_id: user.id,

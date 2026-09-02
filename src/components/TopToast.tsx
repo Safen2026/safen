@@ -4,8 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
+
 export interface TopToastRef {
-  show: (options: { title: string; subtitle?: string; icon?: any; duration?: number }) => void;
+  show: (options: { title: string; subtitle?: string; icon?: IoniconsName; duration?: number }) => void;
 }
 
 export const TopToast = React.memo(React.forwardRef<TopToastRef>((_, ref) => {
@@ -16,7 +18,7 @@ export const TopToast = React.memo(React.forwardRef<TopToastRef>((_, ref) => {
   const [config, setConfig] = React.useState<{
     title: string;
     subtitle?: string;
-    icon?: any;
+    icon?: IoniconsName;
     duration: number;
   }>({
     title: '',
@@ -73,7 +75,7 @@ export const TopToast = React.memo(React.forwardRef<TopToastRef>((_, ref) => {
       ]}
     >
       <View style={[styles.toastIconBg, { backgroundColor: colors.status.safeBackground }]}>
-        <Ionicons name={config.icon as any} size={22} color={colors.status.safeText} />
+        <Ionicons name={config.icon ?? 'checkmark-circle'} size={22} color={colors.status.safeText} />
       </View>
       <View style={styles.toastTextCol}>
         <Text style={[styles.toastTitle, { color: colors.text.primary }]}>{config.title}</Text>

@@ -33,7 +33,8 @@ interface PinDetailsModalProps {
 export function PinDetailsModal({ visible, pin, onClose }: PinDetailsModalProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = React.useMemo(() => getStyles(colors, insets), [colors, insets]);
+  const { bottom: insetsBottom } = insets;
+  const styles = React.useMemo(() => getStyles(colors, insetsBottom), [colors, insetsBottom]);
 
   const [address, setAddress] = useState<string | null>(null);
   const [loadingAddress, setLoadingAddress] = useState(false);
@@ -139,7 +140,7 @@ export function PinDetailsModal({ visible, pin, onClose }: PinDetailsModalProps)
   );
 }
 
-const getStyles = (colors: ThemeColors, insets: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors, insetsBottom: number) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
@@ -150,7 +151,7 @@ const getStyles = (colors: ThemeColors, insets: any) => StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 12,
-    paddingBottom: Math.max(insets.bottom + 24, 24),
+    paddingBottom: Math.max(insetsBottom + 24, 24),
     position: 'absolute',
     bottom: 0,
     left: 0,

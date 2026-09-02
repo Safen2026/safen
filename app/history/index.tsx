@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../src/context/ThemeContext';
+import type { ThemeColors } from '../../src/constants/Theme';
 import { useHistory, HistoryItem } from '../../src/hooks/useHistory';
 import { HistoryFilterChips } from '../../src/components/history/HistoryFilterChips';
 import { HistoryCard } from '../../src/components/history/HistoryCard';
@@ -101,7 +102,7 @@ export default function HistoryScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,

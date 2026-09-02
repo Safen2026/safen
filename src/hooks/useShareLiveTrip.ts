@@ -64,7 +64,7 @@ export function useShareLiveTrip() {
           return;
         }
         setSession(restored);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('[useShareLiveTrip] Failed to parse restored session:', e);
       }
     });

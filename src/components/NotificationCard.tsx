@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppNotification } from '../hooks/useNotifications';
@@ -45,14 +45,14 @@ const NotificationCardComponent = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const handleSosPress = async (res: SosAckResponse) => {
+  const handleSosPress = useCallback(async (res: SosAckResponse) => {
     if (isSubmitting || !onSosRespond) return;
     setSelectedResponse(res);
     setIsSubmitting(true);
     await onSosRespond(n, res);
     setIsSubmitting(false);
     setIsCollapsed(true);
-  };
+  }, [isSubmitting, onSosRespond, n]);
 
   let meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
 

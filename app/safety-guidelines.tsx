@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '../src/context/ThemeContext';
+import type { ThemeColors } from '../src/constants/Theme';
 import { GUIDELINES } from '../src/constants/safetyGuidelines';
 import { GuidelineCard } from '../src/components/safety/GuidelineCard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,7 +64,7 @@ export default function SafetyGuidelinesScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   scroll: { flex: 1 },
   scrollContent: { padding: 20, paddingTop: 8, paddingBottom: 40 },

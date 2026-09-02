@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useTheme } from '../../src/context/ThemeContext';
+import type { ThemeColors } from '../../src/constants/Theme';
 import { useHaptics } from '../../src/context/HapticsContext';
 import { supabase } from '../../src/lib/supabase';
 import { firebaseAuth } from '../../src/lib/firebase';
@@ -358,7 +359,7 @@ export default function SettingsScreen() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { fontSize: 28, fontWeight: '800', color: colors.text.primary, marginBottom: 12, paddingHorizontal: 20 },
   heroSection: { alignItems: 'center', marginBottom: 32, paddingHorizontal: 20 },

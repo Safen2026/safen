@@ -37,13 +37,14 @@ const attemptUpload = async (
       console.warn('[Cloudinary] File does not exist at URI:', uri);
       return null;
     }
-    // size is only present when exists is true
-    const size = (info as FileInfo & { size?: number }).size ?? 0;
+    // Use discriminated union: size is only present when exists === true
+    const existingInfo = info as FileInfo & { size?: number };
+    const size = existingInfo.size ?? 0;
     if (size === 0) {
       console.warn('[Cloudinary] File is 0 bytes — skipping upload:', uri);
       return null;
     }
-    console.log(`[Cloudinary] File ready: ${size} bytes → ${uri}`);
+    if (__DEV__) console.log(`[Cloudinary] File ready: ${size} bytes → ${uri}`);
   } catch (statErr) {
     // getInfoAsync can fail for content:// URIs on some Android versions — proceed anyway
     console.warn('[Cloudinary] Could not stat file (proceeding anyway):', statErr);
@@ -56,11 +57,11 @@ const attemptUpload = async (
   // Force Cloudinary to use our descriptive filename (without extension) as the public_id.
   // This guarantees the resulting URL ends in e.g. "audio_12345.m4a", so the app always
   // knows whether it's audio or video regardless of the folder path.
-  const descriptivePublicId = fileName.split('.')[0]; 
+  const descriptivePublicId = fileName.split('.')[0];
   const finalPublicId = options?.public_id || descriptivePublicId;
 
   // ── Fetch Secure Signature from Supabase ──────────────────────────────────
-  console.log('[Cloudinary] Fetching secure signature...');
+  if (__DEV__) console.log('[Cloudinary] Fetching secure signature...');
   const { data: sigData, error: sigError } = await supabase.functions.invoke('get-cloudinary-signature', {
     body: { public_id: finalPublicId, folder: options?.folder }
   });
@@ -70,16 +71,16 @@ const attemptUpload = async (
     throw new Error(`[Cloudinary] Failed to get signature: ${sigError?.message || 'Missing signature data'}`);
   }
 
-  const parameters: Record<string, string> = { 
+  const parameters: Record<string, string> = {
     public_id: finalPublicId,
     api_key: sigData.api_key,
     timestamp: String(sigData.timestamp),
     signature: sigData.signature
   };
-  
+
   if (options?.folder) parameters.folder = options.folder;
 
-  console.log(`[Cloudinary] Uploading to ${uploadUrl} (public_id: ${parameters.public_id})…`);
+  if (__DEV__) console.log(`[Cloudinary] Uploading to ${uploadUrl} (public_id: ${parameters.public_id})…`);
 
   // ── Upload via FileSystem.uploadAsync (most reliable on Android) ───────────
   const response = await uploadAsync(uploadUrl, uri, {
@@ -89,9 +90,11 @@ const attemptUpload = async (
     parameters,
   });
 
-  console.log('[Cloudinary] HTTP status:', response.status);
-  if (response.body) {
-    console.log('[Cloudinary] Response (first 500 chars):', response.body.substring(0, 500));
+  if (__DEV__) {
+    console.log('[Cloudinary] HTTP status:', response.status);
+    if (response.body) {
+      console.log('[Cloudinary] Response (first 500 chars):', response.body.substring(0, 500));
+    }
   }
 
   if (response.status >= 200 && response.status < 300) {
@@ -100,7 +103,7 @@ const attemptUpload = async (
       throw new Error(`[Cloudinary] Could not parse response: ${response.body.substring(0, 200)}`);
     }
     if (parsed?.secure_url) {
-      console.log('[Cloudinary] Upload SUCCESS:', parsed.secure_url);
+      if (__DEV__) console.log('[Cloudinary] Upload SUCCESS:', parsed.secure_url);
       return parsed.secure_url;
     }
     throw new Error(`[Cloudinary] No secure_url in response: ${response.body.substring(0, 200)}`);
@@ -113,7 +116,7 @@ export const uploadToCloudinary = async (
   uri: string,
   options?: { public_id?: string; folder?: string }
 ): Promise<string | null> => {
-  console.log('[Cloudinary] Starting upload for:', uri);
+  if (__DEV__) console.log('[Cloudinary] Starting upload for:', uri);
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
@@ -124,7 +127,7 @@ export const uploadToCloudinary = async (
     } catch (err) {
       console.warn(`[Cloudinary] Attempt ${attempt}/${MAX_ATTEMPTS} failed:`, err);
       if (attempt < MAX_ATTEMPTS) {
-        console.log(`[Cloudinary] Retrying in ${attempt}s…`);
+        if (__DEV__) console.log(`[Cloudinary] Retrying in ${attempt}s…`);
         await sleep(attempt * 1000);
       }
     }

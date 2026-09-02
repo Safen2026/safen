@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -31,6 +31,45 @@ export default function FeedScreen() {
     [items, filter],
   );
 
+  const handleOpen = useCallback((item: (typeof items)[number]) => {
+    if (item.deep_link) void Linking.openURL(item.deep_link);
+  }, []);
+
+  const renderItem = useCallback(({ item }: { item: (typeof items)[number] }) => {
+    const accent = SEVERITY_COLOR[item.severity] ?? SEVERITY_COLOR.info;
+    return (
+      <TouchableOpacity
+        activeOpacity={0.7}
+        onPress={() => handleOpen(item)}
+        style={[
+          styles.card,
+          {
+            backgroundColor: colors.white,
+            borderColor    : colors.border,
+            borderLeftColor: accent,
+          },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={item.headline}
+      >
+        <Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.headline}</Text>
+        <Text style={[styles.cardBody, { color: colors.text.secondary }]}>{item.summary}</Text>
+        {item.advice ? (
+          <Text style={[styles.advice, { color: accent }]}>{item.advice}</Text>
+        ) : null}
+        <Text style={[styles.meta, { color: colors.text.secondary }]}>
+          {item.kind === 'news' ? item.source_label : 'Safen user report'}
+          {' · '}
+          {timeAgo(item.occurred_at)}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [colors, handleOpen]);
+
+  const handleLoadMore = useCallback(() => { void loadMore(); }, [loadMore]);
+  const handleRefresh = useCallback(() => { void refresh(); }, [refresh]);
+  const keyExtractor = useCallback((item: (typeof items)[number]) => item.id, []);
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={styles.header}>
@@ -61,42 +100,20 @@ export default function FeedScreen() {
 
       <FlatList
         data={visible}
-        keyExtractor={(i) => i.id}
-        onEndReached={() => { void loadMore(); }}
+        keyExtractor={keyExtractor}
+        onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => { void refresh(); }} />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
         ListEmptyComponent={<FeedEmptyState nationalOnly={isNationalOnly} />}
         contentContainerStyle={styles.list}
-        renderItem={({ item }) => {
-          const accent = SEVERITY_COLOR[item.severity] ?? SEVERITY_COLOR.info;
-          return (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => { if (item.deep_link) void Linking.openURL(item.deep_link); }}
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.white,
-                  borderColor    : colors.border,
-                  borderLeftColor: accent,
-                },
-              ]}
-            >
-              <Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.headline}</Text>
-              <Text style={[styles.cardBody, { color: colors.text.secondary }]}>{item.summary}</Text>
-              {item.advice ? (
-                <Text style={[styles.advice, { color: accent }]}>{item.advice}</Text>
-              ) : null}
-              <Text style={[styles.meta, { color: colors.text.secondary }]}>
-                {item.kind === 'news' ? item.source_label : 'Safen user report'}
-                {' · '}
-                {timeAgo(item.occurred_at)}
-              </Text>
-            </TouchableOpacity>
-          );
-        }}
+        renderItem={renderItem}
+        // ── Low-end phone tuning ─────────────────────────────────────
+        initialNumToRender={10}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        removeClippedSubviews
       />
     </View>
   );
