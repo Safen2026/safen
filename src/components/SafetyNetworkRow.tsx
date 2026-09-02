@@ -110,7 +110,7 @@ export const SafetyNetworkRow = React.memo(() => {
   const goToAddForm = useCallback(() => router.push({ pathname: '/(tabs)/contacts', params: { openAdd: 'true' } }), [router]);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header} accessible={true} accessibilityRole="header">
         <Text style={[styles.title, { color: colors.text.primary }]}>My Safety Network</Text>

@@ -12,7 +12,8 @@ import {
   Easing,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useAlert, AlertResult } from '../hooks/useAlert';
+import { useAlertContext } from '../context/AlertContext';
+import type { AlertResult } from '../hooks/useAlert';
 import { ActiveSOSModal } from './ActiveSOSModal';
 import { showToast } from '../utils/toast';
 import { Shadows } from '../constants/Theme';
@@ -27,7 +28,7 @@ const TRIGGER_AT   = SWIPE_RANGE * 0.72; // 72% across = confirmed swipe
 // ────────────────────────────────────────────────────────────────────────────
 
 export const SOSButton = React.memo(() => {
-  const { loading, activeAlert, triggerAlert, cancelAlert } = useAlert();
+  const { loading, activeAlert, triggerAlert, cancelAlert } = useAlertContext();
   const isActivated = !!activeAlert;
 
   const pan         = useRef(new Animated.Value(0)).current;

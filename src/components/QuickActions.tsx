@@ -5,7 +5,8 @@ import { Shadows } from '../constants/Theme';
 import type { ThemeColors } from '../constants/Theme';
 import { QuickActionModal, ActionConfig } from './QuickActionModal';
 import { showToast } from '../utils/toast';
-import { useAlert, AlertType } from '../hooks/useAlert';
+import { useAlertContext } from '../context/AlertContext';
+import type { AlertType } from '../hooks/useAlert';
 import { useTheme } from '../context/ThemeContext';
 
 export type ActionType = 'medical' | 'police' | 'fire';
@@ -16,7 +17,7 @@ export const QuickActions = React.memo(() => {
   
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [description, setDescription] = useState('');
-  const { loading, triggerAlert } = useAlert();
+  const { loading, triggerAlert } = useAlertContext();
 
   const ACTION_CONFIG = useMemo<Record<ActionType, ActionConfig>>(() => ({
     medical: {

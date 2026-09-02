@@ -12,6 +12,7 @@ import { toastRef } from '../src/utils/toast';
 import { useAppUpdates } from '../src/hooks/useAppUpdates';
 import { AppUpdateModal } from '../src/components/AppUpdateModal';
 import { HapticsProvider } from '../src/context/HapticsContext';
+import { AlertProvider } from '../src/context/AlertContext';
 
 export default function RootLayout() {
   const [session, setSession] = useState<Session | null>(null);
@@ -40,7 +41,9 @@ export default function RootLayout() {
     <ThemeProvider>
       <HapticsProvider>
         <SessionContext.Provider value={session}>
-          <RootNavigator loading={loading} />
+          <AlertProvider>
+            <RootNavigator loading={loading} />
+          </AlertProvider>
         </SessionContext.Provider>
       </HapticsProvider>
     </ThemeProvider>

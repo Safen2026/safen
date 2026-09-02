@@ -20,6 +20,12 @@ export type ActiveAlert = {
   type: AlertType;
 };
 
+/**
+ * How often (ms) to push a fresh location update to the alerts row
+ * while an SOS is active and the app is in the foreground.
+ */
+const LOCATION_UPDATE_INTERVAL_MS = 30_000;
+
 export function useAlert() {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
@@ -53,6 +59,37 @@ export function useAlert() {
     return () => { isMounted = false; };
   }, []);
 
+  // ── Live location refresh (foreground only) ───────────────────────────────
+  // While an SOS is active and the app is in the foreground, push a fresh
+  // location to the alerts row every LOCATION_UPDATE_INTERVAL_MS ms.
+  // We use getLastKnownPositionAsync because permission was already obtained
+  // at trigger time — no need to re-prompt or wait for a full GPS fix.
+  useEffect(() => {
+    if (!activeAlert) return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const position = await Location.getLastKnownPositionAsync();
+        if (!position) return;
+
+        supabase
+          .from('alerts')
+          .update({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          })
+          .eq('id', activeAlert.id)
+          .then(({ error }) => {
+            if (error) console.warn('[useAlert] location update failed:', error.message);
+          });
+      } catch (err) {
+        console.warn('[useAlert] location refresh error:', err);
+      }
+    }, LOCATION_UPDATE_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [activeAlert]);
+
   // ── Location helper ──────────────────────────────────────────────────────
   const getLocation = useCallback(async (): Promise<{ latitude: number; longitude: number } | null> => {
     try {
@@ -79,6 +116,12 @@ export function useAlert() {
 
   // ── Main trigger ─────────────────────────────────────────────────────────
   const triggerAlert = useCallback(async (type: AlertType, description?: string): Promise<AlertResult> => {
+    // Idempotency guard: if an alert is already active (either from a fresh trigger
+    // or restored from the DB after a force-close / restart), do NOT create a new
+    // alert row or re-notify contacts. Just surface the existing session.
+    // This prevents the "5 force-closes = 5 notifications" bug.
+    if (activeAlert) return 'ok';
+
     setLoading(true);
     setLoadingMessage('Acquiring secure location...');
 
@@ -173,7 +216,7 @@ export function useAlert() {
     });
 
     return 'ok';
-  }, [getLocation]);
+  }, [getLocation, activeAlert]);
 
   // ── Cancel ───────────────────────────────────────────────────────────────
   const cancelAlert = useCallback(async (): Promise<boolean> => {

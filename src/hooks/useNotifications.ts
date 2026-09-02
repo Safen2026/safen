@@ -76,8 +76,9 @@ export function useNotifications() {
           contactEvents.emitRefresh();
         }
 
-        // Fire local banner when app is in foreground
-        if (!isExpoGo && Notifications) {
+        // Fire local banner only for new incoming notifications — not for
+        // UPDATE events (e.g. is_read changes), which have no new information.
+        if (payload.eventType === 'INSERT' && !isExpoGo && Notifications) {
           Notifications.scheduleNotificationAsync({
             content: {
               title: row.title,
@@ -96,6 +97,19 @@ export function useNotifications() {
           'postgres_changes',
           {
             event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `recipient_id=eq.${user.id}`,
+          },
+          handleNewNotification
+        )
+        .on(
+          'postgres_changes',
+          {
+            // Handles is_read changes (e.g. markAllRead confirmed by server,
+            // or a future multi-device read-sync). Banner does NOT fire for
+            // UPDATE — see the eventType guard in handleNewNotification.
+            event: 'UPDATE',
             schema: 'public',
             table: 'notifications',
             filter: `recipient_id=eq.${user.id}`,

@@ -54,7 +54,7 @@ export function useEmergencyRecording() {
   const isAudioReadyRef = useRef(false);
   const elapsedSecondsRef = useRef(0);
   const cameraRef = useRef<CameraRef | null>(null);
-  const timerRef           = useRef<NodeJS.Timeout | null>(null);
+  const timerRef           = useRef<ReturnType<typeof setInterval> | null>(null);
   const alertIdRef         = useRef<string | null>(null);
   const evidenceListRef    = useRef<string[]>([]);
   const isActiveRef        = useRef(false);
