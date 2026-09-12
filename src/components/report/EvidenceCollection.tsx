@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Switch, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Switch, StyleSheet, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import type { ThemeColors } from '../../constants/Theme';
 import { SwipeButton } from '../SwipeButton';
 import { Shadows } from '../../constants/Theme';
@@ -51,6 +51,44 @@ export const EvidenceCollection = React.memo(function EvidenceCollection({
   colors
 }: EvidenceCollectionProps) {
   const styles = React.useMemo(() => getStyles(colors), [colors]);
+
+  // Android: two-step picker — first 'date', then 'time'.
+  // iOS:     single inline spinner, always visible.
+  // mode="datetime" is iOS-only; using it on Android causes a blank screen
+  // with no dismiss path because the native Android dialog doesn't support it.
+  const [pickerStep, setPickerStep] = React.useState<'closed' | 'date' | 'time'>('closed');
+  // Holds the date portion while we wait for the time step.
+  const pendingDateRef = React.useRef<Date | null>(null);
+
+  const openDatePicker = React.useCallback(() => {
+    pendingDateRef.current = null;
+    setPickerStep('date');
+  }, []);
+
+  const handleDateChange = React.useCallback((event: DateTimePickerEvent, picked?: Date) => {
+    if (Platform.OS === 'android') {
+      if (event.type !== 'set' || !picked) {
+        // User cancelled — close the whole flow.
+        setPickerStep('closed');
+        return;
+      }
+      if (pickerStep === 'date') {
+        // Date confirmed — stash it and open the time picker.
+        pendingDateRef.current = picked;
+        setPickerStep('time');
+      } else {
+        // Time confirmed — combine with stashed date and commit.
+        const base = pendingDateRef.current ?? lastSeenAt ?? new Date();
+        const combined = new Date(base);
+        combined.setHours(picked.getHours(), picked.getMinutes(), 0, 0);
+        setLastSeenAt(combined);
+        setPickerStep('closed');
+      }
+    } else {
+      // iOS inline — every onChange is a live update, just save it.
+      if (picked) setLastSeenAt(picked);
+    }
+  }, [pickerStep, lastSeenAt, setLastSeenAt]);
 
   return (
     <>
@@ -160,31 +198,72 @@ export const EvidenceCollection = React.memo(function EvidenceCollection({
         />
 
         {selectedType === 'missing_person' && (
-          <View style={{ marginBottom: 24, gap: 12 }}>
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text.primary }}>When were they last seen?</Text>
-            <DateTimePicker
-              value={lastSeenAt ?? new Date()}
-              mode="datetime"
-              maximumDate={new Date()}
-              onChange={(_e, d) => d && setLastSeenAt(d)}
-              style={{ alignSelf: 'flex-start' }}
-            />
-            
-            <Text style={{ fontSize: 16, fontWeight: '600', color: colors.text.primary, marginTop: 8 }}>Police station and case reference</Text>
+          <View style={styles.missingPersonSection}>
+            <Text style={styles.missingPersonLabel}>When were they last seen?</Text>
+
+            {/* Android: pressable row opens the two-step date → time flow */}
+            {Platform.OS === 'android' && (
+              <TouchableOpacity
+                style={styles.dateRow}
+                activeOpacity={0.7}
+                onPress={openDatePicker}
+                accessibilityRole="button"
+                accessibilityLabel="Select date and time last seen"
+              >
+                <Ionicons name="calendar-outline" size={20} color={colors.text.secondary} />
+                <Text style={[styles.dateRowText, !lastSeenAt && { color: colors.text.secondary }]}>
+                  {lastSeenAt
+                    ? lastSeenAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                    : 'Tap to set date & time'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
+              </TouchableOpacity>
+            )}
+
+            {/* Android step 1 — date dialog */}
+            {Platform.OS === 'android' && pickerStep === 'date' && (
+              <DateTimePicker
+                value={lastSeenAt ?? new Date()}
+                mode="date"
+                maximumDate={new Date()}
+                onChange={handleDateChange}
+              />
+            )}
+
+            {/* Android step 2 — time dialog */}
+            {Platform.OS === 'android' && pickerStep === 'time' && (
+              <DateTimePicker
+                value={pendingDateRef.current ?? lastSeenAt ?? new Date()}
+                mode="time"
+                is24Hour={true}
+                onChange={handleDateChange}
+              />
+            )}
+
+            {/* iOS: inline spinner — display="spinner" works well inside a ScrollView */}
+            {Platform.OS === 'ios' && (
+              <DateTimePicker
+                value={lastSeenAt ?? new Date()}
+                mode="datetime"
+                display="spinner"
+                maximumDate={new Date()}
+                onChange={handleDateChange}
+                style={{ alignSelf: 'flex-start', marginLeft: -8 }}
+              />
+            )}
+
+            <Text style={styles.missingPersonLabel}>Police station and case reference</Text>
             <TextInput
               value={policeReference}
               onChangeText={setPoliceReference}
               placeholder="e.g. Ikeja Division / CR-1123"
               placeholderTextColor={colors.text.secondary}
-              style={{
-                borderWidth: 1, borderColor: colors.border, borderRadius: 12,
-                padding: 16, color: colors.text.primary, backgroundColor: colors.white,
-                ...Shadows.sm
-              }}
+              style={styles.policeRefInput}
+              accessibilityLabel="Police station and case reference"
             />
-            
-            <Text style={{ fontSize: 13, color: colors.text.secondary, marginTop: 4, lineHeight: 18 }}>
-              A photo, the time last seen, the location, and a police reference are all required before a missing-person report can be filed.
+
+            <Text style={styles.missingPersonHint}>
+              A photo, the time last seen, the location, and a police reference number are all required before a missing-person report can be filed.
             </Text>
           </View>
         )}
@@ -330,5 +409,46 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 14,
     color: colors.text.secondary,
     lineHeight: 20,
+  },
+  // ── Missing person section ──────────────────────────────────────────────────
+  missingPersonSection: {
+    marginBottom: 24,
+    gap: 12,
+  },
+  missingPersonLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.primary,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 14,
+    ...Shadows.sm,
+  },
+  dateRowText: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.text.primary,
+  },
+  policeRefInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: 16,
+    color: colors.text.primary,
+    backgroundColor: colors.white,
+    fontSize: 15,
+    ...Shadows.sm,
+  },
+  missingPersonHint: {
+    fontSize: 13,
+    color: colors.text.secondary,
+    lineHeight: 18,
   },
 });

@@ -95,6 +95,11 @@ export function useShareLiveTrip() {
     if (isExpired && session) {
       stopSharing(true);
     }
+  // stopSharing is a useCallback with [] deps — its reference is permanently
+  // stable. It MUST NOT be added to this dep array: it is declared later in
+  // this file and adding it here causes a temporal dead zone ReferenceError
+  // on every render, crashing any screen that mounts this hook.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isExpired]);
 
   // ── GPS watcher ─────────────────────────────────────────────────────────────
@@ -131,6 +136,9 @@ export function useShareLiveTrip() {
       locationSubRef.current?.remove();
       locationSubRef.current = null;
     };
+  // Intentionally depends on session?.startedAt only — NOT the full session
+  // object — so the watcher survives extendSharing() calls (which bump
+  // expiresAt) and location updates without being torn down and restarted.
   }, [session?.startedAt]);
 
   // ── Periodic location push to contact (update notification row) ─────────────
@@ -168,7 +176,9 @@ export function useShareLiveTrip() {
   ) => {
     setIsStarting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Use getSession() — this project avoids getUser() for auth reads.
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const user = authSession?.user;
       if (!user) throw new Error('Not authenticated');
 
       // Get current position
@@ -192,7 +202,11 @@ export function useShareLiveTrip() {
       const title = `📍 ${senderName} is sharing their live location`;
       const body = `${senderName} is sharing their live location with you ${durationLabel}. Tap to see where they are.`;
 
-      // INSERT without chaining .select() — RLS blocks SELECT after INSERT on this table
+      // Use a stable client_ref (UUID) so the periodic update timer can find
+      // exactly this row without a fragile title-match query — fixes the race
+      // where a concurrent INSERT under the same title returns the wrong row.
+      const clientRef = `trip_${user.id}_${Date.now()}`;
+
       const { error: insertError } = await supabase
         .from('notifications')
         .insert([{
@@ -204,23 +218,21 @@ export function useShareLiveTrip() {
           body,
           latitude: lat ?? null,
           longitude: lng ?? null,
+          client_ref: clientRef,
         }]);
 
       if (insertError) {
         console.warn('Share trip notification insert failed:', insertError.message);
       }
 
-      // Separately fetch the notification row ID so we can update location later
+      // Fetch the ID of the row we just inserted using the stable client_ref —
+      // immune to concurrent inserts with the same title/sender combination.
       let notificationRowId: string | null = null;
       if (!insertError) {
         const { data: fetchedRow } = await supabase
           .from('notifications')
           .select('id')
-          .eq('recipient_id', contactUserId)
-          .eq('sender_id', user.id)
-          .eq('title', title)
-          .order('created_at', { ascending: false })
-          .limit(1)
+          .eq('client_ref', clientRef)
           .maybeSingle();
         notificationRowId = fetchedRow?.id ?? null;
       }
@@ -245,6 +257,7 @@ export function useShareLiveTrip() {
     }
   }, []);
 
+
   // ── Stop sharing ────────────────────────────────────────────────────────────
   const stopSharing = useCallback(async (expired = false) => {
     setIsEnding(true);
@@ -260,7 +273,8 @@ export function useShareLiveTrip() {
       if (updateTimerRef.current) clearInterval(updateTimerRef.current);
 
       // Send "stopped sharing" notification to contact
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session: authSession } } = await supabase.auth.getSession();
+      const user = authSession?.user;
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')

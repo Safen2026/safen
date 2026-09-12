@@ -69,7 +69,9 @@ export function useEmergencyRecording() {
   }, []);
 
   // ─── Hard-stop timers and recorders ─────────────────────────────────────────
-  const killEverything = () => {
+  // useCallback so the reference is stable across renders and it is safe to
+  // list as a dependency in the cleanup effect and any future effects.
+  const killEverything = useCallback(() => {
     isActiveRef.current = false;
 
     if (timerRef.current) {
@@ -87,7 +89,7 @@ export function useEmergencyRecording() {
     }
     isCyclingAudioRef.current = false;
     isAudioReadyRef.current = false;
-  };
+  }, []);
 
   // ─── Sync one Cloudinary URL into the DB row ────────────────────────────────
   const syncEvidenceToAlert = useCallback(async (alertId: string, url: string) => {

@@ -86,6 +86,7 @@ function RootNavigator({ loading }: { loading: boolean }) {
         <Stack.Screen name="permissions" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="history" options={{ headerShown: false }} />
+        <Stack.Screen name="feed/index" options={{ headerShown: false }} />
         <Stack.Screen name="medical-profile" />
         <Stack.Screen name="safety-guidelines" />
           </Stack>

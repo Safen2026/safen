@@ -145,10 +145,12 @@ export function useSafeCheckIn() {
         if (restored.deadlineAt > Date.now()) {
           setSession(restored);
         } else {
-          // Deadline already passed — treat as expired
+          // Deadline already passed — treat as expired. Do NOT remove the
+          // storage key here: the contact-alert effect must still be able to
+          // write contactsAlerted=true atomically before it fires the
+          // network call (fix for premature-deletion race condition).
           setSession(restored);
           setIsExpired(true);
-          AsyncStorage.removeItem(STORAGE_KEY);
         }
       } catch (e: unknown) {
         console.error('[useSafeCheckIn] Failed to parse restored session:', e);
@@ -215,24 +217,29 @@ export function useSafeCheckIn() {
     const contactAlertTime = session.deadlineAt + 5 * 60 * 1000;
     const msUntilContactAlert = contactAlertTime - Date.now();
 
-    // If we're already past T+5, fire immediately (catches app-resume scenario)
+    // If we're already past T+5, fire immediately (catches app-resume scenario).
+    // Write contactsAlerted=true to storage FIRST so a crash/kill during the
+    // Supabase call doesn't cause a double-notification on the next app open.
     if (msUntilContactAlert <= 0) {
-      notifyCheckInMissed({ destination: session.destination }).then(() => {
-        const updated = { ...session, contactsAlerted: true };
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        setSession(updated);
-      });
+      const marked = { ...session, contactsAlerted: true };
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(marked))
+        .then(() => setSession(marked))
+        .catch(err => console.warn('[SafeCheckIn] Failed to persist contactsAlerted:', err));
+      notifyCheckInMissed({ destination: session.destination }).catch(err =>
+        console.warn('[SafeCheckIn] notifyCheckInMissed failed:', err)
+      );
       return;
     }
 
-    // Otherwise schedule for when T+5 arrives while app is in foreground
+    // Otherwise schedule for when T+5 arrives while app is in foreground.
+    // Same atomicity rule: mark contactsAlerted=true in storage before the
+    // network call so a kill-during-upload does not re-fire on next open.
     const timer = setTimeout(async () => {
-      console.warn('[SafeCheckIn] T+5 min elapsed — alerting emergency contacts for:', session.destination);
+      if (__DEV__) console.log('[SafeCheckIn] T+5 min elapsed — alerting contacts for:', session.destination);
+      const marked = { ...session, contactsAlerted: true };
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(marked));
+      setSession(marked);
       await notifyCheckInMissed({ destination: session.destination });
-      // Mark as alerted so we don't double-fire on re-renders
-      const updated = { ...session, contactsAlerted: true };
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      setSession(updated);
     }, msUntilContactAlert);
 
     return () => clearTimeout(timer);
@@ -253,10 +260,12 @@ export function useSafeCheckIn() {
       deadlineAt: now + data.durationMinutes * 60 * 1000,
     };
 
-    // Schedule notifications
+    // Schedule notifications and persist all three IDs so every scheduled
+    // notification can be cancelled if the user confirms safe early.
     const notifIds = await scheduleCheckInNotifications(newSession);
     newSession.reminderNotifId = notifIds.reminderNotifId;
     newSession.deadlineNotifId = notifIds.deadlineNotifId;
+    newSession.contactAlertNotifId = notifIds.contactAlertNotifId;
 
     // Persist so it survives an app restart
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newSession));

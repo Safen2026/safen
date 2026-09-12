@@ -111,7 +111,7 @@ const SafetyFeedComponent = ({ limit = 4, onSeeAll }: SafetyFeedProps) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, { borderBottomColor: colors.border }]}>
         <Text style={[styles.title, { color: colors.text.primary }]}>
           {isNationalOnly ? 'Security updates' : 'Recent in your area'}
         </Text>
@@ -143,7 +143,9 @@ const styles = StyleSheet.create({
     flexDirection : 'row',
     alignItems    : 'center',
     justifyContent: 'space-between',
-    marginBottom  : 12,
+    marginBottom  : 16,
+    paddingBottom : 12,
+    borderBottomWidth: 1,
   },
   title     : { fontSize: 16, fontWeight: '700' },
   seeAll    : { fontSize: 13, fontWeight: '600' },

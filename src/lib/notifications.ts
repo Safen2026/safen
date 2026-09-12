@@ -1,6 +1,9 @@
 import { supabase } from './supabase';
 
-export type NotifyType = 'sos' | 'medical' | 'police' | 'fire' | 'report' | 'check_in_missed' | 'check_in_reminder' | 'check_in_deadline' | 'sos_ack';
+export type NotifyType =
+  | 'sos' | 'medical' | 'police' | 'fire' | 'report'
+  | 'check_in_missed' | 'check_in_reminder' | 'check_in_deadline' | 'sos_ack'
+  | 'contact_added' | 'ping' | 'ping_ack';
 
 const TYPE_LABEL: Record<NotifyType, string> = {
   sos: 'SOS Emergency',
@@ -12,6 +15,9 @@ const TYPE_LABEL: Record<NotifyType, string> = {
   check_in_reminder: 'Safe Check-In Reminder',
   check_in_deadline: 'Safe Check-In Deadline',
   sos_ack: 'SOS Response',
+  contact_added: 'Contact Request',
+  ping: 'Check-in Ping',
+  ping_ack: 'Ping Acknowledged',
 };
 
 type NotifyParams = {

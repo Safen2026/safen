@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { contactEvents } from '../lib/events';
 import { Shadows } from '../constants/Theme';
@@ -22,6 +23,11 @@ type Contact = {
   avatar_url: string | null;
 };
 
+type CachedContact = { name: string; phone: string; status: string };
+
+// Must stay in sync with the key written by useContacts.ts
+const getContactsCacheKey = (userId: string) => `safen_cached_contacts_${userId}`;
+
 const MAX_VISIBLE = 5;
 
 export const SafetyNetworkRow = React.memo(() => {
@@ -30,10 +36,15 @@ export const SafetyNetworkRow = React.memo(() => {
   const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const isMountedRef = useRef(true);
+  // Holds the channel cleanup so the async init can register it for teardown.
+  const channelCleanupRef = useRef<(() => void) | null>(null);
 
-  const fetchContacts = useCallback(async () => {
+  // ── Silent network refresh ────────────────────────────────────────────────
+  // Does NOT blank the UI — contacts already shown from cache stay visible
+  // while this runs in the background.
+  const fetchFromNetwork = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user || !isMountedRef.current) return;
 
     const { data, error } = await supabase
       .from('emergency_contacts')
@@ -45,6 +56,7 @@ export const SafetyNetworkRow = React.memo(() => {
         profiles:contact_user_id (avatar_url)
       `)
       .eq('user_id', user.id)
+      .eq('status', 'accepted')   // Only show accepted contacts on the home card
       .order('created_at', { ascending: true })
       .limit(MAX_VISIBLE);
 
@@ -67,47 +79,75 @@ export const SafetyNetworkRow = React.memo(() => {
     }
   }, []);
 
-  // Initial fetch + realtime subscription for INSERT/UPDATE events
+  // ── Mount: cache hydration → network refresh → realtime subscription ──────
   useEffect(() => {
     isMountedRef.current = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
 
-    (async () => {
-      await fetchContacts();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+    const init = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user || !isMountedRef.current) return;
 
-      channel = supabase
-        .channel(`safety_network_row:${user.id}`)
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'emergency_contacts',
-          filter: `user_id=eq.${user.id}`,
-        }, () => fetchContacts())
-        .on('postgres_changes', {
-          event: '*',
-          schema: 'public',
-          table: 'emergency_contacts',
-          filter: `contact_user_id=eq.${user.id}`,
-        }, () => fetchContacts())
-        .subscribe();
-    })();
+        // Step 1: Read from cache immediately so names appear before any network call.
+        // The contacts cache stores all statuses (needed for SMS fallback), so filter
+        // here to only show accepted contacts on the home screen card.
+        const raw = await AsyncStorage.getItem(getContactsCacheKey(session.user.id));
+        if (raw && isMountedRef.current) {
+          const cached: CachedContact[] = JSON.parse(raw);
+          setContacts(
+            cached
+              .filter(c => c.status === 'accepted')
+              .slice(0, MAX_VISIBLE)
+              .map((c, i) => ({
+                id        : `cached_${i}`,
+                name      : c.name,
+                is_on_app : true,
+                avatar_url: null,
+              }))
+          );
+        }
+
+        // Step 2: Silently refresh to get real IDs, avatars, and is_on_app values.
+        await fetchFromNetwork();
+
+        // Step 3: Subscribe to realtime changes for live updates.
+        if (!isMountedRef.current) return;
+        const channel = supabase
+          .channel(`safety_network_row:${session.user.id}`)
+          .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'emergency_contacts',
+            filter: `user_id=eq.${session.user.id}`,
+          }, () => fetchFromNetwork())
+          .subscribe();
+
+        channelCleanupRef.current = () => supabase.removeChannel(channel);
+      } catch (err) {
+        console.warn('[SafetyNetworkRow] init error:', err);
+      }
+    };
+
+    init();
 
     return () => {
       isMountedRef.current = false;
-      if (channel) supabase.removeChannel(channel);
+      channelCleanupRef.current?.();
+      channelCleanupRef.current = null;
     };
-  }, [fetchContacts]);
+  }, [fetchFromNetwork]);
 
-  // Also re-fetch when the contacts tab emits a delete event via the event bus.
+  // ── Event bus: refresh when contacts are added/edited/deleted ────────────
   useEffect(() => {
-    const unsubscribe = contactEvents.onRefresh(fetchContacts);
+    const unsubscribe = contactEvents.onRefresh(fetchFromNetwork);
     return () => unsubscribe();
-  }, [fetchContacts]);
+  }, [fetchFromNetwork]);
 
   const goToNetwork = useCallback(() => router.push('/(tabs)/contacts'), [router]);
-  const goToAddForm = useCallback(() => router.push({ pathname: '/(tabs)/contacts', params: { openAdd: 'true' } }), [router]);
+  const goToAddForm = useCallback(
+    () => router.push({ pathname: '/(tabs)/contacts', params: { openAdd: 'true' } }),
+    [router]
+  );
 
   return (
     <View style={styles.container}>
@@ -128,11 +168,11 @@ export const SafetyNetworkRow = React.memo(() => {
         {contacts.map(contact => (
           <View key={contact.id} style={styles.item}>
             <View style={{ marginBottom: 6 }}>
-              <Avatar 
-                name={contact.name} 
-                avatarUrl={contact.avatar_url} 
-                isOnline={contact.is_on_app} 
-                size={52} 
+              <Avatar
+                name={contact.name}
+                avatarUrl={contact.avatar_url}
+                isOnline={contact.is_on_app}
+                size={52}
               />
             </View>
             <Text style={[styles.contactName, { color: colors.text.secondary }]} numberOfLines={1}>
@@ -166,7 +206,7 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.white,
     marginHorizontal: 16,
     paddingVertical: 16,
-    marginBottom: 16,
+    marginBottom: 24,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import type { PostgrestError } from '@supabase/supabase-js';
 import { notifyEmergencyContacts } from '../lib/notifications';
@@ -12,8 +13,8 @@ import { getUserDisplayName } from '../utils/userUtils';
 
 export type AlertType = 'sos' | 'medical' | 'police' | 'fire';
 
-/** 'ok' = online flow succeeded; 'sms' = offline fallback fired; false = both failed */
-export type AlertResult = 'ok' | 'sms' | false;
+/** 'ok' = online flow succeeded; 'sms' = offline fallback fired; 'no_contacts' = offline but no contacts cached; false = hard failure */
+export type AlertResult = 'ok' | 'sms' | 'no_contacts' | false;
 
 export type ActiveAlert = {
   id: string;
@@ -98,9 +99,12 @@ export function useAlert() {
 
       let location = await Location.getLastKnownPositionAsync();
       if (!location) {
-        location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+        // Fast timeout (4s) for offline SOS so it doesn't hang before routing to SMS
+        const fetchPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
+        const freshLocation = await Promise.race([fetchPromise, timeoutPromise]);
+        
+        if (freshLocation) location = freshLocation;
       }
       if (!location) return null;
 
@@ -123,41 +127,69 @@ export function useAlert() {
     if (activeAlert) return 'ok';
 
     setLoading(true);
-    setLoadingMessage('Acquiring secure location...');
+    setLoadingMessage('Checking connectivity and location...');
 
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
     if (!user) { setLoading(false); return false; }
 
-    // 1. Location — fast via getLastKnownPositionAsync
-    const coords = await getLocation();
+    // 1. FAST LOCATION + CONNECTIVITY CHECK (Run in parallel for speed)
+    const [coords, online] = await Promise.all([
+      getLocation(),
+      isOnline()
+    ]);
 
+    // ── OFFLINE PATH (Zero Supabase Network Calls) ──────────────────────
+    if (!online) {
+      setLoadingMessage('Network unavailable. Preparing SMS fallback...');
+
+      // Read from the local contact cache. Written by useContacts every time
+      // the contacts list is fetched successfully while online.
+      const cacheKey = `safen_cached_contacts_${user.id}`;
+      const raw = await AsyncStorage.getItem(cacheKey);
+
+      type CachedContact = { name: string; phone: string; status: string };
+      const smsContacts: { name: string; phone: string }[] = raw
+        ? (JSON.parse(raw) as CachedContact[])
+            .filter((c) => c.status === 'accepted' && c.phone?.trim().length > 0)
+            .map((c) => ({ name: c.name || 'Contact', phone: c.phone.trim() }))
+        : [];
+
+      if (smsContacts.length === 0) {
+        // Cache is cold (never visited contacts tab) or all contacts are unaccepted.
+        // Surface this clearly so the caller can show a meaningful error.
+        console.warn('[useAlert] Offline SMS skipped: no accepted contacts found in cache.');
+        setLoading(false);
+        setLoadingMessage(null);
+        return 'no_contacts';
+      }
+
+      // Use cached user metadata for sender name to avoid any network call.
+      const senderName = getUserDisplayName(user, null);
+
+      await new Promise(r => setTimeout(r, 400)); // Brief UI feedback before SMS composer opens
+      setLoading(false);
+      setLoadingMessage(null);
+
+      const result = await sendEmergencySms(smsContacts, senderName, coords, type, description);
+      if (!result.success) {
+        console.warn('[useAlert] sendEmergencySms failed:', result.reason);
+      }
+      return result.success ? 'sms' : false;
+    }
+
+    // ── ONLINE PATH ──────────────────────────────────────────────────────
     setLoadingMessage('Connecting to emergency network...');
-    // 2. Fetch sender name + contact phones upfront (needed for both paths).
-    // The profiles query may fail offline, so we fall back to user_metadata
-    // which is always cached by the Supabase auth session on-device.
+    
+    // Now it's safe to run Supabase queries because we know we are online
     const [profileRes, smsContacts] = await Promise.all([
       supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
       getEmergencyContactPhones(user.id),
     ]);
     const senderName = getUserDisplayName(user, profileRes.data?.full_name);
 
-    // 3. Check connectivity
-    const online = await isOnline();
-
-    // ── OFFLINE PATH ─────────────────────────────────────────────────────
-    if (!online) {
-      setLoadingMessage('Network unavailable. Preparing SMS fallback...');
-      // Give UI a moment to show the message before blocking on SMS composer
-      await new Promise(r => setTimeout(r, 600)); 
-      setLoading(false);
-      setLoadingMessage(null);
-      const result = await sendEmergencySms(smsContacts, senderName, coords, type, description);
-      return result.success ? 'sms' : false;
-    }
-
     setLoadingMessage('Activating SOS protocol...');
-    // ── ONLINE PATH ──────────────────────────────────────────────────────
+    
     const basePayload = {
       user_id: user.id,
       type,
@@ -181,6 +213,11 @@ export function useAlert() {
     }
 
     if (!data) {
+      // The description insert either wasn't attempted (no description) or
+      // failed (e.g. schema mismatch) — log the original error before retrying.
+      if (description?.trim() && error) {
+        console.warn('[useAlert] Description insert failed, retrying without description:', error.message);
+      }
       const res = await supabase
         .from('alerts')
         .insert(basePayload)
@@ -223,6 +260,11 @@ export function useAlert() {
     if (!activeAlert) return false;
     setLoading(true);
 
+    // Capture session once at the start — used for both the DB update and the
+    // feed event insert below. Avoids an inline await inside a fire-and-forget.
+    const { data: { session } } = await supabase.auth.getSession();
+    const actorId = session?.user?.id ?? null;
+
     const { error } = await supabase
       .from('alerts')
       .update({
@@ -241,13 +283,14 @@ export function useAlert() {
       alert_id: activeAlert.id,
       event_type: 'system',
       message: 'Emergency resolved and cancelled by user.',
-      actor_id: (await supabase.auth.getSession()).data.session?.user?.id
+      actor_id: actorId,
     }).then(({ error: insertErr }) => {
       if (insertErr) console.warn('Failed to insert cancellation event:', insertErr);
     });
 
     return true;
   }, [activeAlert]);
+
 
   return useMemo(() => ({
     loading,

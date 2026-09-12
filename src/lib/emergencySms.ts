@@ -34,17 +34,52 @@ export type SmsSendResult =
 // ── Network detection ─────────────────────────────────────────────────────────
 
 /**
- * Returns true only when the device is BOTH connected AND internet-reachable.
- * Defaults to true on any unexpected error so we never accidentally block the
- * normal Supabase flow.
+ * Returns true only when we have good reason to believe the device is online.
+ *
+ * Why not just use `isInternetReachable`?
+ * On Android, `isInternetReachable` can return `null` when the OS has not yet
+ * determined reachability. Treating `null` as `false` (offline) causes online
+ * users to be incorrectly routed to the SMS fallback. We fix this with a
+ * three-tier strategy:
+ *   1. Explicit `false` from the OS → definitely offline.
+ *   2. Both fields `true` → definitely online (fast path, no extra fetch).
+ *   3. Ambiguous (`null`) → fire a lightweight HTTP probe with a 3s timeout.
+ *      If the probe succeeds quickly the user is online; if it times out, offline.
+ *
+ * Defaults to true on any unexpected error so we never block the normal flow.
  */
 export async function isOnline(): Promise<boolean> {
   try {
     const state = await Network.getNetworkStateAsync();
-    return state.isConnected === true && state.isInternetReachable === true;
+
+    // Definitive offline: OS explicitly says not connected or not reachable.
+    if (state.isConnected === false) return false;
+    if (state.isInternetReachable === false) return false;
+
+    // Definitive online: connected AND reachability confirmed. Fast path.
+    if (state.isConnected === true && state.isInternetReachable === true) return true;
+
+    // Ambiguous: isConnected is true but isInternetReachable is null.
+    // This is common on Android. Fire a lightweight probe to break the tie.
+    // We use a 3s timeout — short enough not to delay the SMS fallback, long
+    // enough for a slow but real connection to respond.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+      const response = await fetch('https://connectivitycheck.gstatic.com/generate_204', {
+        method: 'HEAD',
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      return response.status === 204 || response.ok;
+    } catch {
+      return false; // Probe timed out or refused → treat as offline.
+    } finally {
+      clearTimeout(timer);
+    }
   } catch (err) {
-    console.warn('Network state check failed:', err);
-    return true;
+    console.warn('[emergencySms] Network state check failed:', err);
+    return true; // Fail-open: never accidentally block the normal Supabase flow.
   }
 }
 
@@ -86,7 +121,7 @@ export async function getEmergencyContactPhones(userId: string): Promise<SmsCont
   }
 }
 
-// ── SMS message builder ───────────────────────────────────────────────────────
+// ── SMS message builders ──────────────────────────────────────────────────────
 
 function buildSmsBody(
   senderName: string,
@@ -95,7 +130,7 @@ function buildSmsBody(
   description?: string,
 ): string {
   const name = senderName || 'Someone you know';
-  
+
   const typeMap: Record<string, string> = {
     police: 'Police',
     medical: 'Medical',
@@ -117,6 +152,27 @@ function buildSmsBody(
   body += locationLine;
   body += '\n\nSent automatically by Safen because their phone has no internet.\nPlease respond or call them now.';
 
+  return body;
+}
+
+/**
+ * A shorter body for the sms: URL scheme Linking fallback.
+ * Some OS URL handlers reject very long sms: URIs, so we strip optional fields.
+ */
+function buildShortSmsBody(
+  senderName: string,
+  coords: { latitude: number; longitude: number } | null,
+  type: string = 'sos',
+): string {
+  const name = senderName || 'Someone you know';
+  const typeMap: Record<string, string> = { police: 'Police', medical: 'Medical', fire: 'Fire', sos: 'SOS' };
+  const emergencyType = typeMap[type] || 'SOS';
+
+  let body = `EMERGENCY: ${name} needs help! (${emergencyType})`;
+  if (coords) {
+    body += ` Location: https://maps.google.com/?q=${coords.latitude},${coords.longitude}`;
+  }
+  body += ' - Sent via Safen';
   return body;
 }
 
@@ -156,12 +212,16 @@ export async function sendEmergencySms(
     }
 
     // ── Linking fallback (Expo Go / simulator) — primary contact only ─────
+    // Use a shorter body here: sms: URIs with very long encoded bodies are
+    // silently dropped by some OS URL handlers.
     const primaryPhone = phones[0];
-    const encodedBody = encodeURIComponent(body);
-    const canOpen = await Linking.canOpenURL(`sms:${primaryPhone}`);
+    const shortBody = buildShortSmsBody(senderName, coords, type);
+    const encodedBody = encodeURIComponent(shortBody);
+    const smsUrl = `sms:${primaryPhone}?body=${encodedBody}`;
+    const canOpen = await Linking.canOpenURL(smsUrl);
 
     if (canOpen) {
-      await Linking.openURL(`sms:${primaryPhone}?body=${encodedBody}`);
+      await Linking.openURL(smsUrl);
       return { success: true, sent: 1 };
     }
 

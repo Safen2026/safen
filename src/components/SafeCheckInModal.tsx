@@ -113,10 +113,9 @@ export const SafeCheckInModal = ({
           finalDate.setMinutes(selectedDate.getMinutes());
         }
         
-        setPickerMode(Platform.OS === 'ios' ? 'datetime' : null); 
-        if (Platform.OS !== 'ios') {
-          setPickerMode(null); 
-        }
+        // On iOS keep the picker visible (inline); on Android dismiss after
+        // the two-step date → time flow completes.
+        setPickerMode(Platform.OS === 'ios' ? 'datetime' : null);
         
         const now = new Date();
         let diffMs = finalDate.getTime() - now.getTime();

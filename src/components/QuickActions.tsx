@@ -84,6 +84,12 @@ export const QuickActions = React.memo(() => {
           icon: 'chatbubble-ellipses',
         });
       }, 300);
+    } else if (result === 'no_contacts') {
+      Alert.alert(
+        'No Contacts Available Offline',
+        'You are offline and no emergency contacts were found in your local cache. Please open the Contacts tab at least once while online to enable offline SMS alerts.',
+        [{ text: 'OK' }]
+      );
     } else {
       Alert.alert('Could not send request', 'Please check your connection and try again.');
     }

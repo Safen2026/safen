@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Animated } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
@@ -12,6 +12,10 @@ export function useReportMedia() {
   const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+  // Always tracks the latest recording instance so the unmount cleanup can
+  // stop it without the double-unload caused by [recording] deps.
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const showError = useCallback((title: string, message: string) => {
     showToast({
@@ -126,6 +130,7 @@ export function useReportMedia() {
       );
       
       setRecording(newRecording);
+      recordingRef.current = newRecording;
       setRecordingDuration(0);
 
       newRecording.setOnRecordingStatusUpdate((status) => {
@@ -134,8 +139,8 @@ export function useReportMedia() {
         }
       });
       
-      // Start pulse animation
-      Animated.loop(
+      // Start pulse animation and store the reference so we can stop it later.
+      pulseLoopRef.current = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1.3,
@@ -148,7 +153,8 @@ export function useReportMedia() {
             useNativeDriver: true,
           }),
         ])
-      ).start();
+      );
+      pulseLoopRef.current.start();
     } catch {
       showError('Error', 'Failed to start recording.');
     }
@@ -171,9 +177,21 @@ export function useReportMedia() {
       // Ignore errors if stopped abruptly
     }
     setRecording(null);
+    recordingRef.current = null;
     pulseAnim.setValue(1);
-    Animated.loop(Animated.timing(pulseAnim, { toValue: 1, duration: 10, useNativeDriver: true })).stop();
+    // Stop the exact loop instance created in startRecording.
+    pulseLoopRef.current?.stop();
+    pulseLoopRef.current = null;
   }, [recording, pulseAnim]);
+
+  // Unmount-only cleanup: releases the microphone if the user navigates away
+  // while recording is active. Uses a ref (not state) so this effect runs
+  // exactly once and never causes double-unload on a normal stopRecording call.
+  useEffect(() => {
+    return () => {
+      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+    };
+  }, []);
 
   const removeMedia = useCallback((index: number) => {
     setMediaFiles(prev => prev.filter((_, i) => i !== index));

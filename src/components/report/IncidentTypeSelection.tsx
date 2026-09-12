@@ -151,6 +151,8 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: colors.text.primary,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   nextButton: {
     backgroundColor: '#00875A',

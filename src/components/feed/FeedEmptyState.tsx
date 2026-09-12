@@ -6,7 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 export const FeedEmptyState = ({ nationalOnly }: { nationalOnly: boolean }) => {
   const { colors } = useTheme();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.white, borderColor: colors.border }]}>
       <MaterialCommunityIcons name="shield-check-outline" size={32} color={colors.text.secondary} />
       <Text style={[styles.title, { color: colors.text.primary }]}>
         Nothing reported right now
@@ -21,7 +21,15 @@ export const FeedEmptyState = ({ nationalOnly }: { nationalOnly: boolean }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', paddingVertical: 28, paddingHorizontal: 24, gap: 8 },
+  container: { 
+    alignItems: 'center', 
+    paddingVertical: 32, 
+    paddingHorizontal: 24, 
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+  },
   title    : { fontSize: 15, fontWeight: '700' },
   body     : { fontSize: 13, lineHeight: 18, textAlign: 'center' },
 });

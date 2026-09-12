@@ -13,7 +13,7 @@ import { NotificationDetailsModal } from './NotificationDetailsModal';
 import { NotificationCard } from './NotificationCard';
 import { useNotifications, AppNotification } from '../hooks/useNotifications';
 import { supabase } from '../lib/supabase';
-import { sendSosAcknowledgement, type SosAckResponse } from '../lib/notifications';
+import { sendSosAcknowledgement, notifyContactRequestResult, type SosAckResponse } from '../lib/notifications';
 
 const HeaderComponent = () => {
   const { colors } = useTheme();
@@ -21,11 +21,13 @@ const HeaderComponent = () => {
 
   const { notifications, loading: notificationsLoading, unreadCount, markAllRead, removeNotification } = useNotifications();
 
-  // DRY Refactor: Combined accept/reject logic
   const handleContactResponse = useCallback(async (notification: AppNotification, action: 'accepted' | 'declined') => {
-    const { data: { user } } = await supabase.auth.getUser();
+    // Use getSession() — project convention for reading auth state.
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user || !notification.sender_id) return;
     
+    // Optimistically remove from the notification list.
     removeNotification(notification.id);
     
     const { error } = await supabase.rpc('respond_to_contact_request', {
@@ -33,18 +35,31 @@ const HeaderComponent = () => {
       p_action: action
     });
     
-    if (error) console.warn(`respond_to_contact_request (${action}) failed:`, error.message);
+    if (error) {
+      console.warn(`respond_to_contact_request (${action}) failed:`, error.message);
+      // Do not notify the sender — the contact row was not updated.
+      return;
+    }
     
-    const fullName = user.user_metadata?.full_name || user.user_metadata?.first_name || 'A user';
-    await supabase.from('notifications').insert({
-      recipient_id: notification.sender_id,
-      sender_id: user.id,
-      sender_name: fullName,
-      type: 'contact_added',
-      title: action === 'accepted' ? 'Request Accepted' : 'Request Declined',
-      body: `${fullName} ${action === 'accepted' ? 'accepted' : 'declined'} your emergency contact request.`
-    });
+    // Fetch the full name from profiles — user_metadata is only populated for
+    // OAuth sign-ins, so email/magic-link users would appear as 'A user'.
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.id)
+      .maybeSingle();
+    const fullName = profile?.full_name?.trim() || 'A Safen user';
+    
+    // Use the canonical notification helper — single source of truth for this
+    // notification type, avoids the double-notification risk that existed when
+    // both this manual insert and the RPC could fire independently.
+    await notifyContactRequestResult(
+      notification.sender_id,
+      fullName,
+      action === 'accepted' ? 'accepted' : 'rejected'
+    );
   }, [removeNotification]);
+
 
   const handleAcceptContact = useCallback((n: AppNotification) => handleContactResponse(n, 'accepted'), [handleContactResponse]);
   const handleDeclineContact = useCallback((n: AppNotification) => handleContactResponse(n, 'declined'), [handleContactResponse]);

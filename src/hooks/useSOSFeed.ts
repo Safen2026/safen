@@ -59,25 +59,27 @@ export function useSOSFeed(alertId: string | null) {
         async (payload) => {
           if (!isMounted) return;
           
-          // Fetch the profile info for the new event
-          const newEvent = payload.new as SOSEvent;
-          if (newEvent.actor_id) {
+          // Always spread into a new object — never mutate the Supabase payload
+          // reference in-place (fragile if the SDK freezes payload objects).
+          let enrichedEvent: SOSEvent = { ...(payload.new as SOSEvent) };
+          
+          if (enrichedEvent.actor_id) {
             const { data, error } = await supabase
               .from('profiles')
               .select('full_name')
-              .eq('id', newEvent.actor_id)
+              .eq('id', enrichedEvent.actor_id)
               .single();
             if (error) {
               console.warn('Error fetching actor profile:', error);
             } else if (data) {
-              newEvent.profiles = data;
+              enrichedEvent = { ...enrichedEvent, profiles: data };
             }
           }
           
           setEvents((prev) => {
             // Prevent duplicates (just in case)
-            if (prev.some(e => e.id === newEvent.id)) return prev;
-            return [...prev, newEvent];
+            if (prev.some(e => e.id === enrichedEvent.id)) return prev;
+            return [...prev, enrichedEvent];
           });
         }
       )
