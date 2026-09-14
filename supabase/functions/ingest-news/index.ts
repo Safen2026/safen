@@ -1,16 +1,26 @@
 import { createClient } from "@supabase/supabase-js";
 import {
+  assertSafeFeedUrl,
   ingestAll,
   type IngestDeps,
   MAX_CONSECUTIVE_FAILURES,
+  MAX_FEED_BYTES,
+  MAX_REDIRECTS,
+  readCapped,
   type SourceRow,
 } from "./ingest.ts";
+import { CRON_SECRET_HEADER, secretMatches } from "../_shared/auth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const NEWS_CRON_SECRET = Deno.env.get("NEWS_CRON_SECRET");
 const FETCH_TIMEOUT_MS = 10_000;
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  if (!(await secretMatches(req.headers.get(CRON_SECRET_HEADER), NEWS_CRON_SECRET))) {
+    return new Response("unauthorized", { status: 401 });
+  }
+
   const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   const deps: IngestDeps = {
@@ -27,12 +37,29 @@ Deno.serve(async () => {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
       try {
-        const res = await fetch(url, {
-          signal: ctrl.signal,
-          headers: { "user-agent": "SafenBot/1.0 (+https://safen.ng)" },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.text();
+        // Redirects are followed by hand so every hop is re-validated —
+        // otherwise a public feed could 302 the fetch to an internal address.
+        let target = assertSafeFeedUrl(url);
+        for (let hop = 0; ; hop++) {
+          const res = await fetch(target, {
+            signal: ctrl.signal,
+            redirect: "manual",
+            headers: { "user-agent": "SafenBot/1.0 (+https://safen.ng)" },
+          });
+          if (res.status >= 300 && res.status < 400) {
+            await res.body?.cancel();
+            const location = res.headers.get("location");
+            if (!location) throw new Error(`HTTP ${res.status} without location`);
+            if (hop >= MAX_REDIRECTS) throw new Error("too many redirects");
+            target = assertSafeFeedUrl(new URL(location, target).href);
+            continue;
+          }
+          if (!res.ok) {
+            await res.body?.cancel();
+            throw new Error(`HTTP ${res.status}`);
+          }
+          return await readCapped(res, MAX_FEED_BYTES);
+        }
       } finally {
         clearTimeout(timer);
       }
