@@ -1,6 +1,6 @@
 export const LightTheme = {
   primary: '#E02B2B', // SOS Red
-  background: '#F8F9FA',
+  background: '#F2F4F8',  // Cool blue-tinted light grey for more depth
   white: '#FFFFFF',
   
   text: {
@@ -18,7 +18,7 @@ export const LightTheme = {
     warningText: '#B45309'
   },
   
-  border: '#E5E7EB',
+  border: '#DDE1EA',  // Slightly deeper border for light mode
   icon: {
     medical: '#DC2626',
     police: '#2563EB',
@@ -29,33 +29,33 @@ export const LightTheme = {
 };
 
 export const DarkTheme = {
-  primary: '#E02B2B', // SOS Red (Keep red for emergencies)
-  background: '#121212', // Deep dark gray
-  white: '#1E1E1E', // Re-purpose 'white' to mean 'surface' for cards
-  
+  primary: '#E02B2B',        // SOS Red — always stays red for emergencies
+  background: '#0A0A0F',     // Near-black with a subtle blue-black tint
+  white: '#13131A',          // Card surfaces — dark navy-charcoal
+
   text: {
-    primary: '#F3F4F6', // High contrast off-white
-    secondary: '#9CA3AF', // Muted gray
-    inverse: '#1F2937' // Dark gray for buttons if needed
+    primary: '#F0F0F5',      // Slightly warm off-white for readability
+    secondary: '#8B8FA8',    // Desaturated blue-grey
+    inverse: '#0A0A0F',
   },
-  
+
   status: {
-    safeBackground: '#064E3B', // Deep green
-    safeText: '#34D399', // Bright green
-    alertBackground: '#7F1D1D', // Deep red
-    alertText: '#FCA5A5', // Bright red
-    warningBackground: '#78350F', // Deep yellow/orange
-    warningText: '#FCD34D' // Bright yellow
+    safeBackground: '#052E16', // Very dark green
+    safeText: '#4ADE80',       // Bright lime-green
+    alertBackground: '#450A0A', // Very dark red
+    alertText: '#F87171',       // Soft coral-red
+    warningBackground: '#431407', // Very dark amber
+    warningText: '#FBBF24',      // Warm amber
   },
-  
-  border: '#374151', // Dark border
+
+  border: '#1E1E2E',         // Subtle dark border (navy-tinted)
   icon: {
-    medical: '#EF4444',
-    police: '#3B82F6',
-    fire: '#F97316',
-    activeTab: '#34D399',
-    inactiveTab: '#6B7280'
-  }
+    medical: '#F87171',      // Soft red
+    police: '#60A5FA',       // Soft blue
+    fire: '#FB923C',         // Soft orange
+    activeTab: '#4ADE80',    // Bright green
+    inactiveTab: '#6B7280',
+  },
 };
 
 // Temporarily keep Colors to prevent immediate app crash during refactor

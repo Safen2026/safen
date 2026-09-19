@@ -8,6 +8,7 @@ import { showToast } from '../utils/toast';
 import { useAlertContext } from '../context/AlertContext';
 import type { AlertType } from '../hooks/useAlert';
 import { useTheme } from '../context/ThemeContext';
+import { router } from 'expo-router';
 
 export type ActionType = 'medical' | 'police' | 'fire';
 
@@ -19,10 +20,11 @@ export const QuickActions = React.memo(() => {
   const [description, setDescription] = useState('');
   const { loading, triggerAlert } = useAlertContext();
 
-  const ACTION_CONFIG = useMemo<Record<ActionType, ActionConfig>>(() => ({
+  const ACTION_CONFIG = useMemo<Record<ActionType, ActionConfig & { cardBg: string }>>(() => ({
     medical: {
       label  : 'Medical',
       color  : colors.icon.medical,
+      cardBg : colors.icon.medical + '10',
       icon   : (size: number, color: string) => <MaterialCommunityIcons name="medical-bag" size={size} color={color} />,
       message: 'Alert your emergency contacts about a medical situation.',
       detail : 'Your contacts will receive your location and a medical alert.',
@@ -31,6 +33,7 @@ export const QuickActions = React.memo(() => {
     police: {
       label  : 'Security',
       color  : colors.icon.police,
+      cardBg : colors.icon.police + '10',
       icon   : (size: number, color: string) => <MaterialCommunityIcons name="shield-check-outline" size={size} color={color} />,
       message: 'Alert your emergency contacts about a security situation.',
       detail : 'Your contacts will receive your location and a security alert.',
@@ -39,6 +42,7 @@ export const QuickActions = React.memo(() => {
     fire: {
       label  : 'Fire',
       color  : colors.icon.fire,
+      cardBg : colors.icon.fire + '10',
       icon   : (size: number, color: string) => <MaterialIcons name="local-fire-department" size={size} color={color} />,
       message: 'Alert your emergency contacts about a fire situation.',
       detail : 'Your contacts will receive your location and a fire alert.',
@@ -97,7 +101,16 @@ export const QuickActions = React.memo(() => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle} accessible={true} accessibilityRole="header">Quick Actions</Text>
+      <View style={styles.titleRow}>
+        <Text style={styles.sectionTitle} accessible={true} accessibilityRole="header">Quick Actions</Text>
+        <TouchableOpacity
+          onPress={() => router.push('/(tabs)/report')}
+          accessibilityRole="button"
+          accessibilityLabel="View all report options"
+        >
+          <Text style={styles.viewAll}>View all &rsaquo;</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.row}>
         {(Object.keys(ACTION_CONFIG) as ActionType[]).map(type => {
@@ -105,13 +118,13 @@ export const QuickActions = React.memo(() => {
           return (
             <TouchableOpacity
               key={type}
-              style={styles.actionCard}
+              style={[styles.actionCard, { backgroundColor: config.cardBg }]}
               onPress={() => handleOpen(type)}
               disabled={loading}
               accessibilityRole="button"
               accessibilityLabel={`${config.label} quick action`}
             >
-              <View style={[styles.iconCircle, { backgroundColor: `${config.color}22` }]} aria-hidden={true}>
+              <View style={[styles.iconCircle, { backgroundColor: `${config.color}20` }]} aria-hidden={true}>
                 {config.icon(26, config.color)}
               </View>
               <Text style={styles.actionText}>{config.label}</Text>
@@ -141,16 +154,13 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.white,
     marginHorizontal: 16,
     padding: 16,
-    marginBottom: 24,
+    marginBottom: 6,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.text.primary,
-    marginBottom: 12,
   },
   row: {
     flexDirection: 'row',
@@ -164,8 +174,6 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     paddingHorizontal: 8,
     alignItems: 'center',
     gap: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   iconCircle: {
     width: 48,
@@ -178,5 +186,16 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.text.primary,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  viewAll: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
   },
 });

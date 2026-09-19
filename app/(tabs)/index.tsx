@@ -12,7 +12,9 @@ import { SafeCheckInModal } from '../../src/components/SafeCheckInModal';
 import { SafetyNetworkRow } from '../../src/components/SafetyNetworkRow';
 import { QuickActions }     from '../../src/components/QuickActions';
 import { useSafeCheckIn }   from '../../src/hooks/useSafeCheckIn';
-import { SafetyFeed }       from '../../src/components/SafetyFeed';
+import { SafetyFeed }            from '../../src/components/SafetyFeed';
+import { ProtectionStatusCard }  from '../../src/components/ProtectionStatusCard';
+import { LocationCard }          from '../../src/components/LocationCard';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -47,14 +49,20 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* 1. Personalised welcome */}
-        <WelcomeCard />
+        {/* 1. Welcome + Protection Status — side by side */}
+        <View style={styles.topRow}>
+          <View style={styles.topRowLeft}><WelcomeCard /></View>
+          <View style={styles.topRowRight}><ProtectionStatusCard /></View>
+        </View>
 
         {/* 2. SOS — always above the fold, always accessible */}
         <SOSButton />
 
-        {/* 3. Safe Check-In status (idle CTA or active watchdog info) */}
-        <SafeCheckInCard
+        {/* 3. Quick Actions — Security, Medical, Fire */}
+        <QuickActions />
+
+        {/* 4. Safe Check-In status (idle CTA or active watchdog info) */}
+        <SafeCheckInCard 
           onStart={openCheckInModal}
           activeCheckIn={isActive ? {
             destination: session?.destination ?? '',
@@ -68,14 +76,16 @@ export default function HomeScreen() {
           isExpired={isExpired}
         />
 
-        {/* 4. Quick Actions — Security, Medical, Fire */}
-        <QuickActions />
+        {/* 5. Location */}
+        <View style={styles.sectionPad}>
+          <LocationCard />
+        </View>
 
-        {/* 5. Safety Network - horizontal contact row */}
+        {/* 6. Safety Network - horizontal contact row */}
         <SafetyNetworkRow />
-
         {/* Safety Guidelines Card */}
         <TouchableOpacity 
+        
           style={[styles.safetyCard, { backgroundColor: colors.white, borderColor: colors.border }]} 
           onPress={() => router.push('/safety-guidelines')}
           activeOpacity={0.8}
@@ -117,9 +127,22 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
+  topRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 4,
+    marginTop: 4,
+  },
+  topRowLeft: { flex: 55 },
+  topRowRight: { flex: 45 },
+  sectionPad: {
+    marginHorizontal: 16,
+    marginBottom: 6,
+  },
   safetyCard: {
     marginHorizontal: 16,
-    marginBottom: 24,
+    marginBottom: 6,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,

@@ -20,104 +20,112 @@ import { Shadows } from '../constants/Theme';
 
 // ─── Slider geometry ────────────────────────────────────────────────────────
 const CARD_HEIGHT  = 80;
-const PADDING      = 8;
-const THUMB_SIZE   = CARD_HEIGHT - PADDING * 2;
-const CARD_WIDTH   = Dimensions.get('window').width - 32; // 16px margin each side
+const PADDING      = 10;
+const THUMB_SIZE   = 56;                                          // slightly smaller than before
+const CARD_WIDTH   = Dimensions.get('window').width - 32;
 const SWIPE_RANGE  = CARD_WIDTH - THUMB_SIZE - PADDING * 2;
-const TRIGGER_AT   = SWIPE_RANGE * 0.72; // 72% across = confirmed swipe
+const TRIGGER_AT   = SWIPE_RANGE * 0.72;
 // ────────────────────────────────────────────────────────────────────────────
 
 export const SOSButton = React.memo(() => {
   const { loading, activeAlert, triggerAlert, cancelAlert } = useAlertContext();
   const isActivated = !!activeAlert;
 
-  const pan         = useRef(new Animated.Value(0)).current;
-  const thumbBreath = useRef(new Animated.Value(1)).current;
-  const textShimmer = useRef(new Animated.Value(0.85)).current;
-  
+  const pan          = useRef(new Animated.Value(0)).current;
+  const thumbBreath  = useRef(new Animated.Value(1)).current;
+  const textShimmer  = useRef(new Animated.Value(0.85)).current;
+
+  // Pulse — all useNativeDriver:false so they share translateX with pan
+  const pulseScale1  = useRef(new Animated.Value(1)).current;
+  const pulseOpacity1= useRef(new Animated.Value(0.55)).current;
+  const pulseScale2  = useRef(new Animated.Value(1)).current;
+  const pulseOpacity2= useRef(new Animated.Value(0.35)).current;
+
   const ch1 = useRef(new Animated.Value(0.25)).current;
   const ch2 = useRef(new Animated.Value(0.25)).current;
   const ch3 = useRef(new Animated.Value(0.25)).current;
 
   const [smsMode, setSmsMode] = useState(false);
 
-  // ── Idle breathing & balanced chevron wave animations ────────────────────
+  // ── Animations ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (isActivated) return;
 
     const breathAnim = Animated.loop(
       Animated.sequence([
-        Animated.timing(thumbBreath, {
-          toValue: 1.05,
-          duration: 1100,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
-        Animated.timing(thumbBreath, {
-          toValue: 1.0,
-          duration: 1100,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: false,
-        }),
+        Animated.timing(thumbBreath, { toValue: 1.06, duration: 900,  easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(thumbBreath, { toValue: 1.0,  duration: 900,  easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
       ])
     );
 
     const shimmerAnim = Animated.loop(
       Animated.sequence([
-        Animated.timing(textShimmer, {
-          toValue: 1.0,
-          duration: 1100,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-        Animated.timing(textShimmer, {
-          toValue: 0.8,
-          duration: 1100,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
+        Animated.timing(textShimmer, { toValue: 1.0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+        Animated.timing(textShimmer, { toValue: 0.8, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
       ])
     );
 
-    const createChevronSequence = (val: Animated.Value, delayMs: number) => {
-      return Animated.sequence([
+    const createChevronSeq = (val: Animated.Value, delayMs: number) =>
+      Animated.sequence([
         Animated.delay(delayMs),
-        Animated.timing(val, {
-          toValue: 1,
-          duration: 230,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
-        Animated.timing(val, {
-          toValue: 0.25,
-          duration: 230,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }),
+        Animated.timing(val, { toValue: 1,    duration: 230, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
+        Animated.timing(val, { toValue: 0.25, duration: 230, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
         Animated.delay(Math.max(0, 680 - delayMs)),
       ]);
-    };
 
     const chevronLoop = Animated.loop(
       Animated.parallel([
-        createChevronSequence(ch1, 0),
-        createChevronSequence(ch2, 175),
-        createChevronSequence(ch3, 350),
+        createChevronSeq(ch1, 0),
+        createChevronSeq(ch2, 175),
+        createChevronSeq(ch3, 350),
+      ])
+    );
+
+    // Two-ring pulse — ring 2 is offset so they alternate, giving a richer effect
+    const pulse1 = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pulseScale1,   { toValue: 2.4,  duration: 700,  easing: Easing.out(Easing.ease), useNativeDriver: false }),
+          Animated.timing(pulseScale1,   { toValue: 1,    duration: 0,    useNativeDriver: false }),
+        ]),
+        Animated.sequence([
+          Animated.timing(pulseOpacity1, { toValue: 0,    duration: 700,  useNativeDriver: false }),
+          Animated.timing(pulseOpacity1, { toValue: 0.55, duration: 0,    useNativeDriver: false }),
+        ]),
+      ])
+    );
+
+    const pulse2 = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.delay(350),
+          Animated.timing(pulseScale2,   { toValue: 2.4,  duration: 700,  easing: Easing.out(Easing.ease), useNativeDriver: false }),
+          Animated.timing(pulseScale2,   { toValue: 1,    duration: 0,    useNativeDriver: false }),
+        ]),
+        Animated.sequence([
+          Animated.delay(350),
+          Animated.timing(pulseOpacity2, { toValue: 0,    duration: 700,  useNativeDriver: false }),
+          Animated.timing(pulseOpacity2, { toValue: 0.35, duration: 0,    useNativeDriver: false }),
+        ]),
       ])
     );
 
     breathAnim.start();
     shimmerAnim.start();
     chevronLoop.start();
+    pulse1.start();
+    pulse2.start();
 
     return () => {
       breathAnim.stop();
       shimmerAnim.stop();
       chevronLoop.stop();
+      pulse1.stop();
+      pulse2.stop();
     };
-  }, [isActivated, thumbBreath, textShimmer, ch1, ch2, ch3]);
+  }, [isActivated, thumbBreath, textShimmer, ch1, ch2, ch3,
+      pulseScale1, pulseOpacity1, pulseScale2, pulseOpacity2]);
 
-  // ── Reset slider after any loading cycle ────────────────────────────────
   useEffect(() => {
     if (!loading) {
       Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
@@ -127,29 +135,21 @@ export const SOSButton = React.memo(() => {
   const handleCancelAlert = useCallback(async () => {
     const success = await cancelAlert();
     if (success) {
-      showToast({
-        title: 'SOS Cancelled',
-        subtitle: 'Your contacts have been updated.',
-      });
+      showToast({ title: 'SOS Cancelled', subtitle: 'Your contacts have been updated.' });
     }
     return success;
   }, [cancelAlert]);
 
-
-
-  // ── Handlers ────────────────────────────────────────────────────────────
   const handleTrigger = async () => {
     Vibration.vibrate([0, 300, 100, 300]);
     const result: AlertResult = await triggerAlert('sos');
-
     if (result === 'ok') {
       setSmsMode(false);
     } else if (result === 'sms') {
       setSmsMode(true);
     } else if (result === 'no_contacts') {
-      Alert.alert(
-        'No Contacts Available Offline',
-        'You are offline and no emergency contacts were found in your local cache. Please open the Contacts tab at least once while online to enable offline SMS alerts.',
+      Alert.alert('No Contacts Available Offline',
+        'You are offline and no emergency contacts were found in your local cache.',
         [{ text: 'OK' }]
       );
     } else {
@@ -157,27 +157,20 @@ export const SOSButton = React.memo(() => {
     }
   };
 
-  // ── Swipe gesture ────────────────────────────────────────────────────────
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false, // Don't block normal taps
-      onMoveShouldSetPanResponder: (_, g) => {
-        // Gesture Lock: Only capture gesture if it is horizontally dominant and moved > 5px.
-        // This prevents iOS Native ScrollView from fighting the gesture, fixing the sluggishness.
-        return !isActivated && !loading && Math.abs(g.dx) > 5 && Math.abs(g.dx) > Math.abs(g.dy);
-      },
-      onPanResponderTerminationRequest: () => false, // Refuse to surrender gesture to iOS Native components
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) =>
+        !isActivated && !loading && Math.abs(g.dx) > 5 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderTerminationRequest: () => false,
       onPanResponderMove: (_, g) => {
         if (g.dx > 0) {
           if (g.dx <= SWIPE_RANGE) {
             pan.setValue(g.dx);
           } else {
-            // Apply rubber-banding friction that maxes out at 6px over-drag
-            // so it never gets clipped by the track's overflow: 'hidden'
             const excess = g.dx - SWIPE_RANGE;
             const maxOverdrag = 6;
-            const rubberBandedValue = SWIPE_RANGE + (maxOverdrag * (1 - Math.exp(-excess / 30)));
-            pan.setValue(rubberBandedValue);
+            pan.setValue(SWIPE_RANGE + (maxOverdrag * (1 - Math.exp(-excess / 30))));
           }
         }
       },
@@ -200,11 +193,14 @@ export const SOSButton = React.memo(() => {
 
   const trackBgColor = pan.interpolate({
     inputRange: [0, SWIPE_RANGE],
-    outputRange: ['#C0392B', '#991B1B'],
+    outputRange: ['#bb1616', '#4f0101'],
     extrapolate: 'clamp',
   });
 
-  // ── Render ─────────────────────────────────────────────────────────
+  // Pulse rings translate WITH the thumb
+  const thumbCentre = PADDING + THUMB_SIZE / 2;
+  const pulseSize   = THUMB_SIZE + 6; // same base size as thumb, grows via scale
+
   return (
     <View style={styles.wrapper}>
       <ActiveSOSModal
@@ -215,6 +211,42 @@ export const SOSButton = React.memo(() => {
       />
 
       <Animated.View style={[styles.track, { backgroundColor: trackBgColor }]} aria-busy={loading}>
+
+        {/* Pulse ring 1 — moves with thumb via translateX: pan */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: PADDING + THUMB_SIZE / 2 - pulseSize / 2,
+            top:  PADDING + THUMB_SIZE / 2 - pulseSize / 2,
+            width:  pulseSize,
+            height: pulseSize,
+            borderRadius: pulseSize / 2,
+            backgroundColor: '#E02B2B',
+            transform: [{ translateX: pan }, { scale: pulseScale1 }],
+            opacity: pulseOpacity1,
+            zIndex: 2,
+          }}
+        />
+
+        {/* Pulse ring 2 — offset start */}
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: PADDING + THUMB_SIZE / 2 - pulseSize / 2,
+            top:  PADDING + THUMB_SIZE / 2 - pulseSize / 2,
+            width:  pulseSize,
+            height: pulseSize,
+            borderRadius: pulseSize / 2,
+            backgroundColor: '#E02B2B',
+            transform: [{ translateX: pan }, { scale: pulseScale2 }],
+            opacity: pulseOpacity2,
+            zIndex: 2,
+          }}
+        />
+
+        {/* Thumb */}
         <Animated.View
           style={[
             styles.thumb,
@@ -231,23 +263,23 @@ export const SOSButton = React.memo(() => {
           accessibilityHint="Double tap to trigger SOS immediately"
           accessibilityActions={[{ name: 'activate', label: 'Trigger SOS' }]}
           onAccessibilityAction={(event) => {
-            if (event.nativeEvent.actionName === 'activate') {
-              handleTrigger();
-            }
+            if (event.nativeEvent.actionName === 'activate') handleTrigger();
           }}
         >
+          {/* Radial highlight — simulates dome/3D pop-out */}
+          <View style={styles.thumbHighlight} />
+
           {loading
             ? <ActivityIndicator size="small" color="#fff" />
             : <Text style={styles.thumbText}>SOS</Text>
           }
         </Animated.View>
 
+        {/* Swipe label */}
         <Animated.View
           style={[
             styles.textContainer,
-            {
-              opacity: loading ? textShimmer : Animated.multiply(textOpacity, textShimmer),
-            },
+            { opacity: loading ? textShimmer : Animated.multiply(textOpacity, textShimmer) },
           ]}
           pointerEvents="none"
         >
@@ -256,35 +288,34 @@ export const SOSButton = React.memo(() => {
           </Text>
         </Animated.View>
 
+        {/* Chevron arrows */}
         {!loading && (
           <View style={styles.chevrons} pointerEvents="none">
             <Animated.View style={{ opacity: ch1 }}>
-              <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
+              <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(127,29,29,0.5)" />
             </Animated.View>
             <Animated.View style={[styles.chevronOverlap, { opacity: ch2 }]}>
-              <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
+              <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(127,29,29,0.5)" />
             </Animated.View>
             <Animated.View style={[styles.chevronOverlap, { opacity: ch3 }]}>
-              <MaterialCommunityIcons name="chevron-right" size={20} color="#ffffff" />
+              <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(127,29,29,0.5)" />
             </Animated.View>
           </View>
         )}
       </Animated.View>
-
     </View>
   );
 });
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   wrapper: {
     paddingHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 22,
+    marginTop: 6,
+    marginBottom: 6,
   },
   track: {
     height: CARD_HEIGHT,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: PADDING,
     flexDirection: 'row',
     alignItems: 'center',
@@ -294,26 +325,43 @@ const styles = StyleSheet.create({
     ...Shadows.sos,
   },
   thumb: {
-    width: THUMB_SIZE,
+    width:  THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: '#941111',
+    borderWidth: 3.5,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
     left: PADDING,
     zIndex: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    backgroundColor: '#880d0fa3',   // deep red base
+    overflow: 'hidden',
+    // Strong shadow = pop-out depth
+    shadowColor: '#420404',
+    shadowOffset: { width: 3, height: 8 },
+    shadowOpacity: 0.55,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 7,
+  },
+  thumbHighlight: {
+    position: 'absolute',
+    top: 15,
+    left: 9,
+    width:  THUMB_SIZE * 0.6,
+    height: THUMB_SIZE * 0.32,
+    borderRadius: THUMB_SIZE * 0.18,
+    backgroundColor: 'rgba(82, 10, 10, 0.28)',
+    transform: [{ rotate: '-18deg' }],
   },
   thumbText: {
     color: '#fff',
     fontWeight: '900',
-    fontSize: 14,
-    letterSpacing: 1.2,
+    fontSize: 13,
+    letterSpacing: 1.5,
+    textShadowColor: 'rgba(0,0,0,0.25)',
+    textShadowOffset: { width: 1, height: 4 },
+    textShadowRadius: 2,
   },
   textContainer: {
     alignItems: 'center',
@@ -321,8 +369,8 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   swipeText: {
-    color: '#fff',
-    fontSize: 18,
+    color: '#ffffff',
+    fontSize: 17,
     fontWeight: '700',
     letterSpacing: 0.3,
   },

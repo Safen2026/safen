@@ -206,7 +206,7 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.white,
     marginHorizontal: 16,
     paddingVertical: 16,
-    marginBottom: 24,
+    marginBottom: 8,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
