@@ -1,4 +1,4 @@
-﻿// Supabase Edge Function: send-feedback
+// Supabase Edge Function: send-feedback
 //
 // Triggered by a Database Webhook on INSERT into public.feedback.
 // Sends feedback to your email via Resend (resend.com) — no SMTP,
@@ -6,17 +6,28 @@
 //
 // Required secrets:
 //   supabase secrets set RESEND_API_KEY=re_your_key_here
-//   supabase secrets set GMAIL_ADDRESS=georgejnr31@gmail.com  (kept as recipient)
+//   supabase secrets set GMAIL_ADDRESS=your_email@domain.com  (kept as recipient)
 //
 // Deploy:
 //   supabase functions deploy send-feedback --no-verify-jwt
 
+// Removed to prevent local TS error
+
+// TypeScript workaround for VS Code without Deno extension
+declare const Deno: {
+  serve: (handler: (req: Request) => Promise<Response> | Response) => void;
+  env: {
+    get: (key: string) => string | undefined;
+  };
+};
+
+// @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!;
-const RECIPIENT_EMAIL = Deno.env.get('GMAIL_ADDRESS') ?? 'georgejnr31@gmail.com';
+const RECIPIENT_EMAIL = Deno.env.get('GMAIL_ADDRESS');
 
 Deno.serve(async (req) => {
   try {
@@ -30,6 +41,11 @@ Deno.serve(async (req) => {
     if (!RESEND_API_KEY) {
       console.error('Missing RESEND_API_KEY secret');
       return new Response('Email not configured', { status: 500 });
+    }
+
+    if (!RECIPIENT_EMAIL) {
+      console.error('Missing GMAIL_ADDRESS secret');
+      return new Response('Recipient email not configured', { status: 500 });
     }
 
     // Look up who sent it

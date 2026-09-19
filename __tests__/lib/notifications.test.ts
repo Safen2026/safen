@@ -38,6 +38,9 @@ const EXPECTED_TYPE_LABELS: Record<NotifyType, string> = {
   check_in_reminder:   'Safe Check-In Reminder',
   check_in_deadline:   'Safe Check-In Deadline',
   sos_ack:             'SOS Response',
+  contact_added:       'New Contact',
+  ping:                'Safety Ping',
+  ping_ack:            'Ping Response',
 };
 
 describe('NotifyType coverage', () => {
@@ -48,8 +51,8 @@ describe('NotifyType coverage', () => {
     }
   });
 
-  it('has exactly 9 notification types', () => {
-    expect(Object.keys(EXPECTED_TYPE_LABELS)).toHaveLength(9);
+  it('has exactly 12 notification types', () => {
+    expect(Object.keys(EXPECTED_TYPE_LABELS)).toHaveLength(12);
   });
 
   it('emergency types are prefixed with emoji in title', () => {
@@ -61,10 +64,10 @@ describe('NotifyType coverage', () => {
     }
   });
 
-  it('"report" is the only non-emergency type that gets a different title format', () => {
-    const nonEmergency: NotifyType[] = ['report'];
+  it('"report" and new types are non-emergency types that get a different title format', () => {
+    const nonEmergency: NotifyType[] = ['report', 'contact_added', 'ping', 'ping_ack', 'check_in_reminder', 'check_in_deadline'];
     for (const type of nonEmergency) {
-      expect(type).toBe('report');
+      expect(type !== 'sos' && type !== 'medical' && type !== 'police' && type !== 'fire' && type !== 'sos_ack' && type !== 'check_in_missed').toBe(true);
     }
   });
 });
