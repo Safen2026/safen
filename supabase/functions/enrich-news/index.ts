@@ -2,16 +2,24 @@ import { createClient } from "@supabase/supabase-js";
 import { classify, makeAnthropicClient } from "./classify.ts";
 import { evaluateGate } from "./gate.ts";
 import { type GazetteerTables, resolveLocations } from "../_shared/gazetteer.ts";
+import { CRON_SECRET_HEADER, secretMatches } from "../_shared/auth.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
+const NEWS_CRON_SECRET = Deno.env.get("NEWS_CRON_SECRET");
 
 const BATCH_SIZE = 40;
 const CONCURRENCY = 5;
 const MAX_ATTEMPTS = 3;
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  // Every invocation spends Anthropic budget. The publishable key in the
+  // Authorization header is public, so it cannot be what authorizes this.
+  if (!(await secretMatches(req.headers.get(CRON_SECRET_HEADER), NEWS_CRON_SECRET))) {
+    return new Response("unauthorized", { status: 401 });
+  }
+
   if (!ANTHROPIC_API_KEY) {
     console.error("enrich-news: ANTHROPIC_API_KEY not configured");
     return new Response("not configured", { status: 500 });
