@@ -1,7 +1,12 @@
 import { parseFeed } from "../_shared/rss.ts";
 import { urlHash } from "../_shared/url.ts";
 
-export const MAX_CONSECUTIVE_FAILURES = 5;
+/** Must match the news-ingest schedule in the pipeline cron migration. */
+export const INGEST_INTERVAL_MINUTES = 30;
+
+/** One day of failed polls. Counted in polls, not time, so it must be
+ *  rescaled whenever INGEST_INTERVAL_MINUTES changes. */
+export const MAX_CONSECUTIVE_FAILURES = (24 * 60) / INGEST_INTERVAL_MINUTES;
 
 /** Real Nigerian WordPress feeds are well under 1 MB; 5 MB is headroom, not a
  *  target. Anything bigger is a misconfigured or hostile source. */
