@@ -83,9 +83,26 @@ describe('isOnline', () => {
     expect(await isOnline()).toBe(true);
   });
 
-  it('returns false when isInternetReachable is null', async () => {
+  it('returns false when isInternetReachable is null and probe fails', async () => {
     mockGetNetworkState.mockResolvedValueOnce({ isConnected: true, isInternetReachable: null });
-    expect(await isOnline()).toBe(false);
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockRejectedValueOnce(new Error('Probe timeout'));
+    try {
+      expect(await isOnline()).toBe(false);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('returns true when isInternetReachable is null and probe succeeds', async () => {
+    mockGetNetworkState.mockResolvedValueOnce({ isConnected: true, isInternetReachable: null });
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValueOnce({ status: 204, ok: true } as Response);
+    try {
+      expect(await isOnline()).toBe(true);
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 });
 

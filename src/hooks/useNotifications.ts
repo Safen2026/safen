@@ -30,7 +30,11 @@ export function useNotifications() {
   const userIdRef = useRef<string | null>(null);
 
   const fetchNotifications = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    // getSession() reads from local cache — never makes a network round-trip.
+    // getUser() contacts the Auth server on every call, which hammers the network
+    // when called from a 30s poll + AppState listener simultaneously.
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) {
       setNotifications([]);
       setLoading(false);
@@ -59,7 +63,8 @@ export function useNotifications() {
     let pollTimer: ReturnType<typeof setInterval> | null = null;
 
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return;
       userIdRef.current = user.id;
 

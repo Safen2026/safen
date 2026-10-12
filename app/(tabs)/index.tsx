@@ -1,9 +1,8 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { ScrollView, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
-import { Shadows } from '../../src/constants/Theme';
 import { Header }           from '../../src/components/Header';
 import { WelcomeCard }      from '../../src/components/WelcomeCard';
 import { SOSButton }        from '../../src/components/SOSButton';
@@ -12,7 +11,7 @@ import { SafeCheckInModal } from '../../src/components/SafeCheckInModal';
 import { SafetyNetworkRow } from '../../src/components/SafetyNetworkRow';
 import { QuickActions }     from '../../src/components/QuickActions';
 import { useSafeCheckIn }   from '../../src/hooks/useSafeCheckIn';
-import { SafetyFeed }            from '../../src/components/SafetyFeed';
+import { AlertsBanner }          from '../../src/components/AlertsBanner';
 import { ProtectionStatusCard }  from '../../src/components/ProtectionStatusCard';
 import { LocationCard }          from '../../src/components/LocationCard';
 
@@ -40,7 +39,28 @@ export default function HomeScreen() {
     await startCheckIn(data);
   }, [startCheckIn]);
 
-  const handleSeeAllFeed = useCallback(() => router.push('/feed'), [router]);
+  // Memoize activeCheckIn so SafeCheckInCard's React.memo actually works.
+  // Without this, the inline object literal was recreated every second by the
+  // tick timer in useSafeCheckIn, causing the whole card tree to re-render.
+  const activeCheckIn = useMemo(() => {
+    if (!isActive) return null;
+    return {
+      destination: session?.destination ?? '',
+      timeLeftStr: isExpired
+        ? '🚨 Deadline passed — confirm you\'re safe!'
+        : `${timeLeftStr} • Watchdog on`,
+    };
+  }, [isActive, session?.destination, isExpired, timeLeftStr]);
+
+  // Memoize initialSession for the same reason — inline object would be
+  // a new reference every second, forcing SafeCheckInModal to re-render.
+  const initialSession = useMemo(() => {
+    if (!isActive) return null;
+    return {
+      destination: session?.destination ?? '',
+      notifyContacts: session?.notifyContacts ?? true,
+    };
+  }, [isActive, session?.destination, session?.notifyContacts]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -64,12 +84,7 @@ export default function HomeScreen() {
         {/* 4. Safe Check-In status (idle CTA or active watchdog info) */}
         <SafeCheckInCard 
           onStart={openCheckInModal}
-          activeCheckIn={isActive ? {
-            destination: session?.destination ?? '',
-            timeLeftStr: isExpired
-              ? '🚨 Deadline passed — confirm you\'re safe!'
-              : `${timeLeftStr} • Watchdog on`,
-          } : null}
+          activeCheckIn={activeCheckIn}
           onConfirmSafe={confirmSafe}
           onCancel={cancelCheckIn}
           onEdit={openCheckInModal}
@@ -102,8 +117,8 @@ export default function HomeScreen() {
           </View>
         </TouchableOpacity>
 
-        {/* 6. Blended security feed - news + community, scoped to the user's area */}
-        <SafetyFeed limit={4} onSeeAll={handleSeeAllFeed} />
+        {/* 6. Compact Security Alerts Banner */}
+        <AlertsBanner />
       </ScrollView>
 
       {/* Full-Screen Safe Check-In Modal */}
@@ -111,10 +126,7 @@ export default function HomeScreen() {
         visible={checkInModalVisible}
         onClose={closeCheckInModal}
         onStartCheckIn={handleStartCheckIn}
-        initialSession={isActive ? {
-          destination: session?.destination ?? '',
-          notifyContacts: session?.notifyContacts ?? true,
-        } : null}
+        initialSession={initialSession}
       />
     </View>
   );

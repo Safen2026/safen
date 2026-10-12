@@ -21,10 +21,10 @@ export const useTheme = () => useContext(ThemeContext);
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const systemColorScheme = useColorScheme();
+  const isMounted = React.useRef(false);
   
   // Initialize with system color scheme
   const [isDark, setIsDark] = useState(systemColorScheme === 'dark');
-  // Keep track of whether the user has explicitly overridden the theme
   const [userOverride, setUserOverride] = useState<boolean | null>(null);
 
   // Load saved user preference on mount
@@ -44,12 +44,18 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     loadTheme();
   }, []);
 
-  // Sync with OS theme changes ONLY if the user hasn't explicitly overridden it
+  // Sync with OS theme changes
   useEffect(() => {
-    if (userOverride === null) {
-      setIsDark(systemColorScheme === 'dark');
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
     }
-  }, [systemColorScheme, userOverride]);
+    // If the system color scheme changes AFTER mount, it means the user actively toggled their phone's settings.
+    // In this case, we should prioritize the phone's setting and clear any manual override they previously set.
+    setIsDark(systemColorScheme === 'dark');
+    setUserOverride(null);
+    AsyncStorage.removeItem(THEME_STORAGE_KEY).catch(() => {});
+  }, [systemColorScheme]);
 
   const toggleTheme = async () => {
     const newTheme = !isDark;

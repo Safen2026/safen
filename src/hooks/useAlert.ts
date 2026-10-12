@@ -148,12 +148,38 @@ export function useAlert() {
       const cacheKey = `safen_cached_contacts_${user.id}`;
       const raw = await AsyncStorage.getItem(cacheKey);
 
+      // Cache format: { cachedAt: number, contacts: CachedContact[] }
+      // Older builds wrote a plain CachedContact[] — handle both shapes gracefully.
       type CachedContact = { name: string; phone: string; status: string };
-      const smsContacts: { name: string; phone: string }[] = raw
-        ? (JSON.parse(raw) as CachedContact[])
-            .filter((c) => c.status === 'accepted' && c.phone?.trim().length > 0)
-            .map((c) => ({ name: c.name || 'Contact', phone: c.phone.trim() }))
-        : [];
+      type CacheEnvelope = { cachedAt?: number; contacts?: CachedContact[] };
+
+      // NOTE: We deliberately do NOT expire this cache by time. It refreshes
+      // automatically whenever the user is online. If a contact removes themselves
+      // while the user is offline, that gets cleaned up on the next online sync.
+      // Blocking SOS because a cache is "old" is far more dangerous than sending
+      // to a slightly stale contact list.
+      let smsContacts: { name: string; phone: string }[] = [];
+
+      if (raw) {
+        const parsed: CachedContact[] | CacheEnvelope = JSON.parse(raw);
+        const isEnvelope = !Array.isArray(parsed);
+        let contactList: CachedContact[] = [];
+
+        if (isEnvelope) {
+          const { contacts } = parsed as CacheEnvelope;
+          // Only skip if the envelope is literally empty/malformed
+          if (contacts && contacts.length > 0) {
+            contactList = contacts;
+          }
+        } else {
+          // Legacy plain-array format
+          contactList = parsed as CachedContact[];
+        }
+
+        smsContacts = contactList
+          .filter((c) => c.status === 'accepted' && c.phone?.trim().length > 0)
+          .map((c) => ({ name: c.name || 'Contact', phone: c.phone.trim() }));
+      }
 
       if (smsContacts.length === 0) {
         // Cache is cold (never visited contacts tab) or all contacts are unaccepted.

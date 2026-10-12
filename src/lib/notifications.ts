@@ -29,13 +29,8 @@ type NotifyParams = {
   detailsSnippet?: string | null;
 };
 
-type PushMessage = {
-  to: string;
-  sound: 'default';
-  title: string;
-  body: string;
-  data?: Record<string, unknown>;
-};
+// Push delivery is handled server-side by the send-push Edge Function,
+// which fires automatically via a Database Webhook on every notifications INSERT.
 
 // ─── Private Helpers ─────────────────────────────────────────────────────────
 
@@ -49,15 +44,9 @@ async function fetchSenderName(userId: string): Promise<string> {
   return profile?.full_name?.trim() || 'A Safen contact';
 }
 
-type ContactWithToken = { contact_user_id: string; expo_push_token: string | null };
-
-/**
- * Returns all accepted emergency contacts for a user that are on the app,
- * including their Expo push token (may be null).
- * This is the single source of truth for the security-critical `.eq('status', 'accepted')` filter.
- */
-async function getAcceptedContactsWithTokens(userId: string): Promise<ContactWithToken[]> {
-  const { data: contacts, error: contactsError } = await supabase
+/** Returns IDs of all accepted on-app emergency contacts for a user. */
+async function getAcceptedContactIds(userId: string): Promise<string[]> {
+  const { data: contacts, error } = await supabase
     .from('emergency_contacts')
     .select('contact_user_id')
     .eq('user_id', userId)
@@ -65,46 +54,27 @@ async function getAcceptedContactsWithTokens(userId: string): Promise<ContactWit
     .eq('status', 'accepted')
     .not('contact_user_id', 'is', null);
 
-  if (contactsError || !contacts || contacts.length === 0) {
-    return [];
-  }
-
-  const contactIds = contacts.map(c => c.contact_user_id as string);
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, expo_push_token')
-    .in('id', contactIds);
-
-  return (contacts as { contact_user_id: string }[]).map(c => {
-    const profile = profiles?.find(p => p.id === c.contact_user_id);
-    return { contact_user_id: c.contact_user_id, expo_push_token: profile?.expo_push_token ?? null };
-  });
+  if (error || !contacts || contacts.length === 0) return [];
+  return contacts.map(c => c.contact_user_id as string);
 }
 
-/** Fires push messages to Expo's API. Best-effort — never throws. */
-function firePush(messages: PushMessage[]): void {
-  if (messages.length === 0) return;
-  fetch('https://exp.host/--/api/v2/push/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    body: JSON.stringify(messages),
-  }).catch(err => console.warn('Push send failed:', err));
-}
+
 
 // ─── Public API ────────────────────────────────────────────────────────────────
 
-// Fires an in-app notification to every emergency contact the current
-// user has that is (a) on Safen and (b) linked to a real account. This
-// is a best-effort side effect: it never throws, so a notification
-// failure never blocks the SOS/report flow it's attached to.
+// Fires an in-app + push notification to every accepted emergency contact.
+// Push delivery is handled server-side: inserting a row into `notifications`
+// triggers the send-push Edge Function via a Database Webhook automatically.
+// The client just writes the row — no direct Expo API calls needed.
 export async function notifyEmergencyContacts(params: NotifyParams): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
 
     const senderName = await fetchSenderName(user.id);
-    const contacts = await getAcceptedContactsWithTokens(user.id);
-    if (contacts.length === 0) return;
+    const contactIds = await getAcceptedContactIds(user.id);
+    if (contactIds.length === 0) return;
 
     const label = TYPE_LABEL[params.type];
     const isEmergency = params.type !== 'report';
@@ -115,8 +85,8 @@ export async function notifyEmergencyContacts(params: NotifyParams): Promise<voi
         ? `${senderName} triggered a ${label.toLowerCase()} and may need help. Tap for details.`
         : `${senderName} filed a safety report near their location.`;
 
-    const rows = contacts.map(c => ({
-      recipient_id: c.contact_user_id,
+    const rows = contactIds.map(contactId => ({
+      recipient_id: contactId,
       sender_id: user.id,
       sender_name: senderName,
       type: params.type,
@@ -132,39 +102,28 @@ export async function notifyEmergencyContacts(params: NotifyParams): Promise<voi
     if (insertError) {
       console.warn('notifyEmergencyContacts: failed to insert notifications', insertError.message);
     }
-
-    const pushMessages: PushMessage[] = contacts
-      .filter(c => c.expo_push_token?.startsWith('ExponentPushToken'))
-      .map(c => ({
-        to: c.expo_push_token as string,
-        sound: 'default' as const,
-        title,
-        body,
-        data: { type: params.type, alertId: params.alertId, reportId: params.reportId },
-      }));
-
-    firePush(pushMessages);
+    // Push is dispatched by the send-push Edge Function via Database Webhook.
   } catch (err) {
     console.warn('notifyEmergencyContacts error:', err);
   }
 }
 
-// Fired when a user's Safe Check-In deadline passes and they haven't confirmed.
-// This fans out a notification to all their accepted emergency contacts so they
-// appear on the contacts' Notifications screen — works in Expo Go too since
-// it goes through Supabase, not local push.
+// Fired when a user's Safe Check-In deadline passes without confirmation.
+// Fans out to all accepted emergency contacts via the notifications table.
+// Push is dispatched automatically by the send-push Edge Function webhook.
 export async function notifyCheckInMissed(params: {
   destination: string;
   latitude?: number | null;
   longitude?: number | null;
 }): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
 
     const senderName = await fetchSenderName(user.id);
-    const contacts = await getAcceptedContactsWithTokens(user.id);
-    if (contacts.length === 0) {
+    const contactIds = await getAcceptedContactIds(user.id);
+    if (contactIds.length === 0) {
       console.warn('notifyCheckInMissed: no contacts to notify');
       return;
     }
@@ -172,8 +131,8 @@ export async function notifyCheckInMissed(params: {
     const title = `⚠️ Missed Check-In: ${senderName}`;
     const body = `${senderName} was supposed to check in after heading to ${params.destination} but has not responded. Please check on them.`;
 
-    const rows = contacts.map(c => ({
-      recipient_id: c.contact_user_id,
+    const rows = contactIds.map(contactId => ({
+      recipient_id: contactId,
       sender_id: user.id,
       sender_name: senderName,
       type: 'check_in_missed' as NotifyType,
@@ -189,18 +148,7 @@ export async function notifyCheckInMissed(params: {
     } else {
       if (__DEV__) console.log('[SafeCheckIn] Contact notifications sent for missed check-in.');
     }
-
-    const pushMessages: PushMessage[] = contacts
-      .filter(c => c.expo_push_token?.startsWith('ExponentPushToken'))
-      .map(c => ({
-        to: c.expo_push_token as string,
-        sound: 'default' as const,
-        title,
-        body,
-        data: { type: 'check_in_missed' },
-      }));
-
-    firePush(pushMessages);
+    // Push is dispatched by the send-push Edge Function via Database Webhook.
   } catch (err) {
     console.warn('notifyCheckInMissed error:', err);
   }
@@ -211,7 +159,8 @@ export async function notifyCheckInMissed(params: {
 // the Notifications screen even in Expo Go (where local push doesn't fire).
 export async function notifyCheckInReminder(destination: string): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     const name = await fetchSenderName(user.id);
     await supabase.from('notifications').insert({
@@ -231,7 +180,8 @@ export async function notifyCheckInReminder(destination: string): Promise<void> 
 // an urgent alert on their Notifications screen in Expo Go.
 export async function notifyCheckInDeadline(destination: string): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     const name = await fetchSenderName(user.id);
     await supabase.from('notifications').insert({
@@ -252,7 +202,8 @@ export async function notifyCheckInDeadline(destination: string): Promise<void> 
 // separate from notifyEmergencyContacts above.
 export async function notifyContactAdded(recipientId: string, adderName: string): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
 
     const { error } = await supabase.from('notifications').insert({
@@ -272,7 +223,8 @@ export async function notifyContactAdded(recipientId: string, adderName: string)
 
 export async function sendContactRequest(recipientId: string, adderName: string, contactId: string): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
 
     const { error } = await supabase.from('notifications').insert({
@@ -292,7 +244,8 @@ export async function sendContactRequest(recipientId: string, adderName: string,
 
 export async function notifyContactRequestResult(recipientId: string, myName: string, action: 'accepted' | 'rejected'): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
 
     const title = action === 'accepted' ? 'Request Accepted' : 'Request Declined';
@@ -317,7 +270,8 @@ export async function notifyContactRequestResult(recipientId: string, myName: st
 
 export async function sendPing(recipientId: string): Promise<boolean> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return false;
 
     const { data: profile } = await supabase
@@ -350,7 +304,8 @@ export async function sendPing(recipientId: string): Promise<boolean> {
 
 export async function sendPingAck(recipientId: string): Promise<boolean> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return false;
 
     const { data: profile } = await supabase
@@ -403,8 +358,33 @@ export async function sendSosAcknowledgement(params: {
   response: SosAckResponse;
 }): Promise<boolean> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return false;
+
+    // ── Relationship guard ────────────────────────────────────────────────────
+    // Only an accepted emergency contact of the SOS owner can acknowledge.
+    // This prevents anyone who intercepts an alertId from injecting fake
+    // responses ("I've called police") into a live SOS feed.
+    const { data: contactRow, error: guardError } = await supabase
+      .from('emergency_contacts')
+      .select('id')
+      .eq('user_id', params.alertOwnerId)   // the SOS owner's contact list
+      .eq('contact_user_id', user.id)        // must contain the responder
+      .eq('status', 'accepted')              // must be fully accepted
+      .maybeSingle();
+
+    if (guardError) {
+      console.warn('[SosAck] relationship guard query failed:', guardError.message);
+      return false;
+    }
+
+    if (!contactRow) {
+      // Not a verified contact — silently reject. No writes, no notifications.
+      console.warn('[SosAck] rejected: responder is not an accepted contact of the SOS owner.');
+      return false;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const { data: profile } = await supabase
       .from('profiles')

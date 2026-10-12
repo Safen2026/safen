@@ -141,8 +141,9 @@ export function useSafetyFeed(limit = 20) {
       reloadTimer = setTimeout(() => { void load('refresh'); }, 2000);
     };
 
+    const channelId = `news_items_feed_${Math.random().toString(36).substring(7)}`;
     const channel = supabase
-      .channel('news_items_feed')
+      .channel(channelId)
       .on('postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'news_items' },
         debouncedReload)

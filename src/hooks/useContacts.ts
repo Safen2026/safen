@@ -128,12 +128,17 @@ export function useContacts() {
         avatar_url: c.profiles?.avatar_url || undefined
       }));
       setContacts(mappedContacts);
-      // Persist fresh data back to cache for next app open
-      const snapshot: CachedContact[] = mappedContacts.map(c => ({
-        name: c.name,
-        phone: c.phone,
-        status: c.status,
-      }));
+      // Persist fresh data back to cache for next app open.
+      // cachedAt is used by the offline SMS fallback to expire stale entries
+      // (e.g. a contact who removed themselves since the last online session).
+      const snapshot = {
+        cachedAt: Date.now(),
+        contacts: mappedContacts.map(c => ({
+          name: c.name,
+          phone: c.phone,
+          status: c.status,
+        })),
+      };
       AsyncStorage.setItem(getContactsCacheKey(user.id), JSON.stringify(snapshot)).catch((err) => {
         console.warn('[useContacts] Failed to update contacts cache:', err);
       });

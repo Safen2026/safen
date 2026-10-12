@@ -65,3 +65,6 @@ supabase/.temp/
 
 # Deno lockfile generated at repo root by npx deno; the real one lives in supabase/functions/
 /deno.lock
+
+# Media & local audio
+*.m4a

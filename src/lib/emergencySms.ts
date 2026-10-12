@@ -110,9 +110,32 @@ export async function getEmergencyContactPhones(userId: string): Promise<SmsCont
     const raw = await AsyncStorage.getItem(cacheKey);
     if (!raw) return [];
 
+    // Cache format: { cachedAt: number, contacts: CachedContact[] }
+    // Older builds wrote a plain CachedContact[] — handle both shapes gracefully.
+    // NOTE: We deliberately do NOT expire this cache by time. It refreshes
+    // automatically whenever the user is online. If a contact removes themselves
+    // while the user is offline, that gets cleaned up on the next online sync.
+    // Blocking SOS because a cache is "old" is far more dangerous than sending
+    // to a slightly stale contact list.
     type CachedContact = { name: string; phone: string; status: string };
-    const cached: CachedContact[] = JSON.parse(raw);
-    return cached
+    type CacheEnvelope = { cachedAt?: number; contacts?: CachedContact[] };
+
+    const parsed: CachedContact[] | CacheEnvelope = JSON.parse(raw);
+    const isEnvelope = !Array.isArray(parsed);
+
+    if (isEnvelope) {
+      const { contacts: cachedContacts } = parsed as CacheEnvelope;
+      if (!cachedContacts || cachedContacts.length === 0) {
+        console.warn('[emergencySms] Contact cache envelope is empty — no SMS fallback contacts available.');
+        return [];
+      }
+      return cachedContacts
+        .filter((c) => c.status === 'accepted' && c.phone?.trim().length > 0)
+        .map((c) => ({ name: c.name || 'Contact', phone: c.phone.trim() }));
+    }
+
+    // Legacy plain-array format (no expiry info — accept as-is for backwards compat)
+    return (parsed as CachedContact[])
       .filter((c) => c.status === 'accepted' && c.phone?.trim().length > 0)
       .map((c) => ({ name: c.name || 'Contact', phone: c.phone.trim() }));
   } catch (err) {

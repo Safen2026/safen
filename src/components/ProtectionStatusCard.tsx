@@ -111,7 +111,9 @@ export const ProtectionStatusCard = React.memo(() => {
           Battery.getBatteryLevelAsync(),
           Battery.getBatteryStateAsync(),
         ]);
-        setBattLevel(Math.round(level * 100));
+        // iOS simulator often returns -1 for battery level. Fallback to 1 (100%).
+        const validLevel = level < 0 ? 1 : level;
+        setBattLevel(Math.round(validLevel * 100));
         setCharging(state === Battery.BatteryState.CHARGING || state === Battery.BatteryState.FULL);
         setHasBattery(true);
       } catch {
@@ -120,7 +122,12 @@ export const ProtectionStatusCard = React.memo(() => {
     }
   }, []);
 
-  // Initial load + app-foreground refresh
+  // Initial load + app-foreground refresh.
+  // Battery level is read in refresh() via getBatteryLevelAsync — a one-shot
+  // read. We deliberately do NOT use addBatteryLevelListener here: on Android,
+  // the native listener fires on every micro-fluctuation during charging
+  // (e.g. 72% → 73% → 72% dozens of times per minute), which floods the JS
+  // bridge fast enough to make the system UI blink and crash the app.
   useEffect(() => {
     refresh();
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  Animated, Easing, Share, Alert, Linking, Platform,
+  Animated, Easing, Share, Alert, Linking, Platform, AppState, AppStateStatus
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -48,9 +48,7 @@ const PulseDot = ({ color }: { color: string }) => {
 
   return (
     <View style={dotStyles.wrap}>
-      {/* Outer pulse ring */}
       <Animated.View style={[dotStyles.ring, { borderColor: color, transform: [{ scale }], opacity }]} />
-      {/* Inner solid dot */}
       <View style={[dotStyles.dot, { backgroundColor: color }]} />
     </View>
   );
@@ -71,18 +69,39 @@ export const LocationCard = React.memo(() => {
   const [loading, setLoading] = useState(true);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setHasPermission(status === 'granted');
-      if (status !== 'granted') { setLoading(false); return; }
+  // Prevent geocode calls running after unmount
+  const isMounted = useRef(true);
 
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+  const fetchLocation = useCallback(async () => {
+    try {
+      // Use get instead of request to avoid spawning system dialogs implicitly.
+      // If we need to request it, it should be attached to a direct user action (like a button press),
+      // not a passive effect.
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (!isMounted.current) return;
+      setHasPermission(status === 'granted');
+      if (status !== 'granted') {
+        setLoading(false);
+        return;
+      }
+
+      // Try cached position first (instant, no GPS radio spin-up),
+      // then fall back to a fresh read only if we have no cache.
+      const pos =
+        (await Location.getLastKnownPositionAsync()) ??
+        (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+
+      if (!pos || !isMounted.current) {
+        setLoading(false);
+        return;
+      }
+
       const { latitude, longitude, accuracy } = pos.coords;
 
-      // Reverse geocode
+      // Reverse geocode once per fetch — NOT on every position tick
       const [place] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (!isMounted.current) return;
+
       const parts = [
         place?.streetNumber,
         place?.street,
@@ -92,18 +111,32 @@ export const LocationCard = React.memo(() => {
       ].filter(Boolean);
 
       setLoc({
-        address:   parts.length ? parts.join(', ') : 'Unknown location',
-        accuracy:  accuracy,
+        address: parts.length ? parts.join(', ') : 'Unknown location',
+        accuracy,
         latitude,
         longitude,
       });
     } catch {
-      setLoc({ ...EMPTY, address: 'Unable to get location' });
+      if (isMounted.current) {
+        setLoc({ ...EMPTY, address: 'Unable to get location' });
+      }
+    } finally {
+      if (isMounted.current) setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    isMounted.current = true;
+
+    // Fetch once on mount. We do NOT refresh on AppState 'active' because 
+    // any permission prompts or system dialogs would trigger an AppState change
+    // loop.
+    fetchLocation();
+
+    return () => {
+      isMounted.current = false;
+    };
+  }, [fetchLocation]);
 
   const handleShare = useCallback(async () => {
     if (!loc.latitude || !loc.longitude) {
@@ -133,8 +166,13 @@ export const LocationCard = React.memo(() => {
   const dotColor = hasPermission ? '#3B82F6' : '#9CA3AF';
 
   return (
-    <TouchableOpacity style={styles.card} onPress={handleOpenMaps} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Open location in Maps">
-      {/* Left: icon + text */}
+    <TouchableOpacity
+      style={styles.card}
+      onPress={handleOpenMaps}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel="Open location in Maps"
+    >
       <View style={styles.left}>
         <View style={[styles.pinCircle, { backgroundColor: '#EF444420' }]}>
           <Ionicons name="location" size={18} color="#EF4444" />
@@ -147,10 +185,8 @@ export const LocationCard = React.memo(() => {
         </View>
       </View>
 
-      {/* Centre: pulse dot */}
       <PulseDot color={dotColor} />
 
-      {/* Right: accuracy + share */}
       <View style={styles.right}>
         <Text style={styles.accTitle}>Location Accuracy</Text>
         <Text style={[styles.accValue, { color: accColor }]}>{loading ? '—' : accLabel}</Text>
