@@ -1,7 +1,9 @@
 import { assertEquals, assertRejects, assertThrows } from "jsr:@std/assert@1";
 import {
   assertSafeFeedUrl,
+  INGEST_INTERVAL_MINUTES,
   ingestAll,
+  MAX_CONSECUTIVE_FAILURES,
   type IngestDeps,
   readCapped,
   type SourceRow,
@@ -54,6 +56,13 @@ Deno.test("one failing source does not stop the others", async () => {
   assertEquals(r.inserted, 1);
   assertEquals(r.failed, ["s1"]);
   assertEquals(d.failures, ["s1"]);
+});
+
+Deno.test("a source survives a full day of failed polls before auto-disable", () => {
+  // Disabling is permanent until someone re-enables the row by hand, so a
+  // short outage at a publisher must not cost us the source.
+  const toleratedMinutes = MAX_CONSECUTIVE_FAILURES * INGEST_INTERVAL_MINUTES;
+  assertEquals(toleratedMinutes >= 24 * 60, true);
 });
 
 Deno.test("published_at survives as ISO", async () => {

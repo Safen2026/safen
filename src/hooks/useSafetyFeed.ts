@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
+import { matchLga, matchState } from '../lib/area';
 import { fetchAreaFeed, type AreaRef, type FeedRow } from '../lib/feed';
 import { supabase } from '../lib/supabase';
 
@@ -20,13 +21,25 @@ export function useSafetyFeed(limit = 20) {
   const area = useRef<AreaRef>({ stateCode: null, lgaCode: null, lat: null, lng: null });
 
   const resolveArea = useCallback(async () => {
+    // Every fallback is logged: they used to be silent, which hid the fact that
+    // no user in production had ever resolved to a state.
+    const national = (reason: string, detail?: unknown) => {
+      console.warn(`[feed] national fallback: ${reason}`, detail ?? '');
+      setNational(true);
+    };
+
     try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== 'granted') { setNational(true); return; }
+      let { status } = await Location.getForegroundPermissionsAsync();
+      // Users who skipped onboarding were never asked; ask once here. A denial
+      // stays a denial — the OS will not re-prompt and we do not nag.
+      if (status === 'undetermined') {
+        ({ status } = await Location.requestForegroundPermissionsAsync());
+      }
+      if (status !== 'granted') { national('permission', status); return; }
 
       const pos = (await Location.getLastKnownPositionAsync())
         ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
-      if (!pos) { setNational(true); return; }
+      if (!pos) { national('no position'); return; }
 
       // Record coordinates before reverse-geocoding: community incidents match
       // by distance, so they still work even if the state lookup fails.
@@ -37,20 +50,30 @@ export function useSafetyFeed(limit = 20) {
         latitude : pos.coords.latitude,
         longitude: pos.coords.longitude,
       });
-      if (!place?.region) { setNational(true); return; }
+      if (!place) { national('no geocode result'); return; }
 
-      const { data } = await supabase
-        .from('ng_states').select('code').ilike('name', place.region).maybeSingle();
-      if (!data?.code) { setNational(true); return; }
+      // Match in JS rather than with ilike: geocoder names vary ("Lagos State",
+      // "Abuja", "FCT") and need the same normalisation the server uses.
+      const { data: states, error: statesErr } = await supabase
+        .from('ng_states').select('code, name');
+      if (statesErr || !states) { national('state list', statesErr); return; }
 
-      area.current.stateCode = data.code;
+      // Some geocoders leave region empty but put the state in city
+      // (e.g. "Lagos", "Abuja"), so try that before giving up.
+      const stateCode = matchState(place.region, states) ?? matchState(place.city, states);
+      if (!stateCode) { national('unmatched region', { region: place.region, city: place.city }); return; }
+
+      area.current.stateCode = stateCode;
       setNational(false);
 
+      area.current.lgaCode = null;
       if (place.subregion) {
-        const { data: lga } = await supabase
-          .from('ng_lgas').select('code')
-          .eq('state_code', data.code).ilike('name', place.subregion).maybeSingle();
-        area.current.lgaCode = lga?.code ?? null;
+        const { data: lgas } = await supabase
+          .from('ng_lgas').select('code, name').eq('state_code', stateCode);
+        area.current.lgaCode = matchLga(place.subregion, lgas ?? []);
+        if (!area.current.lgaCode) {
+          console.warn('[feed] unmatched LGA', { state: stateCode, subregion: place.subregion });
+        }
       }
 
       // Persist the area so the push notifier knows who is in this LGA.
@@ -61,11 +84,13 @@ export function useSafetyFeed(limit = 20) {
           last_state_code: area.current.stateCode,
           last_lga_code  : area.current.lgaCode,
           area_updated_at: new Date().toISOString(),
-        }).eq('id', session.user.id);
+        }).eq('id', session.user.id).then(({ error: upErr }) => {
+          if (upErr) console.warn('[feed] could not save area to profile', upErr);
+        });
       }
-    } catch {
+    } catch (e) {
       // Any geo failure degrades to the national feed rather than an error state.
-      setNational(true);
+      national('exception', e);
     }
   }, []);
 
