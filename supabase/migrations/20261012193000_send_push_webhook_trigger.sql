@@ -1,9 +1,10 @@
-﻿-- ════════════════════════════════════════════════════════════════════
+-- ════════════════════════════════════════════════════════════════════
 -- send_push_webhook_trigger
 --
 -- Uses pg_net (built into every Supabase project) to call the
 -- send-push Edge Function on every INSERT into public.notifications.
--- Non-blocking: pg_net is async so the INSERT is never delayed.
+-- Reads the webhook secret securely from Supabase Vault at runtime
+-- so no raw secret keys are exposed in migrations or git.
 -- ════════════════════════════════════════════════════════════════════
 
 create extension if not exists pg_net with schema extensions;
@@ -14,7 +15,14 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_secret text;
 begin
+  select decrypted_secret into v_secret
+  from vault.decrypted_secrets
+  where name = 'push_webhook_secret'
+  limit 1;
+
   perform net.http_post(
     url     := 'https://ujbknxfvatvtwthxtytu.supabase.co/functions/v1/send-push',
     body    := jsonb_build_object(
@@ -25,7 +33,7 @@ begin
                ),
     headers := jsonb_build_object(
                  'Content-Type',     'application/json',
-                 'x-webhook-secret', 'oI0Um7xTsd2XyETVOgfrJZsu3rRn6UFBMmXLVImgt6xC7HX8'
+                 'x-webhook-secret', coalesce(v_secret, '')
                )
   );
   return NEW;
