@@ -107,6 +107,14 @@ begin
   from public.get_area_feed('LA','LA-ikeja', 6.6018, 3.3515, 10, null);
   if n <> 2 then raise exception 'expected both news and community kinds, got %', n; end if;
 
+  -- The internal ranking score is not sent to clients.
+  if exists (
+    select 1 from information_schema.attributes
+    where udt_schema = 'public' and udt_name = 'feed_row' and attribute_name = 'score'
+  ) then
+    raise exception 'feed_row must not expose score';
+  end if;
+
   -- Half-life is exactly 12 hours.
   select public.feed_recency_decay(now() - interval '12 hours') into d;
   if d not between 0.49 and 0.51 then

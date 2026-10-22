@@ -39,13 +39,12 @@ Deno.serve(async (req) => {
     aliases: aliasRes.data ?? [],
   };
 
-  const { data: pending, error } = await db
-    .from("news_items_raw")
-    .select("id, url, title, raw_summary, published_at, fetched_at, attempts, source_id")
-    .eq("status", "pending")
-    .lt("attempts", MAX_ATTEMPTS)
-    .order("fetched_at", { ascending: true })
-    .limit(BATCH_SIZE);
+  // Claimed atomically (status -> processing) so an overlapping run cannot
+  // pick up, and pay to classify, the same rows.
+  const { data: pending, error } = await db.rpc("claim_news_items_raw", {
+    p_limit: BATCH_SIZE,
+    p_max_attempts: MAX_ATTEMPTS,
+  });
 
   if (error) {
     console.error("enrich-news: queue read failed", error);
@@ -84,7 +83,7 @@ Deno.serve(async (req) => {
         .update({
           attempts,
           status: attempts >= MAX_ATTEMPTS ? "failed" : "pending",
-          last_error: result.failure,
+          last_error: result.detail ? `${result.failure}: ${result.detail}` : result.failure,
         })
         .eq("id", row.id);
       return;
@@ -117,6 +116,14 @@ Deno.serve(async (req) => {
       source_name: sourceName,
       source_url: row.url,
     });
+
+    // raw_id is unique: this row is already published (e.g. a reclaimed stale
+    // claim), so it is done — sending it back to pending would re-classify it.
+    if (insErr?.code === "23505") {
+      stats.published++;
+      await db.from("news_items_raw").update({ status: "enriched" }).eq("id", row.id);
+      return;
+    }
 
     if (insErr) {
       // Do not mark enriched on a write failure — the row must remain claimable.
