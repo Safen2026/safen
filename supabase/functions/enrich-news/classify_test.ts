@@ -50,12 +50,22 @@ Deno.test("refusal is detected before content is read", async () => {
 
 Deno.test("a network error is transport, not malformed", async () => {
   const res = await classify(article, client(new Error("ECONNRESET")));
-  assertEquals(res, { ok: false, failure: "transport" });
+  assertEquals(res, { ok: false, failure: "transport", detail: "ECONNRESET" });
 });
 
 Deno.test("a timeout is transport", async () => {
   const res = await classify(article, client(new DOMException("aborted", "AbortError")));
-  assertEquals(res, { ok: false, failure: "transport" });
+  assertEquals(res, { ok: false, failure: "transport", detail: "aborted" });
+});
+
+Deno.test("an API error keeps its status so billing and auth failures are visible", async () => {
+  const err = Object.assign(new Error("Your credit balance is too low"), { status: 400 });
+  const res = await classify(article, client(err));
+  assertEquals(res, {
+    ok: false,
+    failure: "transport",
+    detail: "400 Your credit balance is too low",
+  });
 });
 
 Deno.test("non-JSON text is malformed", async () => {

@@ -41,7 +41,18 @@ export interface ModelClient {
 
 export type ClassifyResult =
   | { ok: true; verdict: Verdict }
-  | { ok: false; failure: "refusal" | "transport" | "malformed" | "invalid" };
+  | { ok: false; failure: "refusal" | "transport" | "malformed" | "invalid"; detail?: string };
+
+/**
+ * HTTP status + message of a failed model call. Billing, auth and model errors
+ * all surface as exceptions; without this they were indistinguishable from a
+ * dropped connection, and a week of credit-exhaustion read as "transport".
+ */
+function describeError(err: unknown): string {
+  const status = (err as { status?: unknown } | null)?.status;
+  const message = err instanceof Error ? err.message : String(err);
+  return (typeof status === "number" ? `${status} ${message}` : message).slice(0, 200);
+}
 
 function validate(raw: unknown): Verdict | null {
   if (typeof raw !== "object" || raw === null) return null;
@@ -76,8 +87,10 @@ export async function classify(
   let res: ModelResponse;
   try {
     res = await client.create(article);
-  } catch {
-    return { ok: false, failure: "transport" };
+  } catch (err) {
+    const detail = describeError(err);
+    console.error(`enrich-news: model call failed: ${detail}`);
+    return { ok: false, failure: "transport", detail };
   }
 
   // A refusal arrives as HTTP 200 with no exception. Check stop_reason BEFORE

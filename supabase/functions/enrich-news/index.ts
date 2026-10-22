@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
         .update({
           attempts,
           status: attempts >= MAX_ATTEMPTS ? "failed" : "pending",
-          last_error: result.failure,
+          last_error: result.detail ? `${result.failure}: ${result.detail}` : result.failure,
         })
         .eq("id", row.id);
       return;
