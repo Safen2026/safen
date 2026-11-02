@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -10,6 +10,10 @@ import { ActiveTripShareCard } from '../../src/components/ActiveTripShareCard';
 import { useShareLiveTrip, TripShareContact } from '../../src/hooks/useShareLiveTrip';
 import { tripEvents, TripSharePayload } from '../../src/lib/events';
 import { PinDetailsModal, PinData } from '../../src/components/PinDetailsModal';
+import { useRadarAlerts, RadarAlert } from '../../src/hooks/useRadarAlerts';
+import { IncidentPins } from '../../src/components/map/IncidentPins';
+import { BreadcrumbPolyline } from '../../src/components/map/BreadcrumbPolyline';
+import { IncidentDrawer } from '../../src/components/map/IncidentDrawer';
 
 export default function MapScreen() {
   const { colors } = useTheme();
@@ -19,19 +23,18 @@ export default function MapScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
 
-
   // Share Live Trip state
   const [shareTripContact, setShareTripContact] = useState<TripShareContact | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
-  // Pin Details state
+  // Pin Details state (for the notification-navigated pin)
   const [selectedPin, setSelectedPin] = useState<PinData | null>(null);
   const [showPinModal, setShowPinModal] = useState(false);
   const handlePinClose = useCallback(() => setShowPinModal(false), []);
 
-  const { lat, lng, senderName, alertType, alertTitle } = useLocalSearchParams<{ 
-    lat?: string; 
-    lng?: string; 
+  const { lat, lng, senderName, alertType, alertTitle } = useLocalSearchParams<{
+    lat?: string;
+    lng?: string;
     senderName?: string;
     alertType?: string;
     alertTitle?: string;
@@ -49,7 +52,19 @@ export default function MapScreen() {
     extendSharing,
   } = useShareLiveTrip();
 
-  // ── Initial device location ────────────────────────────────────────────────
+  // ── Safety Radar ────────────────────────────────────────────────────────────
+  const {
+    alerts: radarAlerts,
+    loading: radarLoading,
+    selectedAlertId,
+    setSelectedAlertId,
+    breadcrumbs,
+  } = useRadarAlerts({
+    latitude: location?.coords.latitude ?? null,
+    longitude: location?.coords.longitude ?? null,
+  });
+
+  // ── Initial device location ─────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       const { status } = await Location.getForegroundPermissionsAsync();
@@ -62,7 +77,7 @@ export default function MapScreen() {
     })();
   }, []);
 
-  // ── Listen for "Share Live Trip" event from contacts tab ───────────────────
+  // ── Listen for "Share Live Trip" event from contacts tab ────────────────────
   useEffect(() => {
     const unsub = tripEvents.onShareTrip((payload: TripSharePayload) => {
       setShareTripContact({
@@ -76,7 +91,7 @@ export default function MapScreen() {
     return unsub;
   }, []);
 
-  // ── Jump to pin when navigated from alert notification ─────────────────────
+  // ── Jump to pin when navigated from alert notification ──────────────────────
   useEffect(() => {
     if (isMapReady && lat && lng && mapRef.current) {
       const targetLat = parseFloat(lat);
@@ -94,21 +109,18 @@ export default function MapScreen() {
     }
   }, [isMapReady, lat, lng]);
 
-
-
-  // ── Share trip handlers ────────────────────────────────────────────────────
+  // ── Share trip handlers ─────────────────────────────────────────────────────
   const handleShareClose = useCallback(() => setShowShareModal(false), []);
   const handleShareStart = useCallback(async (durationMinutes: number) => {
     if (!shareTripContact) return;
     setShowShareModal(false);
     await startSharing(shareTripContact.contactUserId, shareTripContact.name, durationMinutes);
   }, [shareTripContact, startSharing]);
-  
-  const handleStopSharing = useCallback(() => stopSharing(false), [stopSharing]);
 
+  const handleStopSharing = useCallback(() => stopSharing(false), [stopSharing]);
   const handleMapReady = useCallback(() => setIsMapReady(true), []);
 
-  // Parse pin coordinates once — stable unless search params change
+  // ── Parse notification-navigated pin coordinates ────────────────────────────
   const parsedLat = React.useMemo(() => (lat ? parseFloat(lat) : NaN), [lat]);
   const parsedLng = React.useMemo(() => (lng ? parseFloat(lng) : NaN), [lng]);
   const hasPinCoords = !isNaN(parsedLat) && !isNaN(parsedLng);
@@ -145,6 +157,28 @@ export default function MapScreen() {
     setShowPinModal(true);
   }, [senderName, alertTitle, alertType, parsedLat, parsedLng]);
 
+  // ── Radar pin handlers ──────────────────────────────────────────────────────
+
+  /** Called when user taps an incident pill in the drawer OR a pin on the map. */
+  const handleRadarPinSelect = useCallback((alert: RadarAlert) => {
+    // Toggle: tap same pin again → deselect
+    const isAlreadySelected = selectedAlertId === alert.id;
+    setSelectedAlertId(isAlreadySelected ? null : alert.id);
+
+    if (!isAlreadySelected && mapRef.current) {
+      // Animate camera to the pin, offset upward so the drawer doesn't cover it
+      mapRef.current.animateToRegion(
+        {
+          latitude: alert.latitude - 0.003, // nudge south so pin appears above drawer
+          longitude: alert.longitude,
+          latitudeDelta: 0.012,
+          longitudeDelta: 0.012,
+        },
+        800
+      );
+    }
+  }, [selectedAlertId, setSelectedAlertId]);
+
   const initialRegion = React.useMemo(() => {
     if (!location) return undefined;
     return {
@@ -154,6 +188,8 @@ export default function MapScreen() {
       longitudeDelta: 0.01,
     };
   }, [location, hasPinCoords, parsedLat, parsedLng]);
+
+  // ── Render guards ───────────────────────────────────────────────────────────
 
   if (errorMsg) {
     return (
@@ -183,9 +219,11 @@ export default function MapScreen() {
         showsMyLocationButton={true}
         toolbarEnabled={false}
         onMapReady={handleMapReady}
-        mapPadding={{ top: 0, right: 0, bottom: 180, left: 0 }}
+        // Bottom padding reserves space for the floating panel so the
+        // "my location" button doesn't hide behind it.
+        mapPadding={{ top: 0, right: 0, bottom: 200, left: 0 }}
       >
-        {/* Alert pin — navigated from notification */}
+        {/* ── Notification-navigated alert pin ── */}
         {hasPinCoords && (
           <Marker
             coordinate={{ latitude: parsedLat, longitude: parsedLng }}
@@ -194,12 +232,20 @@ export default function MapScreen() {
           />
         )}
 
+        {/* ── Safety Radar: nearby incident pins ── */}
+        <IncidentPins
+          alerts={radarAlerts}
+          selectedAlertId={selectedAlertId}
+          onPinPress={handleRadarPinSelect}
+        />
 
-
+        {/* ── Breadcrumb trail for selected incident ── */}
+        <BreadcrumbPolyline breadcrumbs={breadcrumbs} />
       </MapView>
 
-      {/* Floating bottom panel */}
+      {/* ── Floating bottom panel ─────────────────────────────────────────── */}
       <View style={styles.floatingPanel}>
+        {/* Active trip share card (shown only when a trip share is active) */}
         {isShareActive && shareSession && (
           <ActiveTripShareCard
             contactName={shareSession.contactName}
@@ -209,9 +255,17 @@ export default function MapScreen() {
             onExtend={extendSharing}
           />
         )}
+
+        {/* Safety Radar incident drawer — always visible once location loaded */}
+        <IncidentDrawer
+          alerts={radarAlerts}
+          loading={radarLoading}
+          selectedAlertId={selectedAlertId}
+          onPinSelect={handleRadarPinSelect}
+        />
       </View>
 
-      {/* Modals */}
+      {/* ── Modals ────────────────────────────────────────────────────────── */}
       <ShareTripModal
         visible={showShareModal}
         contact={shareTripContact}
@@ -243,6 +297,7 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     bottom: 16,
     left: 0,
     right: 0,
+    gap: 10,
   },
   centerContainer: {
     flex: 1,
