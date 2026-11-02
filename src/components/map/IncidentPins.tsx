@@ -15,7 +15,7 @@
  */
 
 import React, { useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import type { RadarAlert } from '../../hooks/useRadarAlerts';
@@ -48,14 +48,21 @@ const PinMarker = React.memo(({ alert, isSelected }: PinMarkerProps) => {
 
   return (
     <View style={[styles.pinWrapper, isSelected && styles.pinWrapperSelected]}>
-      {/* Outer ring — only shown when selected */}
-      {isSelected && (
-        <View style={[styles.outerRing, { borderColor: cfg.color }]} />
+      {/* "YOU" badge above the pin if this is the user's own SOS */}
+      {alert.isOwn && (
+        <View style={styles.youBadge}>
+          <Text style={styles.youBadgeText}>YOU</Text>
+        </View>
+      )}
+
+      {/* Outer ring — shown when selected or for own alert */}
+      {(isSelected || alert.isOwn) && (
+        <View style={[styles.outerRing, { borderColor: cfg.color, borderWidth: alert.isOwn ? 3 : 2.5 }]} />
       )}
 
       {/* Pin body */}
-      <View style={[styles.pin, { backgroundColor: cfg.color }]}>
-        <Ionicons name={cfg.icon} size={14} color="#FFFFFF" />
+      <View style={[styles.pin, { backgroundColor: cfg.color }, alert.isOwn && styles.ownPin]}>
+        <Ionicons name={alert.isOwn ? 'radio' : cfg.icon} size={14} color="#FFFFFF" />
       </View>
 
       {/* Downward triangle caret */}
@@ -140,6 +147,25 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 6,
+  },
+  ownPin: {
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  youBadge: {
+    backgroundColor: '#E02B2B',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    marginBottom: 2,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  youBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   caret: {
     width: 0,

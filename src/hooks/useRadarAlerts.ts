@@ -5,11 +5,19 @@
  * streams real-time updates via Supabase Realtime. Also fetches the
  * breadcrumb trail (location history) for a selected alert.
  *
- * Responsibilities:
- *  - Query 'alerts' table for active, community-scoped rows within ~5 km
- *  - Subscribe to INSERT/UPDATE on alerts so new SOS pins appear instantly
- *  - Fetch ordered breadcrumb rows from the 'locations' table for a given alertId
- *  - Expose loading state, error state, and a refresh function
+ * Sources:
+ *  1. 'alerts' table:
+ *     - Active alerts from past 24h owned by user (User's own SOS)
+ *     - Active alerts where user is an emergency contact or confirmed responder
+ *  2. 'notifications' table:
+ *     - Nearby community broadcast notifications (is_community_broadcast = true)
+ *       delivered to this user within past 24h
+ *
+ * Filtering:
+ *  - Enforces a strict 24-hour time window (eliminates stale/forgotten test alerts)
+ *  - Excludes cancelled/resolved alerts
+ *  - Computes exact Haversine distance client-side
+ *  - Real-time updates on both 'alerts' and 'notifications' tables
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -29,6 +37,8 @@ export interface RadarAlert {
   distanceMeters: number;
   createdAt: string;
   senderName: string | null;
+  /** True if this alert was triggered by the logged-in user */
+  isOwn: boolean;
 }
 
 export interface Breadcrumb {
@@ -60,8 +70,9 @@ interface UseRadarAlertsResult {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_RADIUS_METERS = 5000;
-/** Supabase Realtime channel name — one per map screen mount */
-const REALTIME_CHANNEL = 'radar-alerts';
+const REALTIME_CHANNEL = 'radar-alerts-v2';
+/** Stale cutoff: Ignore any alert older than 24 hours */
+const MAX_ALERT_AGE_MS = 24 * 60 * 60 * 1000;
 
 // ── Hook ───────────────────────────────────────────────────────────────────────
 
@@ -77,49 +88,9 @@ export function useRadarAlerts({
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([]);
   const [breadcrumbsLoading, setBreadcrumbsLoading] = useState(false);
 
-  // Keep a stable ref to the user's coordinates so the realtime handler can
-  // compute distances without a stale closure.
+  // Keep stable ref to user's coordinates for realtime calculations
   const coordsRef = useRef({ latitude, longitude });
   coordsRef.current = { latitude, longitude };
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
-
-  /** Convert a raw DB row into a RadarAlert, computing distance from the user. */
-  const rowToAlert = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (row: any): RadarAlert | null => {
-      const { latitude: userLat, longitude: userLng } = coordsRef.current;
-      const rowLat: number | null = row.latitude ?? null;
-      const rowLng: number | null = row.longitude ?? null;
-      if (
-        rowLat == null ||
-        rowLng == null ||
-        userLat == null ||
-        userLng == null
-      ) {
-        return null;
-      }
-      const distanceMeters = getDistanceMeters(userLat, userLng, rowLat, rowLng);
-
-      // profiles may be a single object or an array depending on Supabase version
-      const profilesRaw = row.profiles;
-      const profile = Array.isArray(profilesRaw)
-        ? (profilesRaw[0] ?? null)
-        : profilesRaw ?? null;
-      const senderName: string | null = profile?.full_name ?? null;
-
-      return {
-        id: row.id as string,
-        type: row.type as AlertType,
-        latitude: rowLat,
-        longitude: rowLng,
-        distanceMeters,
-        createdAt: row.created_at as string,
-        senderName,
-      };
-    },
-    []
-  );
 
   // ── Fetch active nearby alerts ────────────────────────────────────────────
 
@@ -131,23 +102,21 @@ export function useRadarAlerts({
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id;
+      const currentUserId = session?.user?.id ?? null;
+      const cutoffTime = new Date(Date.now() - MAX_ALERT_AGE_MS).toISOString();
 
-      // Fetch alerts that are active and community-scoped (scope = 'both').
-      // We filter by a rough bounding box first (cheap), then compute exact
-      // Haversine distances client-side to cull anything outside the radius.
-      const latDelta = radiusMeters / 111_320; // ~1 degree latitude ≈ 111 320 m
-      const lngDelta =
-        radiusMeters / (111_320 * Math.cos((latitude * Math.PI) / 180));
+      // Bounding box for pre-filtering (cheap)
+      const latDelta = radiusMeters / 111_320;
+      const lngDelta = radiusMeters / (111_320 * Math.cos((latitude * Math.PI) / 180));
 
-      const { data, error: fetchError } = await supabase
+      // 1. Fetch from 'alerts' table (covers user's own alert, contacts, responders)
+      const alertsQuery = supabase
         .from('alerts')
         .select(
-          'id, type, latitude, longitude, created_at, profiles!alerts_user_id_fkey(full_name)'
+          'id, type, latitude, longitude, created_at, user_id, profiles!alerts_user_id_fkey(full_name)'
         )
         .eq('status', 'active')
-        // Only show community-broadcast alerts on the radar
-        .neq('user_id', userId ?? '') // don't show the user's own alert as a radar pin
+        .gte('created_at', cutoffTime)
         .gte('latitude', latitude - latDelta)
         .lte('latitude', latitude + latDelta)
         .gte('longitude', longitude - lngDelta)
@@ -155,19 +124,104 @@ export function useRadarAlerts({
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (fetchError) {
-        console.warn('[useRadarAlerts] fetch error:', fetchError.message);
+      // 2. Fetch from 'notifications' table (covers community broadcasts received by user)
+      const notifsQuery = supabase
+        .from('notifications')
+        .select(
+          'id, alert_id, type, latitude, longitude, created_at, sender_name, is_community_broadcast'
+        )
+        .eq('is_community_broadcast', true)
+        .not('alert_id', 'is', null)
+        .gte('created_at', cutoffTime)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      // 3. Fetch any cancellation notifications to weed out resolved alerts
+      const cancelNotifsQuery = supabase
+        .from('notifications')
+        .select('alert_id')
+        .eq('type', 'sos_ack')
+        .gte('created_at', cutoffTime);
+
+      const [alertsRes, notifsRes, cancelRes] = await Promise.all([
+        alertsQuery,
+        notifsQuery,
+        cancelNotifsQuery,
+      ]);
+
+      if (alertsRes.error && notifsRes.error) {
+        console.warn('[useRadarAlerts] fetch error:', alertsRes.error?.message, notifsRes.error?.message);
         setError('Could not load nearby alerts.');
         return;
       }
 
-      const parsed = (data ?? [])
-        .map(rowToAlert)
-        .filter((a): a is RadarAlert => a !== null)
-        // Final Haversine cull — removes corners of the bounding box
-        .filter((a) => a.distanceMeters <= radiusMeters)
-        // Closest first
-        .sort((a, b) => a.distanceMeters - b.distanceMeters);
+      // Collect cancelled alert IDs
+      const cancelledIds = new Set<string>();
+      (cancelRes.data ?? []).forEach((c) => {
+        if (c.alert_id) cancelledIds.add(c.alert_id);
+      });
+
+      const resultMap = new Map<string, RadarAlert>();
+
+      // Process rows from 'alerts' table
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (alertsRes.data ?? []).forEach((row: any) => {
+        const isOwn = currentUserId != null && row.user_id === currentUserId;
+        const rowLat = row.latitude ?? (isOwn ? latitude : null);
+        const rowLng = row.longitude ?? (isOwn ? longitude : null);
+
+        if (rowLat == null || rowLng == null) return;
+
+        const distanceMeters = getDistanceMeters(latitude, longitude, rowLat, rowLng);
+        if (distanceMeters > radiusMeters && !isOwn) return;
+
+        const profilesRaw = row.profiles;
+        const profile = Array.isArray(profilesRaw) ? (profilesRaw[0] ?? null) : profilesRaw ?? null;
+        const senderName = isOwn ? 'You' : (profile?.full_name ?? null);
+
+        resultMap.set(row.id, {
+          id: row.id,
+          type: (row.type ?? 'sos') as AlertType,
+          latitude: rowLat,
+          longitude: rowLng,
+          distanceMeters: isOwn ? 0 : distanceMeters,
+          createdAt: row.created_at,
+          senderName,
+          isOwn,
+        });
+      });
+
+      // Process rows from 'notifications' table (community broadcasts)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (notifsRes.data ?? []).forEach((n: any) => {
+        const alertId = n.alert_id as string;
+        if (!alertId || resultMap.has(alertId) || cancelledIds.has(alertId)) return;
+
+        const nLat: number | null = n.latitude ?? null;
+        const nLng: number | null = n.longitude ?? null;
+        if (nLat == null || nLng == null) return;
+
+        const distanceMeters = getDistanceMeters(latitude, longitude, nLat, nLng);
+        if (distanceMeters > radiusMeters) return;
+
+        resultMap.set(alertId, {
+          id: alertId,
+          type: (n.type ?? 'sos') as AlertType,
+          latitude: nLat,
+          longitude: nLng,
+          distanceMeters,
+          createdAt: n.created_at,
+          senderName: n.sender_name ?? 'Community Member',
+          isOwn: false,
+        });
+      });
+
+      const parsed = Array.from(resultMap.values()).sort((a, b) => {
+        // Own alert always first, then closest by distance
+        if (a.isOwn && !b.isOwn) return -1;
+        if (!a.isOwn && b.isOwn) return 1;
+        return a.distanceMeters - b.distanceMeters;
+      });
 
       setAlerts(parsed);
     } catch (err) {
@@ -176,7 +230,7 @@ export function useRadarAlerts({
     } finally {
       setLoading(false);
     }
-  }, [latitude, longitude, radiusMeters, rowToAlert]);
+  }, [latitude, longitude, radiusMeters]);
 
   // ── Fetch breadcrumbs for selected alert ─────────────────────────────────
 
@@ -190,7 +244,7 @@ export function useRadarAlerts({
         .select('latitude, longitude, timestamp')
         .eq('alert_id', alertId)
         .order('timestamp', { ascending: true })
-        .limit(200); // Cap at 200 points for polyline performance
+        .limit(200);
 
       if (fetchError) {
         console.warn('[useRadarAlerts] breadcrumbs fetch error:', fetchError.message);
@@ -217,24 +271,23 @@ export function useRadarAlerts({
     fetchAlerts();
   }, [fetchAlerts]);
 
-  // ── Effect: Supabase Realtime subscription ────────────────────────────────
+  // ── Effect: Supabase Realtime subscriptions ───────────────────────────────
 
   useEffect(() => {
     if (latitude == null || longitude == null) return;
 
     const channel = supabase
       .channel(REALTIME_CHANNEL)
+      // Listen for alerts changes
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'alerts',
-          filter: `status=eq.active`,
         },
         (payload) => {
           if (payload.eventType === 'DELETE') {
-            // Alert was hard-deleted — remove from list
             setAlerts((prev) => prev.filter((a) => a.id !== payload.old?.id));
             return;
           }
@@ -249,58 +302,36 @@ export function useRadarAlerts({
             user_id: string;
           };
 
-          // If a previously active alert is now cancelled/resolved — drop it
           if (row.status !== 'active') {
+            // Cancelled or resolved
             setAlerts((prev) => prev.filter((a) => a.id !== row.id));
-            // If this was the selected alert, deselect
             setSelectedAlertId((prev) => (prev === row.id ? null : prev));
             return;
           }
 
-          // Build a basic RadarAlert from realtime payload (no joined profile).
-          // We'll get the sender name on the next full refresh, which is fine.
-          const { latitude: userLat, longitude: userLng } = coordsRef.current;
-          if (
-            row.latitude == null ||
-            row.longitude == null ||
-            userLat == null ||
-            userLng == null
-          ) {
-            return;
-          }
-
-          const distanceMeters = getDistanceMeters(
-            userLat,
-            userLng,
-            row.latitude,
-            row.longitude
-          );
-
-          if (distanceMeters > radiusMeters) return; // Outside the radar radius
-
-          const newAlert: RadarAlert = {
-            id: row.id,
-            type: row.type as AlertType,
-            latitude: row.latitude,
-            longitude: row.longitude,
-            distanceMeters,
-            createdAt: row.created_at,
-            senderName: null,
+          // Active alert insert or update -> refresh radar
+          fetchAlerts();
+        }
+      )
+      // Listen for community notifications
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+        },
+        (payload) => {
+          const notif = payload.new as {
+            type: string;
+            alert_id: string | null;
+            is_community_broadcast?: boolean;
           };
 
-          setAlerts((prev) => {
-            const existingIdx = prev.findIndex((a) => a.id === newAlert.id);
-            if (existingIdx >= 0) {
-              // Update existing (e.g. location changed)
-              const updated = [...prev];
-              updated[existingIdx] = newAlert;
-              return updated.sort((a, b) => a.distanceMeters - b.distanceMeters);
-            }
-            // New alert — prepend then sort
-            return [...prev, newAlert].sort(
-              (a, b) => a.distanceMeters - b.distanceMeters
-            );
-          });
+          if (notif.is_community_broadcast || notif.type === 'sos_ack') {
+            // Community broadcast received or cancelled -> refresh radar
+            fetchAlerts();
+          }
         }
       )
       .subscribe();
@@ -308,7 +339,7 @@ export function useRadarAlerts({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [latitude, longitude, radiusMeters]);
+  }, [latitude, longitude, fetchAlerts]);
 
   // ── Effect: fetch breadcrumbs when selected alert changes ─────────────────
 
@@ -331,4 +362,3 @@ export function useRadarAlerts({
     refresh: fetchAlerts,
   };
 }
-

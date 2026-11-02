@@ -97,11 +97,11 @@ const IncidentPill = React.memo(
         {/* Text */}
         <View style={styles.pillText}>
           <Text style={styles.pillType} numberOfLines={1}>
-            {cfg.label}
+            {alert.isOwn ? `Your ${cfg.label}` : cfg.label}
           </Text>
           <Text style={styles.pillMeta} numberOfLines={1}>
-            {formatDistance(alert.distanceMeters)}
-            {alert.senderName ? ` · ${alert.senderName}` : ''}
+            {alert.isOwn ? 'Your location' : formatDistance(alert.distanceMeters)}
+            {!alert.isOwn && alert.senderName ? ` · ${alert.senderName}` : ''}
           </Text>
         </View>
 
@@ -121,10 +121,11 @@ interface IncidentDrawerProps {
   loading: boolean;
   selectedAlertId: string | null;
   onPinSelect: (alert: RadarAlert) => void;
+  onRespondPress?: (alert: RadarAlert) => void;
 }
 
 export const IncidentDrawer = React.memo(
-  ({ alerts, loading, selectedAlertId, onPinSelect }: IncidentDrawerProps) => {
+  ({ alerts, loading, selectedAlertId, onPinSelect, onRespondPress }: IncidentDrawerProps) => {
     const { colors } = useTheme();
     const styles = React.useMemo(() => getStyles(colors), [colors]);
 
@@ -134,6 +135,8 @@ export const IncidentDrawer = React.memo(
       },
       [onPinSelect]
     );
+
+    const selectedAlert = alerts.find((a) => a.id === selectedAlertId);
 
     return (
       <View style={styles.drawer}>
@@ -180,12 +183,28 @@ export const IncidentDrawer = React.memo(
           </ScrollView>
         )}
 
-        {/* Hint when an alert is selected */}
-        {selectedAlertId && !loading && (
-          <Text style={styles.trailHint}>
-            <Ionicons name="footsteps-outline" size={11} color={colors.text.secondary} />
-            {'  '}Movement trail shown on map
-          </Text>
+        {/* Action / Detail row when an alert is selected */}
+        {selectedAlert && !loading && (
+          <View style={styles.selectedFooter}>
+            <Text style={styles.trailHint}>
+              <Ionicons name="footsteps-outline" size={11} color={colors.text.secondary} />
+              {'  '}Movement trail shown on map
+            </Text>
+
+            {!selectedAlert.isOwn && onRespondPress && (
+              <TouchableOpacity
+                style={styles.respondButton}
+                onPress={() => onRespondPress(selectedAlert)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="View details and respond"
+              >
+                <Ionicons name="shield-checkmark" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.respondButtonText}>View Details & Respond</Text>
+                <Ionicons name="chevron-forward" size={14} color="#FFFFFF" style={{ marginLeft: 4 }} />
+              </TouchableOpacity>
+            )}
+          </View>
         )}
       </View>
     );
@@ -253,10 +272,32 @@ const getStyles = (colors: ThemeColors) =>
       paddingRight: 4,
     },
     trailHint: {
-      marginTop: 10,
       fontSize: 11,
       color: colors.text.secondary,
       fontWeight: '500',
+    },
+    selectedFooter: {
+      marginTop: 12,
+      paddingTop: 10,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    respondButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+    },
+    respondButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '700',
     },
   });
 

@@ -4,7 +4,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useTheme } from '../../src/context/ThemeContext';
 import type { ThemeColors } from '../../src/constants/Theme';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import { ShareTripModal } from '../../src/components/ShareTripModal';
 import { ActiveTripShareCard } from '../../src/components/ActiveTripShareCard';
 import { useShareLiveTrip, TripShareContact } from '../../src/hooks/useShareLiveTrip';
@@ -179,6 +179,11 @@ export default function MapScreen() {
     }
   }, [selectedAlertId, setSelectedAlertId]);
 
+  const handleRespondPress = useCallback((alert: RadarAlert) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    router.push(`/community-alert/${alert.id}` as any);
+  }, []);
+
   const initialRegion = React.useMemo(() => {
     if (!location) return undefined;
     return {
@@ -262,6 +267,7 @@ export default function MapScreen() {
           loading={radarLoading}
           selectedAlertId={selectedAlertId}
           onPinSelect={handleRadarPinSelect}
+          onRespondPress={handleRespondPress}
         />
       </View>
 
