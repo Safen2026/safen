@@ -3,13 +3,27 @@ import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import type { PostgrestError } from '@supabase/supabase-js';
-import { notifyEmergencyContacts } from '../lib/notifications';
+import {
+  notifyEmergencyContacts,
+  notifySosCancelled,
+  notifyCommunityNearby,
+} from '../lib/notifications';
 import {
   isOnline,
   getEmergencyContactPhones,
   sendEmergencySms,
 } from '../lib/emergencySms';
 import { getUserDisplayName } from '../utils/userUtils';
+import {
+  type BroadcastScope,
+  getStoredBroadcastScope,
+  setStoredBroadcastScope,
+} from '../utils/broadcastScope';
+import {
+  startBackgroundLocationTracking,
+  stopBackgroundLocationTracking,
+  isBackgroundLocationTrackingActive,
+} from '../services/backgroundLocation';
 
 export type AlertType = 'sos' | 'medical' | 'police' | 'fire';
 
@@ -19,6 +33,7 @@ export type AlertResult = 'ok' | 'sms' | 'no_contacts' | false;
 export type ActiveAlert = {
   id: string;
   type: AlertType;
+  scope: BroadcastScope;
 };
 
 /**
@@ -31,6 +46,22 @@ export function useAlert() {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
   const [activeAlert, setActiveAlert] = useState<ActiveAlert | null>(null);
+  const [broadcastScope, setBroadcastScopeState] = useState<BroadcastScope>('both');
+  const [isEscalating, setIsEscalating] = useState(false);
+
+  // Load user's default broadcast scope preference from storage
+  useEffect(() => {
+    let isMounted = true;
+    getStoredBroadcastScope().then((scope) => {
+      if (isMounted) setBroadcastScopeState(scope);
+    });
+    return () => { isMounted = false; };
+  }, []);
+
+  const setBroadcastScope = useCallback(async (scope: BroadcastScope) => {
+    setBroadcastScopeState(scope);
+    await setStoredBroadcastScope(scope);
+  }, []);
 
   // Re-hydrate any active alert from the DB on mount (covers app restarts).
   useEffect(() => {
@@ -53,23 +84,37 @@ export function useAlert() {
         .maybeSingle();
 
       if (isMounted && data) {
-        setActiveAlert({ id: data.id, type: data.type as AlertType });
+        const storedScope = (await AsyncStorage.getItem(`@safen_active_alert_scope_${data.id}`)) as BroadcastScope | null;
+        setActiveAlert({
+          id: data.id,
+          type: data.type as AlertType,
+          scope: storedScope === 'contacts_only' ? 'contacts_only' : 'both',
+        });
       }
     };
     fetchActiveAlert();
     return () => { isMounted = false; };
   }, []);
 
-  // ── Live location refresh (foreground only) ───────────────────────────────
-  // While an SOS is active and the app is in the foreground, push a fresh
-  // location to the alerts row every LOCATION_UPDATE_INTERVAL_MS ms.
-  // We use getLastKnownPositionAsync because permission was already obtained
-  // at trigger time — no need to re-prompt or wait for a full GPS fix.
+  // ── Live location tracking (foreground & background) ─────────────────────
+  // While an SOS is active, continuously push coordinates and log breadcrumbs
+  // via expo-task-manager background service even if the app is backgrounded.
   useEffect(() => {
-    if (!activeAlert) return;
+    if (!activeAlert) {
+      stopBackgroundLocationTracking();
+      return;
+    }
 
+    startBackgroundLocationTracking(activeAlert.id);
+
+    // Foreground fallback: push a fresh location reading every 30s.
+    // We skip the DB write if the background task is already running to avoid
+    // writing the same coordinates twice (background fires every 15s).
     const intervalId = setInterval(async () => {
       try {
+        const bgActive = await isBackgroundLocationTrackingActive();
+        if (bgActive) return; // background task handles it — nothing to do
+
         const position = await Location.getLastKnownPositionAsync();
         if (!position) return;
 
@@ -88,7 +133,9 @@ export function useAlert() {
       }
     }, LOCATION_UPDATE_INTERVAL_MS);
 
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [activeAlert]);
 
   // ── Location helper ──────────────────────────────────────────────────────
@@ -97,7 +144,7 @@ export function useAlert() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') return null;
 
-      let location = await Location.getLastKnownPositionAsync();
+      let location = await Location.getLastKnownPositionAsync({ maxAge: 20000 }).catch(() => null);
       if (!location) {
         // Fast timeout (4s) for offline SOS so it doesn't hang before routing to SMS
         const fetchPromise = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -119,12 +166,18 @@ export function useAlert() {
   }, []);
 
   // ── Main trigger ─────────────────────────────────────────────────────────
-  const triggerAlert = useCallback(async (type: AlertType, description?: string): Promise<AlertResult> => {
+  const triggerAlert = useCallback(async (
+    type: AlertType,
+    description?: string,
+    customScope?: BroadcastScope,
+  ): Promise<AlertResult> => {
     // Idempotency guard: if an alert is already active (either from a fresh trigger
     // or restored from the DB after a force-close / restart), do NOT create a new
     // alert row or re-notify contacts. Just surface the existing session.
     // This prevents the "5 force-closes = 5 notifications" bug.
     if (activeAlert) return 'ok';
+
+    const effectiveScope = customScope ?? broadcastScope;
 
     setLoading(true);
     setLoadingMessage('Checking connectivity and location...');
@@ -255,16 +308,27 @@ export function useAlert() {
 
     setLoading(false);
     setLoadingMessage(null);
-    if (error || !data) return false;
+    if (error || !data) {
+      if (error) {
+        console.error('[useAlert] Failed to activate SOS in DB:', error.message, error.details, error.hint);
+      }
+      return false;
+    }
 
-    setActiveAlert({ id: data.id, type });
+    // Store active alert scope for session continuity across app restarts
+    await AsyncStorage.setItem(`@safen_active_alert_scope_${data.id}`, effectiveScope).catch((err) => {
+      console.warn('[useAlert] Failed to persist alert scope to storage:', err);
+    });
+    setActiveAlert({ id: data.id, type, scope: effectiveScope });
 
     // Insert initial event into the feed (fire-and-forget)
     supabase.from('sos_events').insert({
       alert_id: data.id,
       event_type: 'system',
-      message: 'Emergency triggered. Alerting your network...',
-      actor_id: user.id
+      message: effectiveScope === 'both'
+        ? 'Emergency triggered. Alerting contacts and nearby community (~800m)...'
+        : 'Emergency triggered in discreet mode. Alerting trusted contacts only...',
+      actor_id: user.id,
     }).then(({ error: insertErr }) => {
       if (insertErr) console.warn('Failed to insert initial SOS event:', insertErr);
     });
@@ -278,16 +342,27 @@ export function useAlert() {
       detailsSnippet: description?.trim() ?? undefined,
     });
 
+    // Fan out to nearby community if broadcast scope includes community
+    if (effectiveScope === 'both') {
+      notifyCommunityNearby({
+        alertId: data.id,
+        type,
+        latitude: coords?.latitude ?? undefined,
+        longitude: coords?.longitude ?? undefined,
+        detailsSnippet: description?.trim() ?? undefined,
+      });
+    }
+
     return 'ok';
-  }, [getLocation, activeAlert]);
+  }, [getLocation, activeAlert, broadcastScope]);
 
   // ── Cancel ───────────────────────────────────────────────────────────────
   const cancelAlert = useCallback(async (): Promise<boolean> => {
     if (!activeAlert) return false;
     setLoading(true);
 
-    // Capture session once at the start — used for both the DB update and the
-    // feed event insert below. Avoids an inline await inside a fire-and-forget.
+    const cancelledAlertId = activeAlert.id;
+    const hadCommunityBroadcast = activeAlert.scope === 'both';
     const { data: { session } } = await supabase.auth.getSession();
     const actorId = session?.user?.id ?? null;
 
@@ -297,16 +372,25 @@ export function useAlert() {
         status: 'cancelled',
         resolved_at: new Date().toISOString(),
       })
-      .eq('id', activeAlert.id);
+      .eq('id', cancelledAlertId);
 
     setLoading(false);
     if (error) return false;
 
+    await stopBackgroundLocationTracking();
+
+    // Notify contacts (and nearby community if broadcast) that the emergency has been resolved
+    notifySosCancelled({ alertId: cancelledAlertId, hadCommunityBroadcast }).catch(
+      (err) => console.warn('[useAlert] cancel notification failed:', err)
+    );
+    await AsyncStorage.removeItem(`@safen_active_alert_scope_${cancelledAlertId}`).catch((err) => {
+      console.warn('[useAlert] Failed to remove alert scope from storage:', err);
+    });
     setActiveAlert(null);
 
     // Insert cancellation event into the feed (fire-and-forget)
     supabase.from('sos_events').insert({
-      alert_id: activeAlert.id,
+      alert_id: cancelledAlertId,
       event_type: 'system',
       message: 'Emergency resolved and cancelled by user.',
       actor_id: actorId,
@@ -317,13 +401,63 @@ export function useAlert() {
     return true;
   }, [activeAlert]);
 
+  // ── Layer 3: Escalate to Community ──────────────────────────────────────
+  const escalateToCommunity = useCallback(async (): Promise<boolean> => {
+    if (!activeAlert || activeAlert.scope === 'both') return false;
+    setIsEscalating(true);
+    try {
+      const coords = await getLocation();
+      await notifyCommunityNearby({
+        alertId: activeAlert.id,
+        type: activeAlert.type,
+        latitude: coords?.latitude ?? undefined,
+        longitude: coords?.longitude ?? undefined,
+      });
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) {
+        void supabase.from('sos_events').insert({
+          alert_id: activeAlert.id,
+          event_type: 'system',
+          message: 'Alert escalated: Nearby community notified within ~800m.',
+          actor_id: session.user.id,
+        });
+      }
+
+      await AsyncStorage.setItem(`@safen_active_alert_scope_${activeAlert.id}`, 'both').catch((err) => {
+        console.warn('[useAlert] Failed to persist escalated scope to storage:', err);
+      });
+      setActiveAlert((prev) => (prev ? { ...prev, scope: 'both' } : null));
+      return true;
+    } catch (err) {
+      console.warn('[useAlert] escalateToCommunity failed:', err);
+      return false;
+    } finally {
+      setIsEscalating(false);
+    }
+  }, [activeAlert, getLocation]);
 
   return useMemo(() => ({
     loading,
     loadingMessage,
     activeAlert,
+    broadcastScope,
+    setBroadcastScope,
+    isEscalating,
+    escalateToCommunity,
     triggerAlert,
-    cancelAlert
-  }), [loading, loadingMessage, activeAlert, triggerAlert, cancelAlert]);
+    cancelAlert,
+  }), [
+    loading,
+    loadingMessage,
+    activeAlert,
+    broadcastScope,
+    setBroadcastScope,
+    isEscalating,
+    escalateToCommunity,
+    triggerAlert,
+    cancelAlert,
+  ]);
 }
-
+
+

@@ -1,7 +1,8 @@
+import { customAlert } from '../../src/utils/customAlert';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Image, Linking, Alert, Modal,
+  ActivityIndicator, Image, Linking, Modal,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -172,7 +173,7 @@ export default function HistoryDetailScreen() {
   // Reuses the same map navigation pattern as NotificationDetailsModal.handleViewMap
   const handleViewOnMap = useCallback(() => {
     if (!data?.latitude || !data?.longitude) {
-      Alert.alert('Location Unavailable', 'No coordinates were captured for this event.');
+      customAlert('Location Unavailable', 'No coordinates were captured for this event.');
       return;
     }
     router.push(`/(tabs)/map?lat=${data.latitude}&lng=${data.longitude}`);
@@ -183,14 +184,14 @@ export default function HistoryDetailScreen() {
     try {
       const lower = url.toLowerCase();
       if (!lower.startsWith('http://') && !lower.startsWith('https://')) {
-        Alert.alert('Security Alert', 'This media link is not secure and cannot be opened.');
+        customAlert('Security Alert', 'This media link is not secure and cannot be opened.');
         return;
       }
       const canOpen = await Linking.canOpenURL(url);
       if (canOpen) await Linking.openURL(url);
-      else Alert.alert('Cannot Open', 'Your device cannot open this file.');
+      else customAlert('Cannot Open', 'Your device cannot open this file.');
     } catch {
-      Alert.alert('Error', 'Failed to open the media file.');
+      customAlert('Error', 'Failed to open the media file.');
     }
   }, []);
 

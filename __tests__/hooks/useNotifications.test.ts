@@ -22,6 +22,7 @@ function makeNotification(overrides: Partial<AppNotification> = {}): AppNotifica
     latitude: null,
     longitude: null,
     is_read: false,
+    is_community_broadcast: false,
     created_at: new Date().toISOString(),
     ...overrides,
   };

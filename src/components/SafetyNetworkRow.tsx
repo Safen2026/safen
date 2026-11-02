@@ -21,6 +21,7 @@ type Contact = {
   name: string;
   is_on_app: boolean;
   avatar_url: string | null;
+  status?: string;
 };
 
 type CachedContact = { name: string; phone: string; status: string };
@@ -43,7 +44,8 @@ export const SafetyNetworkRow = React.memo(() => {
   // Does NOT blank the UI — contacts already shown from cache stay visible
   // while this runs in the background.
   const fetchFromNetwork = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user || !isMountedRef.current) return;
 
     const { data, error } = await supabase
@@ -52,11 +54,12 @@ export const SafetyNetworkRow = React.memo(() => {
         id,
         name,
         is_on_app,
+        status,
         contact_user_id,
         profiles:contact_user_id (avatar_url)
       `)
       .eq('user_id', user.id)
-      .eq('status', 'accepted')   // Only show accepted contacts on the home card
+      .eq('status', 'accepted')   // Strictly show accepted contacts only on the home card
       .order('created_at', { ascending: true })
       .limit(MAX_VISIBLE);
 
@@ -65,6 +68,7 @@ export const SafetyNetworkRow = React.memo(() => {
         id: string;
         name: string;
         is_on_app: boolean;
+        status: string;
         contact_user_id: string | null;
         profiles: { avatar_url: string | null } | null;
       }
@@ -74,6 +78,7 @@ export const SafetyNetworkRow = React.memo(() => {
           name      : c.name,
           is_on_app : c.is_on_app ?? false,
           avatar_url: c.profiles?.avatar_url ?? null,
+          status    : c.status,
         }))
       );
     }
@@ -89,22 +94,27 @@ export const SafetyNetworkRow = React.memo(() => {
         if (!session?.user || !isMountedRef.current) return;
 
         // Step 1: Read from cache immediately so names appear before any network call.
-        // The contacts cache stores all statuses (needed for SMS fallback), so filter
-        // here to only show accepted contacts on the home screen card.
         const raw = await AsyncStorage.getItem(getContactsCacheKey(session.user.id));
         if (raw && isMountedRef.current) {
-          const cached: CachedContact[] = JSON.parse(raw);
-          setContacts(
-            cached
-              .filter(c => c.status === 'accepted')
-              .slice(0, MAX_VISIBLE)
-              .map((c, i) => ({
-                id        : `cached_${i}`,
-                name      : c.name,
-                is_on_app : true,
-                avatar_url: null,
-              }))
-          );
+          const parsed = JSON.parse(raw);
+          const cachedList: CachedContact[] = Array.isArray(parsed)
+            ? parsed
+            : (Array.isArray(parsed?.contacts) ? parsed.contacts : []);
+
+          if (cachedList.length > 0) {
+            setContacts(
+              cachedList
+                .filter(c => c.status === 'accepted')
+                .slice(0, MAX_VISIBLE)
+                .map((c, i) => ({
+                  id        : `cached_${i}`,
+                  name      : c.name,
+                  is_on_app : true,
+                  avatar_url: null,
+                  status    : c.status,
+                }))
+            );
+          }
         }
 
         // Step 2: Silently refresh to get real IDs, avatars, and is_on_app values.
@@ -166,7 +176,14 @@ export const SafetyNetworkRow = React.memo(() => {
         contentContainerStyle={styles.row}
       >
         {contacts.map(contact => (
-          <View key={contact.id} style={styles.item}>
+          <TouchableOpacity
+            key={contact.id}
+            style={styles.item}
+            onPress={goToNetwork}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Contact: ${contact.name}. Tap to view network.`}
+          >
             <View style={{ marginBottom: 6 }}>
               <Avatar
                 name={contact.name}
@@ -178,7 +195,7 @@ export const SafetyNetworkRow = React.memo(() => {
             <Text style={[styles.contactName, { color: colors.text.secondary }]} numberOfLines={1}>
               {contact.name.split(' ')[0]}
             </Text>
-          </View>
+          </TouchableOpacity>
         ))}
 
         {/* Add button */}

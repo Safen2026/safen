@@ -1,5 +1,6 @@
+import { customAlert } from '../../utils/customAlert';
 import React, { useState, memo, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -27,7 +28,7 @@ export const TagInput = memo(function TagInput({
     
     // Application-layer DoS protection
     if (trimmed.length > 50) {
-      Alert.alert('Error', 'Tag cannot exceed 50 characters.');
+      customAlert('Error', 'Tag cannot exceed 50 characters.');
       return;
     }
     

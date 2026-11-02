@@ -1,5 +1,6 @@
+import { customAlert } from '../utils/customAlert';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert, Linking, Image } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Linking, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
@@ -45,20 +46,20 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
 
   const handlePing = async () => {
     if (!contact.contact_user_id) {
-      Alert.alert('Cannot Ping', 'This contact is not verified on Safen.');
+      customAlert('Cannot Ping', 'This contact is not verified on Safen.');
       return;
     }
     const success = await sendPing(contact.contact_user_id);
     if (success) {
-      Alert.alert('Ping Sent', `A check-in ping was successfully sent to ${contact.name}.`);
+      customAlert('Ping Sent', `A check-in ping was successfully sent to ${contact.name}.`);
     } else {
-      Alert.alert('Error', 'Failed to send ping. Please try again later.');
+      customAlert('Error', 'Failed to send ping. Please try again later.');
     }
   };
 
   const handleShareTrip = () => {
     if (!contact?.contact_user_id) {
-      Alert.alert('Not on Safen', 'Live location sharing only works with contacts who are on Safen.');
+      customAlert('Not on Safen', 'Live location sharing only works with contacts who are on Safen.');
       return;
     }
     onClose();
@@ -189,9 +190,13 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
                 onPress={() => { onClose(); onEdit(); }}
                 accessibilityRole="button"
                 accessibilityLabel="Edit Contact Details"
+                activeOpacity={0.7}
               >
-                <Ionicons name="pencil" size={20} color={colors.text.secondary} />
+                <View style={styles.manageIconBox}>
+                  <Ionicons name="pencil" size={18} color={colors.text.secondary} />
+                </View>
                 <Text style={styles.manageText}>Edit Contact Details</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.text.secondary} />
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -199,8 +204,11 @@ export const ContactDetailsModal = ({ visible, contact, onClose, onEdit, onDelet
                 onPress={() => { onClose(); onDelete(); }}
                 accessibilityRole="button"
                 accessibilityLabel="Remove Contact"
+                activeOpacity={0.7}
               >
-                <Ionicons name="trash" size={20} color="#DC2626" />
+                <View style={[styles.manageIconBox, { backgroundColor: '#DC262615' }]}>
+                  <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                </View>
                 <Text style={[styles.manageText, { color: '#DC2626' }]}>Remove Contact</Text>
               </TouchableOpacity>
             </View>
@@ -259,14 +267,15 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   quickBtn: { alignItems: 'center', gap: 8 },
   quickIcon: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
   quickLabel: { fontSize: 14, fontWeight: '500', color: colors.text.primary },
-  premiumAction: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: 16, borderRadius: 16, marginBottom: 24 },
-  premiumIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary + '20', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  premiumAction: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, padding: 16, borderRadius: 16, marginBottom: 16 },
+  premiumIconBox: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary + '20', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
   premiumText: { flex: 1 },
   premiumTitle: { fontSize: 16, fontWeight: 'bold', color: colors.text.primary, marginBottom: 2 },
   premiumSub: { fontSize: 13, color: colors.text.secondary },
   manageSection: { backgroundColor: colors.background, borderRadius: 16, overflow: 'hidden' },
-  manageBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  manageText: { fontSize: 16, fontWeight: '600', color: colors.text.primary, marginLeft: 16 },
+  manageBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  manageIconBox: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.white, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  manageText: { flex: 1, fontSize: 15, fontWeight: '600', color: colors.text.primary },
   imageViewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
   fullscreenImage: { width: '100%', height: '80%' },
   imageViewerCloseBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 8 },

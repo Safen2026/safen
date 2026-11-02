@@ -220,4 +220,34 @@ describe('notification scheduling guards', () => {
     // contactAlertAt = now - 6min + 5min = now - 1min — in the past
     expect(shouldScheduleContactAlert(deadlineAt, now)).toBe(false);
   });
+
+  describe('SAD PATHS: Erratic inputs & clock drift', () => {
+    it('formatTimeLeft handles NaN ms gracefully without crashing', () => {
+      expect(() => formatTimeLeft(NaN)).not.toThrow();
+      expect(formatTimeLeft(NaN)).toBe('Less than a minute left');
+    });
+
+    it('formatTimeLeft handles -Infinity and large negative ms as deadline passed', () => {
+      expect(formatTimeLeft(-Infinity)).toBe('Deadline passed — check in now!');
+      expect(formatTimeLeft(-9999999999)).toBe('Deadline passed — check in now!');
+    });
+
+    it('session restore handles distant past sessions (e.g. 7 days expired) cleanly', () => {
+      const pastSession: CheckInSession = {
+        destination: 'Airport',
+        durationMinutes: 60,
+        notifyContacts: true,
+        startedAt: Date.now() - 7 * 24 * 60 * 60 * 1000,
+        deadlineAt: Date.now() - 6 * 24 * 60 * 60 * 1000,
+      };
+      expect(shouldRestoreSession(pastSession)).toBe('expired');
+    });
+
+    it('reminder guard handles clock jump backwards without scheduling in the past', () => {
+      const now = Date.now();
+      // Deadline was set in the past relative to now
+      const deadlineAt = now - 1000;
+      expect(shouldScheduleReminder(deadlineAt, now)).toBe(false);
+    });
+  });
 });

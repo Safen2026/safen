@@ -24,7 +24,11 @@
       "supportsTablet": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": ["location", "fetch", "audio"],
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SAFEN needs background location access to update your live coordinates for emergency contacts during an active SOS.",
+        "NSLocationWhenInUseUsageDescription": "SAFEN uses your location to display nearby safety alerts and share your location when reporting incidents or triggering SOS.",
+        "NSLocationAlwaysUsageDescription": "SAFEN tracks your location in the background only during active emergencies so responders can reach you."
       }
     },
     "android": {
@@ -35,22 +39,37 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.kingdave17.safen",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "RECORD_AUDIO",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/logo.png"
     },
 
     "plugins": [
-  "expo-router",
-  ["expo-location", { "locationAlwaysAndWhenInUsePermission": "Allow SAFEN to use your location to share it during emergencies." }],
-  ["expo-image-picker", { "photosPermission": "Allow SAFEN to access your photos so you can attach evidence to reports.", "cameraPermission": "Allow SAFEN to access your camera to capture evidence for emergency reports." }],
-  ["expo-av", { "microphonePermission": "Allow SAFEN to access your microphone to record audio evidence for reports." }],
-  ["expo-notifications", { "icon": "./assets/android-icon-monochrome.png", "color": "#00875A" }],
-  "@react-native-community/datetimepicker",
-  ["@react-native-firebase/app", { "ios": { "useFrameworks": "dynamic" } }],
-  "@react-native-firebase/auth"
-],
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow SAFEN to use your location to share it during emergencies.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      ["expo-image-picker", { "photosPermission": "Allow SAFEN to access your photos so you can attach evidence to reports.", "cameraPermission": "Allow SAFEN to access your camera to capture evidence for emergency reports." }],
+      ["expo-av", { "microphonePermission": "Allow SAFEN to access your microphone to record audio evidence for reports." }],
+      ["expo-notifications", { "icon": "./assets/android-icon-monochrome.png", "color": "#00875A" }],
+      "@react-native-community/datetimepicker",
+      ["@react-native-firebase/app", { "ios": { "useFrameworks": "dynamic" } }],
+      "@react-native-firebase/auth"
+    ],
     "extra": {
       "router": {},
       "eas": {

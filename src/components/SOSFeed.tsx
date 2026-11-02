@@ -83,15 +83,24 @@ const FeedItem = React.memo(({ event, isLast }: { event: SOSEvent; isLast: boole
   if (event.event_type === 'seen') {
     iconName = 'eye';
     iconColor = '#3498DB';
-  } else if (event.event_type === 'responding') {
+  } else if (event.event_type === 'responding' || event.event_type === 'responder_joined') {
     iconName = 'shield-checkmark';
-    iconColor = '#27AE60';
+    iconColor = '#16A34A';
+  } else if (event.event_type === 'responder_cancelled') {
+    iconName = 'close-circle';
+    iconColor = '#EF4444';
   } else if (event.event_type === 'system') {
     iconName = 'cog';
     iconColor = '#7F8C8D';
   }
 
-  const actorName = event.profiles?.full_name || 'System';
+  const actorName =
+    event.profiles?.full_name ||
+    (event.event_type === 'responding' || event.event_type === 'responder_joined'
+      ? 'Community Responder'
+      : event.event_type === 'responder_cancelled'
+      ? 'Community Member'
+      : 'System');
 
   return (
     <Animated.View 

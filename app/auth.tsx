@@ -9,7 +9,6 @@ import {
   ScrollView,
   Animated,
   ActivityIndicator,
-  Alert,
   Image,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -21,9 +20,9 @@ import { useTheme } from '../src/context/ThemeContext';
 import { setSignupData } from '../src/utils/signupStore';
 import { InputField } from '../src/components/auth/InputField';
 import { isValidPhone, toE164Nigeria } from '../src/utils/contactUtils';
+import { customAlert } from '../src/utils/customAlert';
 
 type Mode = 'login' | 'signup';
-
 
 export default function AuthScreen() {
   const { colors } = useTheme();
@@ -57,13 +56,13 @@ export default function AuthScreen() {
   const handleAuth = useCallback(async () => {
     const targetPhone = mode === 'signup' ? phone.trim() : loginPhone.trim();
     if (!targetPhone) {
-      Alert.alert('Missing fields', 'Please enter your phone number.');
+      customAlert('Missing Fields', 'Please enter your phone number.', undefined, { type: 'warning' });
       return;
     }
     
     // Application-layer DoS protection
     if (targetPhone.length > 15) {
-      Alert.alert('Error', 'Phone number is too long.');
+      customAlert('Error', 'Phone number is too long.', undefined, { type: 'error' });
       return;
     }
     
@@ -73,21 +72,25 @@ export default function AuthScreen() {
       const mail = email.trim();
       
       if (!fName || !lName || !mail) {
-        Alert.alert('Missing fields', 'Please fill in your first name, last name, and email.');
+        customAlert('Missing Fields', 'Please fill in your first name, last name, and email.', undefined, { type: 'warning' });
         return;
       }
       if (fName.length > 50 || lName.length > 50) {
-        Alert.alert('Error', 'Name fields cannot exceed 50 characters.');
+        customAlert('Error', 'Name fields cannot exceed 50 characters.', undefined, { type: 'error' });
         return;
       }
       if (mail.length > 100) {
-        Alert.alert('Error', 'Email cannot exceed 100 characters.');
+        customAlert('Error', 'Email cannot exceed 100 characters.', undefined, { type: 'error' });
+        return;
+      }
+      if (!/\S+@\S+\.\S+/.test(mail)) {
+        customAlert('Invalid Email', 'Please enter a valid email address.', undefined, { type: 'warning' });
         return;
       }
     }
 
     if (!isValidPhone(targetPhone)) {
-      Alert.alert('Invalid phone', 'Please enter a valid phone number.');
+      customAlert('Invalid Phone', 'Please enter a valid phone number.', undefined, { type: 'warning' });
       return;
     }
 
@@ -117,128 +120,135 @@ export default function AuthScreen() {
     } catch (err: unknown) {
       setLoading(false);
       const msg = err instanceof Error ? err.message : String(err);
-      Alert.alert('Authentication failed', msg);
+      customAlert('Authentication Failed', msg, undefined, { type: 'error' });
     }
   }, [mode, phone, loginPhone, firstName, lastName, email]);
 
   return (
-    <SafeAreaView style={styles.flex} edges={['top']}>
+    <SafeAreaView style={styles.flex} edges={['top', 'bottom']}>
       <KeyboardAvoidingView 
         style={styles.flex} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView 
-        style={styles.flex} 
-        contentContainerStyle={styles.scroll} 
-        keyboardShouldPersistTaps="handled" 
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.brand}>
-          <Image
-            source={require('../assets/images/logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.tagline}>Your personal safety companion</Text>
-        </View>
-        <View style={styles.card}>
-          <View style={styles.tabRow} accessibilityRole="tablist">
+          style={styles.flex} 
+          contentContainerStyle={[styles.scroll, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]} 
+          keyboardShouldPersistTaps="handled" 
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.brand}>
+            <Image
+              source={require('../assets/images/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.tagline}>Your personal safety companion</Text>
+          </View>
+          <View style={styles.card}>
+            <View style={styles.tabRow} accessibilityRole="tablist">
+              <TouchableOpacity 
+                style={styles.tab} 
+                onPress={() => switchMode('login')}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: mode === 'login' }}
+              >
+                <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>Sign In</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.tab} 
+                onPress={() => switchMode('signup')}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: mode === 'signup' }}
+              >
+                <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>Create Account</Text>
+              </TouchableOpacity>
+              <Animated.View 
+                style={[
+                  styles.tabUnderline, 
+                  { 
+                    left: underlineX.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '50%']
+                    }) 
+                  }
+                ]} 
+              />
+            </View>
+
+            <View style={styles.fields}>
+              {mode === 'signup' ? (
+                <>
+                  <InputField 
+                    label="First Name" 
+                    placeholder="David" 
+                    value={firstName} 
+                    onChangeText={setFirstName} 
+                    autoCapitalize="words" 
+                    maxLength={50}
+                    icon={<Ionicons name="person-outline" size={18} color={colors.text.secondary} />} 
+                  />
+                  <InputField 
+                    label="Last Name" 
+                    placeholder="Adeyemi" 
+                    value={lastName} 
+                    onChangeText={setLastName} 
+                    autoCapitalize="words" 
+                    maxLength={50}
+                    icon={<Ionicons name="people-outline" size={18} color={colors.text.secondary} />} 
+                  />
+                  <InputField 
+                    label="Email Address" 
+                    placeholder="you@example.com" 
+                    value={email} 
+                    onChangeText={setEmail} 
+                    keyboardType="email-address" 
+                    maxLength={100}
+                    icon={<Ionicons name="mail-outline" size={18} color={colors.text.secondary} />} 
+                  />
+                  <InputField 
+                    label="Phone Number" 
+                    placeholder="08012345678" 
+                    value={phone} 
+                    onChangeText={setPhone} 
+                    keyboardType="phone-pad" 
+                    maxLength={15}
+                    icon={<Ionicons name="call-outline" size={18} color={colors.text.secondary} />} 
+                  />
+                </>
+              ) : (
+                <>
+                  <InputField 
+                    label="Phone Number" 
+                    placeholder="08012345678" 
+                    value={loginPhone} 
+                    onChangeText={setLoginPhone} 
+                    keyboardType="phone-pad" 
+                    maxLength={15}
+                    icon={<Ionicons name="call-outline" size={18} color={colors.text.secondary} />} 
+                  />
+                </>
+              )}
+            </View>
+
             <TouchableOpacity 
-              style={styles.tab} 
-              onPress={() => switchMode('login')}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: mode === 'login' }}
+              style={[styles.cta, loading && styles.ctaDisabled]} 
+              activeOpacity={0.85} 
+              onPress={handleAuth} 
+              disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel={mode === 'login' ? 'Sign In button' : 'Create Account button'}
             >
-              <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>Sign In</Text>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>{mode === 'login' ? 'Sign In' : 'Create Account'}</Text>}
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.tab} 
-              onPress={() => switchMode('signup')}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: mode === 'signup' }}
-            >
-              <Text style={[styles.tabText, mode === 'signup' && styles.tabTextActive]}>Create Account</Text>
-            </TouchableOpacity>
-            <Animated.View style={[styles.tabUnderline, { left: underlineX.interpolate({ inputRange: [0, 1], outputRange: ['0%', '50%'] }) }]} />
+
           </View>
 
-          <View style={styles.fields}>
-            {mode === 'signup' ? (
-              <>
-                <InputField 
-                  label="First Name" 
-                  placeholder="David" 
-                  value={firstName} 
-                  onChangeText={setFirstName} 
-                  autoCapitalize="words" 
-                  maxLength={50}
-                  icon={<Ionicons name="person-outline" size={18} color={colors.text.secondary} />} 
-                />
-                <InputField 
-                  label="Last Name" 
-                  placeholder="Adeyemi" 
-                  value={lastName} 
-                  onChangeText={setLastName} 
-                  autoCapitalize="words" 
-                  maxLength={50}
-                  icon={<Ionicons name="people-outline" size={18} color={colors.text.secondary} />} 
-                />
-                <InputField 
-                  label="Email Address" 
-                  placeholder="you@example.com" 
-                  value={email} 
-                  onChangeText={setEmail} 
-                  keyboardType="email-address" 
-                  maxLength={100}
-                  icon={<Ionicons name="mail-outline" size={18} color={colors.text.secondary} />} 
-                />
-                <InputField 
-                  label="Phone Number" 
-                  placeholder="08012345678" 
-                  value={phone} 
-                  onChangeText={setPhone} 
-                  keyboardType="phone-pad" 
-                  maxLength={15}
-                  icon={<Ionicons name="call-outline" size={18} color={colors.text.secondary} />} 
-                />
-              </>
-            ) : (
-              <>
-                <InputField 
-                  label="Phone Number" 
-                  placeholder="08012345678" 
-                  value={loginPhone} 
-                  onChangeText={setLoginPhone} 
-                  keyboardType="phone-pad" 
-                  maxLength={15}
-                  icon={<Ionicons name="call-outline" size={18} color={colors.text.secondary} />} 
-                />
-              </>
-            )}
+          <View style={styles.notice}>
+            <MaterialCommunityIcons name="shield-check-outline" size={16} color="#1B5E20" />
+            <Text style={styles.noticeText}>Your data is protected and never shared with third parties.</Text>
           </View>
 
-          <TouchableOpacity 
-            style={[styles.cta, loading && styles.ctaDisabled]} 
-            activeOpacity={0.85} 
-            onPress={handleAuth} 
-            disabled={loading}
-            accessibilityRole="button"
-            accessibilityLabel={mode === 'login' ? 'Sign In button' : 'Create Account button'}
-          >
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>{mode === 'login' ? 'Sign In' : 'Create Account'}</Text>}
-          </TouchableOpacity>
-
-        </View>
-
-        {/* Flexible spacer pushes the notice to the bottom, but collapses smoothly when the keyboard opens */}
-        <View style={{ flex: 1, minHeight: 24 }} />
-
-        <View style={styles.notice}>
-          <MaterialCommunityIcons name="shield-check-outline" size={16} color="#1B5E20" />
-          <Text style={styles.noticeText}>Your data is protected and never shared with third parties.</Text>
-        </View>
-
-      </ScrollView>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -248,7 +258,7 @@ const BRAND_BLUE = '#0A2463';
 
 const getStyles = (colors: import('../src/constants/Theme').ThemeColors) => StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.background },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 },
+  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24 },
   brand: { alignItems: 'center', marginBottom: 32 },
   logo: { width: 180, height: 120, marginBottom: 8 },
   tagline: { marginTop: 4, fontSize: 14, color: colors.text.secondary, fontWeight: '500' },
@@ -262,6 +272,6 @@ const getStyles = (colors: import('../src/constants/Theme').ThemeColors) => Styl
   cta: { backgroundColor: BRAND_BLUE, height: 52, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginTop: 8, shadowColor: BRAND_BLUE, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 6 },
   ctaDisabled: { opacity: 0.7 },
   ctaText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
-  notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 12, marginBottom: 12, gap: 6 },
+  notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24, marginBottom: 16, gap: 6 },
   noticeText: { fontSize: 12, color: colors.text.secondary, flexShrink: 1, lineHeight: 18 },
 });

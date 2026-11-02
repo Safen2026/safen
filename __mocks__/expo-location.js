@@ -5,11 +5,17 @@
  */
 module.exports = {
   LocationGeocodedAddress: {},
-  getForegroundPermissionsAsync: jest.fn(),
-  requestForegroundPermissionsAsync: jest.fn(),
-  getLastKnownPositionAsync: jest.fn(),
-  getCurrentPositionAsync: jest.fn(),
-  reverseGeocodeAsync: jest.fn(),
+  getForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  requestForegroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  getBackgroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  requestBackgroundPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  startLocationUpdatesAsync: jest.fn().mockResolvedValue(undefined),
+  stopLocationUpdatesAsync: jest.fn().mockResolvedValue(undefined),
+  hasStartedLocationUpdatesAsync: jest.fn().mockResolvedValue(false),
+  watchPositionAsync: jest.fn().mockResolvedValue({ remove: jest.fn() }),
+  getLastKnownPositionAsync: jest.fn().mockResolvedValue(null),
+  getCurrentPositionAsync: jest.fn().mockResolvedValue(null),
+  reverseGeocodeAsync: jest.fn().mockResolvedValue([]),
   Accuracy: {
     Balanced: 3,
     High: 4,

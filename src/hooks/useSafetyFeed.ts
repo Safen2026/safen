@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import * as Location from 'expo-location';
 import { matchLga, matchState } from '../lib/area';
 import { fetchAreaFeed, type AreaRef, type FeedRow } from '../lib/feed';
@@ -29,15 +29,10 @@ export function useSafetyFeed(limit = 20) {
     };
 
     try {
-      let { status } = await Location.getForegroundPermissionsAsync();
-      // Users who skipped onboarding were never asked; ask once here. A denial
-      // stays a denial — the OS will not re-prompt and we do not nag.
-      if (status === 'undetermined') {
-        ({ status } = await Location.requestForegroundPermissionsAsync());
-      }
+      const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== 'granted') { national('permission', status); return; }
 
-      const pos = (await Location.getLastKnownPositionAsync())
+      const pos = (await Location.getLastKnownPositionAsync({ maxAge: 60000 }).catch(() => null))
         ?? (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
       if (!pos) { national('no position'); return; }
 
@@ -114,16 +109,20 @@ export function useSafetyFeed(limit = 20) {
     await load('refresh');
   }, [resolveArea, load]);
 
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+
   const loadMore = useCallback(async () => {
-    if (items.length === 0) return;
-    const before = items[items.length - 1].occurred_at;
+    const currentItems = itemsRef.current;
+    if (currentItems.length === 0) return;
+    const before = currentItems[currentItems.length - 1].occurred_at;
     try {
       const more = await fetchAreaFeed(area.current, limit, before);
       if (more.length > 0) setItems((prev) => [...prev, ...more]);
     } catch {
       // Keep the current page.
     }
-  }, [items, limit]);
+  }, [limit]);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,5 +155,13 @@ export function useSafetyFeed(limit = 20) {
     };
   }, [resolveArea, load]);
 
-  return { items, loading, refreshing, isNationalOnly, error, refresh, loadMore };
+  return useMemo(() => ({
+    items,
+    loading,
+    refreshing,
+    isNationalOnly,
+    error,
+    refresh,
+    loadMore,
+  }), [items, loading, refreshing, isNationalOnly, error, refresh, loadMore]);
 }

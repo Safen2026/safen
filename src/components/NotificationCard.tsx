@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppNotification } from '../hooks/useNotifications';
@@ -23,13 +23,25 @@ const NOTIFICATION_TYPE_META: Record<string, { icon: IoniconsName; color: string
   sos_ack: { icon: 'shield-checkmark', color: '#10B981' },
 };
 
+// Pure helper — defined at module level (not inside the component) to avoid
+// re-creating the function on every render.
+function getResponseMeta(res: SosAckResponse): { label: string; emoji: string } {
+  switch (res) {
+    case 'on_my_way':            return { label: 'On My Way',   emoji: '🚗' };
+    case 'calling_you':          return { label: 'Calling You',  emoji: '📞' };
+    case 'alerting_authorities': return { label: 'Calling 112', emoji: '🚨' };
+    case 'cant_help':            return { label: "Can't Help",  emoji: '❌' };
+  }
+}
+
+
 interface NotificationCardProps {
   notification: AppNotification;
   colors: ThemeColors;
   onAcceptContact: (notification: AppNotification) => void;
   onDeclineContact: (notification: AppNotification) => void;
   onSelect: (notification: AppNotification) => void;
-  onSosRespond?: (notification: AppNotification, response: SosAckResponse) => void;
+  onSosRespond?: (notification: AppNotification, response: SosAckResponse) => Promise<boolean>;
 }
 
 const NotificationCardComponent = ({
@@ -49,40 +61,68 @@ const NotificationCardComponent = ({
     if (isSubmitting || !onSosRespond) return;
     setSelectedResponse(res);
     setIsSubmitting(true);
-    await onSosRespond(n, res);
+    const accepted = await onSosRespond(n, res);
     setIsSubmitting(false);
-    setIsCollapsed(true);
+    // Only collapse to the "Tap to change" summary if the server actually
+    // accepted the ack. If it returned false (alert cancelled, not a contact,
+    // etc.) we stay expanded so the user isn't misled.
+    if (accepted) setIsCollapsed(true);
   }, [isSubmitting, onSosRespond, n]);
 
-  let meta = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
-
-  // Location sharing notifications
-  if (n.title.includes('sharing their live location') || n.title.includes('is sharing live location')) {
-    meta = { icon: 'navigate', color: '#6366F1' };
-  } else if (n.title.includes('stopped sharing') || n.title.includes('location sharing ended')) {
-    meta = { icon: 'location-outline', color: '#9CA3AF' };
-  // SOS Acknowledgements (disguised as 'report' due to DB constraints)
-  } else if (n.title.includes('— On My Way') || n.title.includes('— Calling You') || n.title.includes('— Alerting Authorities') || n.title.includes("— Can't Help")) {
-    meta = NOTIFICATION_TYPE_META.sos_ack;
-  }
+  const meta = useMemo(() => {
+    let m = NOTIFICATION_TYPE_META[n.type] || NOTIFICATION_TYPE_META.report;
+    if (n.title.includes('sharing their live location') || n.title.includes('is sharing live location')) {
+      m = { icon: 'navigate', color: '#6366F1' };
+    } else if (n.title.includes('stopped sharing') || n.title.includes('location sharing ended')) {
+      m = { icon: 'location-outline', color: '#9CA3AF' };
+    } else if (n.title.includes('— On My Way') || n.title.includes('— Calling You') || n.title.includes('— Alerting Authorities') || n.title.includes("— Can't Help")) {
+      m = NOTIFICATION_TYPE_META.sos_ack;
+    }
+    return m;
+  }, [n.type, n.title]);
 
   const isRequest = n.type === 'contact_added' && n.title === 'Contact Request';
-  const isSos = n.type === 'sos';
+  // Show SOS response buttons only for genuine live SOS notifications — not
+  // cancellation confirmations (which share the 'sos_ack' type or carry a ✅ prefix).
+  const isCancelled = n.title.startsWith('✅');
+  const isSos = n.type === 'sos' && !isCancelled && !n.is_community_broadcast;
   // Hide the SOS response buttons if the alert is older than 5 hours
-  const isOld = (Date.now() - new Date(n.created_at).getTime()) > 5 * 60 * 60 * 1000;
+  const isOld = useMemo(
+    () => (Date.now() - new Date(n.created_at).getTime()) > 5 * 60 * 60 * 1000,
+    [n.created_at],
+  );
 
-  const getResponseMeta = (res: SosAckResponse) => {
-    switch (res) {
-      case 'on_my_way': return { label: 'On My Way', emoji: '🚗' };
-      case 'calling_you': return { label: 'Calling You', emoji: '📞' };
-      case 'alerting_authorities': return { label: 'Calling 911', emoji: '🚨' };
-      case 'cant_help': return { label: "Can't Help", emoji: '❌' };
-    }
-  };
+  const handleAccept = useCallback(() => {
+    onAcceptContact(n);
+  }, [onAcceptContact, n]);
+
+  const handleDecline = useCallback(() => {
+    onDeclineContact(n);
+  }, [onDeclineContact, n]);
+
+  const handleSelect = useCallback(() => {
+    onSelect(n);
+  }, [onSelect, n]);
+
+  const handleExpand = useCallback(() => {
+    setIsCollapsed(false);
+  }, []);
+
+  const handleSosOnMyWay = useCallback(() => handleSosPress('on_my_way'), [handleSosPress]);
+  const handleSosCallingYou = useCallback(() => handleSosPress('calling_you'), [handleSosPress]);
+  const handleSosAlertingAuthorities = useCallback(() => handleSosPress('alerting_authorities'), [handleSosPress]);
+  const handleSosCantHelp = useCallback(() => handleSosPress('cant_help'), [handleSosPress]);
 
   return (
     <View style={[styles.notificationCard, !n.is_read && styles.notificationCardUnread]}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'flex-start' }}
+        onPress={!isRequest ? handleSelect : undefined}
+        activeOpacity={!isRequest ? 0.7 : 1}
+        disabled={isRequest}
+        accessibilityRole={!isRequest ? 'button' : undefined}
+        accessibilityHint={!isRequest ? 'Opens notification details' : undefined}
+      >
         <View style={[styles.notificationIcon, { backgroundColor: meta.color + '18' }]}>
           <Ionicons name={meta.icon} size={20} color={meta.color} />
         </View>
@@ -96,13 +136,13 @@ const NotificationCardComponent = ({
           <Text style={styles.notificationTextBody} numberOfLines={2}>{n.body}</Text>
           <Text style={styles.notificationTime}>{timeAgo(n.created_at)}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {isRequest && (
         <View style={styles.contactRequestActions}>
           <TouchableOpacity 
             style={styles.acceptBtn} 
-            onPress={() => onAcceptContact(n)} 
+            onPress={handleAccept} 
             activeOpacity={0.8} 
             accessibilityRole="button"
             accessibilityLabel={`Accept contact request from ${n.sender_name || 'user'}`}
@@ -112,7 +152,7 @@ const NotificationCardComponent = ({
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.declineBtn} 
-            onPress={() => onDeclineContact(n)} 
+            onPress={handleDecline} 
             activeOpacity={0.8} 
             accessibilityRole="button"
             accessibilityLabel={`Decline contact request from ${n.sender_name || 'user'}`}
@@ -128,7 +168,7 @@ const NotificationCardComponent = ({
           {isCollapsed && selectedResponse ? (
             <TouchableOpacity 
               style={[styles.sosActionBtn, styles.sosActionBtnActive, { width: '100%' }]} 
-              onPress={() => setIsCollapsed(false)}
+              onPress={handleExpand}
               activeOpacity={0.8}
             >
               <Text style={styles.sosActionEmoji}>{getResponseMeta(selectedResponse).emoji}</Text>
@@ -140,7 +180,7 @@ const NotificationCardComponent = ({
             <>
               <TouchableOpacity 
                 style={[styles.sosActionBtn, selectedResponse === 'on_my_way' && styles.sosActionBtnActive]} 
-                onPress={() => handleSosPress('on_my_way')} 
+                onPress={handleSosOnMyWay} 
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Respond: On my way"
@@ -156,7 +196,7 @@ const NotificationCardComponent = ({
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.sosActionBtn, selectedResponse === 'calling_you' && styles.sosActionBtnActive]} 
-                onPress={() => handleSosPress('calling_you')} 
+                onPress={handleSosCallingYou} 
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Respond: Calling you"
@@ -172,7 +212,7 @@ const NotificationCardComponent = ({
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.sosActionBtn, selectedResponse === 'alerting_authorities' && styles.sosActionBtnActive]} 
-                onPress={() => handleSosPress('alerting_authorities')} 
+                onPress={handleSosAlertingAuthorities} 
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Respond: Alerting Authorities"
@@ -184,11 +224,11 @@ const NotificationCardComponent = ({
                 ) : (
                   <Text style={styles.sosActionEmoji}>🚨</Text>
                 )}
-                <Text style={[styles.sosActionText, selectedResponse === 'alerting_authorities' && { color: colors.primary }]}>Calling 911</Text>
+                <Text style={[styles.sosActionText, selectedResponse === 'alerting_authorities' && { color: colors.primary }]}>Calling 112</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.sosActionBtn, selectedResponse === 'cant_help' && styles.sosActionBtnActive]} 
-                onPress={() => handleSosPress('cant_help')} 
+                onPress={handleSosCantHelp} 
                 activeOpacity={0.8}
                 accessibilityRole="button"
                 accessibilityLabel="Respond: Can't Help"
@@ -207,16 +247,30 @@ const NotificationCardComponent = ({
         </View>
       )}
 
-      {!isRequest && (
+      {!isRequest && !n.is_community_broadcast && (
         <TouchableOpacity 
           style={styles.viewDetailsBtn} 
-          onPress={() => onSelect(n)} 
+          onPress={handleSelect} 
           activeOpacity={0.7} 
           accessibilityRole="button"
           accessibilityLabel={`View details for ${n.title}`}
         >
           <Text style={styles.viewDetailsBtnText}>View details</Text>
           <Ionicons name="chevron-forward" size={13} color={colors.primary} />
+        </TouchableOpacity>
+      )}
+
+      {n.is_community_broadcast && (
+        <TouchableOpacity
+          style={[styles.communityRespondBtn, { backgroundColor: meta.color }]}
+          onPress={handleSelect}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="View Community Alert and Respond"
+        >
+          <Ionicons name="shield-checkmark" size={15} color="#fff" />
+          <Text style={styles.communityRespondBtnText}>View Alert & Respond</Text>
+          <Ionicons name="chevron-forward" size={15} color="#fff" />
         </TouchableOpacity>
       )}
     </View>
@@ -244,4 +298,19 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   sosActionBtnActive: { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' },
   sosActionEmoji: { fontSize: 16 },
   sosActionText: { color: colors.text.primary, fontSize: 12, fontWeight: '600' },
+  communityRespondBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  communityRespondBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });

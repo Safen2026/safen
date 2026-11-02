@@ -1,5 +1,6 @@
+import { customAlert } from '../utils/customAlert';
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Shadows } from '../constants/Theme';
 import type { ThemeColors } from '../constants/Theme';
@@ -8,7 +9,6 @@ import { showToast } from '../utils/toast';
 import { useAlertContext } from '../context/AlertContext';
 import type { AlertType } from '../hooks/useAlert';
 import { useTheme } from '../context/ThemeContext';
-import { router } from 'expo-router';
 
 export type ActionType = 'medical' | 'police' | 'fire';
 
@@ -89,28 +89,19 @@ export const QuickActions = React.memo(() => {
         });
       }, 300);
     } else if (result === 'no_contacts') {
-      Alert.alert(
+      customAlert(
         'No Contacts Available Offline',
         'You are offline and no emergency contacts were found in your local cache. Please open the Contacts tab at least once while online to enable offline SMS alerts.',
         [{ text: 'OK' }]
       );
     } else {
-      Alert.alert('Could not send request', 'Please check your connection and try again.');
+      customAlert('Could not send request', 'Please check your connection and try again.');
     }
   }, [selectedAction, ACTION_CONFIG, triggerAlert, description, handleClose]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.titleRow}>
-        <Text style={styles.sectionTitle} accessible={true} accessibilityRole="header">Quick Actions</Text>
-        <TouchableOpacity
-          onPress={() => router.push('/(tabs)/report')}
-          accessibilityRole="button"
-          accessibilityLabel="View all report options"
-        >
-          <Text style={styles.viewAll}>View all &rsaquo;</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={styles.sectionTitle} accessible={true} accessibilityRole="header">Quick Actions</Text>
 
       <View style={styles.row}>
         {(Object.keys(ACTION_CONFIG) as ActionType[]).map(type => {
@@ -161,6 +152,7 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.text.primary,
+    marginBottom: 12,
   },
   row: {
     flexDirection: 'row',
@@ -186,16 +178,5 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.text.primary,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  viewAll: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
   },
 });

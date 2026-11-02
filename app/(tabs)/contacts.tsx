@@ -1,6 +1,7 @@
+import { customAlert } from '../../src/utils/customAlert';
 import React, { useState, useCallback } from 'react';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
@@ -54,7 +55,7 @@ export default function ContactsScreen() {
 
   const openAddSheet = useCallback(() => {
     if (contacts.length >= MAX_CONTACTS) {
-      Alert.alert('Limit Reached', `You can only add up to ${MAX_CONTACTS} emergency contacts.`);
+      customAlert('Limit Reached', `You can only add up to ${MAX_CONTACTS} emergency contacts.`);
       return;
     }
     setEditingContact(null);
@@ -76,7 +77,7 @@ export default function ContactsScreen() {
   }, []);
 
   const handleNotOnAppConfirm = useCallback((form: FormData) => {
-    Alert.alert(
+    customAlert(
       'Not on Safen',
       `This number isn't registered on Safen yet. You can still save them — they'll be automatically verified once they join the app. Save anyway?`,
       [
@@ -108,7 +109,7 @@ export default function ContactsScreen() {
         .eq('id', editingContact.id);
 
       setSaving(false);
-      if (error) { Alert.alert('Error', error.message); return; }
+      if (error) { customAlert('Error', error.message); return; }
     } else {
       const { data: existing } = await supabase
         .from('emergency_contacts')
@@ -121,12 +122,12 @@ export default function ContactsScreen() {
         setSaving(false);
 
         if (existing.status === 'accepted') {
-          Alert.alert('Already Added', `${form.name.trim()} is already in your safety network.`);
+          customAlert('Already Added', `${form.name.trim()} is already in your safety network.`);
           return;
         }
 
         if (existing.status === 'pending') {
-          Alert.alert('Request Pending', `A request has already been sent to ${form.name.trim()}. They haven't responded yet.`);
+          customAlert('Request Pending', `A request has already been sent to ${form.name.trim()}. They haven't responded yet.`);
           return;
         }
 
@@ -135,7 +136,7 @@ export default function ContactsScreen() {
           .update({ ...payload, status: 'pending' })
           .eq('id', existing.id);
 
-        if (error) { Alert.alert('Error', error.message); return; }
+        if (error) { customAlert('Error', error.message); return; }
         newContactId = existing.id;
       } else {
         const { data: newContact, error } = await supabase
@@ -145,7 +146,7 @@ export default function ContactsScreen() {
           .single();
 
         setSaving(false);
-        if (error) { Alert.alert('Error', error.message); return; }
+        if (error) { customAlert('Error', error.message); return; }
         if (newContact) newContactId = newContact.id;
       }
     }
@@ -175,7 +176,7 @@ export default function ContactsScreen() {
   const handleSaveContact = useCallback(async (form: FormData, resolvedStatus: 'on_app' | 'not_on_app', contactUserId: string | null) => {
     const errorMsg = validateForm(form);
     if (errorMsg) {
-      Alert.alert('Missing Info', errorMsg);
+      customAlert('Missing Info', errorMsg);
       return;
     }
     await persistContact(form, resolvedStatus === 'on_app', contactUserId);

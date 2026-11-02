@@ -160,4 +160,38 @@ describe('getAvatarColor', () => {
     const used = new Set(colors);
     expect(used.size).toBeGreaterThanOrEqual(2); // at minimum 2 distinct colours
   });
+
+  // ── SAD PATHS: Adversarial and erratic inputs ──────────────────────────────
+  describe('SAD PATHS: Erratic and adversarial user inputs', () => {
+    it('isValidPhone rejects SQL injection string', () => {
+      expect(isValidPhone("'; DROP TABLE profiles;--")).toBe(false);
+    });
+
+    it('isValidPhone rejects HTML / script tags', () => {
+      expect(isValidPhone("<script>alert(1)</script>")).toBe(false);
+    });
+
+    it('isValidPhone rejects arbitrary punctuation and symbols', () => {
+      expect(isValidPhone("!@#$%^&*()_+-=[]{}|;':,.<>?")).toBe(false);
+    });
+
+    it('isValidPhone rejects extremely long strings of numbers', () => {
+      expect(isValidPhone('8'.repeat(100))).toBe(false);
+    });
+
+    it('toE164Nigeria handles messy user paste with brackets, tabs, and spaces', () => {
+      expect(toE164Nigeria('\t(0801) [234] 5678\n')).toBe('+2348012345678');
+    });
+
+    it('getInitials does not crash with emojis in name', () => {
+      expect(() => getInitials('🚨 Emergency Contact')).not.toThrow();
+    });
+
+    it('getAvatarColor handles emoji strings, null bytes, and unicode smoothly', () => {
+      expect(() => getAvatarColor('🔥🚀')).not.toThrow();
+      expect(() => getAvatarColor('\0\0\0')).not.toThrow();
+      expect(() => getAvatarColor('A'.repeat(5000))).not.toThrow();
+      expect(PALETTE).toContain(getAvatarColor('🔥🚀'));
+    });
+  });
 });

@@ -1,5 +1,6 @@
+import { customAlert } from '../../utils/customAlert';
 import React, { useState, memo, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { Allergy, Severity } from '../../types/medical';
@@ -25,7 +26,7 @@ export const AllergyInput = memo(function AllergyInput({
     
     // Application-layer DoS protection
     if (trimmed.length > 50) {
-      Alert.alert('Error', 'Allergy name cannot exceed 50 characters.');
+      customAlert('Error', 'Allergy name cannot exceed 50 characters.');
       return;
     }
     

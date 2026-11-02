@@ -64,27 +64,57 @@ const HeaderComponent = () => {
   const handleAcceptContact = useCallback((n: AppNotification) => handleContactResponse(n, 'accepted'), [handleContactResponse]);
   const handleDeclineContact = useCallback((n: AppNotification) => handleContactResponse(n, 'declined'), [handleContactResponse]);
 
-  const handleSosRespond = useCallback(async (n: AppNotification, response: SosAckResponse) => {
-    if (!n.alert_id || !n.sender_id) return;
+  const handleSosRespond = useCallback(async (n: AppNotification, response: SosAckResponse): Promise<boolean> => {
+    if (!n.alert_id || !n.sender_id) return false;
     
-    // Remove it optimistically (or keep it and mark as read? Wait, we probably want to keep it and show what they responded, but removing is fine for now just like contacts)
-    // Actually, letting them change their response is a requirement, so DO NOT remove it.
-    
-    // Mark as read so the dot goes away
+    // Mark as read so the dot goes away (fire-and-forget — realtime will sync)
     if (!n.is_read) {
-      await supabase.from('notifications').update({ is_read: true }).eq('id', n.id);
-      // It will auto-refresh via realtime hook, but we don't block.
+      supabase.from('notifications').update({ is_read: true }).eq('id', n.id)
+        .then(({ error }) => { if (error) console.warn('[handleSosRespond] mark-read failed:', error.message); });
     }
     
-    await sendSosAcknowledgement({
+    return sendSosAcknowledgement({
       alertId: n.alert_id,
       alertOwnerId: n.sender_id,
       response,
     });
   }, []);
 
+
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
+
+  /**
+   * Intercepts notification card taps.
+   * Community broadcast alerts route to the responder-gated detail screen;
+   * all other notification types open the standard modal.
+   */
+  const handleSelectNotification = useCallback((n: AppNotification) => {
+    if (n.is_community_broadcast && n.alert_id) {
+      // Close the notifications panel first, then push to the community alert screen
+      setNotificationsVisible(false);
+      router.push(`/community-alert/${n.alert_id}`);
+      return;
+    }
+    setSelectedNotification(n);
+  }, [router]);
+
+  const handleOpenHistory = useCallback(() => {
+    router.push('/history');
+  }, []);
+
+  const handleOpenNotifications = useCallback(() => {
+    setNotificationsVisible(true);
+    markAllRead();
+  }, [markAllRead]);
+
+  const handleCloseNotifications = useCallback(() => {
+    setNotificationsVisible(false);
+  }, []);
+
+  const handleCloseNotificationDetails = useCallback(() => {
+    setSelectedNotification(null);
+  }, []);
 
   const groupedNotifications = useMemo(() => {
     const groups = {
@@ -136,13 +166,13 @@ const HeaderComponent = () => {
             colors={colors} 
             onAcceptContact={handleAcceptContact}
             onDeclineContact={handleDeclineContact}
-            onSelect={setSelectedNotification}
+            onSelect={handleSelectNotification}
             onSosRespond={handleSosRespond}
           />
         ))}
       </View>
     );
-  }, [colors, handleAcceptContact, handleDeclineContact, handleSosRespond]);
+  }, [colors, handleAcceptContact, handleDeclineContact, handleSosRespond, handleSelectNotification]);
 
   return (
     <View style={styles.container}>
@@ -163,7 +193,7 @@ const HeaderComponent = () => {
       <View style={styles.rightActionsGroup}>
         <TouchableOpacity
           style={styles.actionBtn}
-          onPress={() => router.push('/history')}
+          onPress={handleOpenHistory}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel="View history"
@@ -174,7 +204,7 @@ const HeaderComponent = () => {
         <TouchableOpacity
           style={styles.actionBtn}
           activeOpacity={0.7}
-          onPress={() => { setNotificationsVisible(true); markAllRead(); }}
+          onPress={handleOpenNotifications}
           accessibilityRole="button"
           accessibilityLabel="Open notifications"
         >
@@ -184,7 +214,7 @@ const HeaderComponent = () => {
       </View>
 
       {/* Notifications panel */}
-      <Modal visible={notificationsVisible} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent onRequestClose={() => setNotificationsVisible(false)}>
+      <Modal visible={notificationsVisible} animationType="slide" presentationStyle="fullScreen" statusBarTranslucent onRequestClose={handleCloseNotifications}>
         {notificationsVisible && (
           <SafeAreaView style={styles.notificationsModalFull} edges={['bottom']}>
             <View style={styles.notificationsHeader}>
@@ -192,7 +222,7 @@ const HeaderComponent = () => {
                 <Text style={styles.notificationsTitle}>Notifications</Text>
                 {unreadCount > 0 && <Text style={styles.notificationsSubtitle}>{unreadCount} unread</Text>}
               </View>
-              <TouchableOpacity onPress={() => setNotificationsVisible(false)} style={styles.notificationsCloseBtn} accessibilityRole="button" accessibilityLabel="Close notifications">
+              <TouchableOpacity onPress={handleCloseNotifications} style={styles.notificationsCloseBtn} accessibilityRole="button" accessibilityLabel="Close notifications">
                 <Ionicons name="close" size={20} color={colors.text.primary} />
               </TouchableOpacity>
             </View>
@@ -223,7 +253,7 @@ const HeaderComponent = () => {
           <NotificationDetailsModal
             visible={!!selectedNotification}
             notification={notifications.find(n => n.id === selectedNotification?.id) || selectedNotification}
-            onClose={() => setSelectedNotification(null)}
+            onClose={handleCloseNotificationDetails}
           />
           </SafeAreaView>
         )}

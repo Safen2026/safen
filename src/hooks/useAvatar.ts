@@ -6,11 +6,27 @@ import { useSession } from '../context/SessionContext';
 
 const getAvatarCacheKey = (userId: string) => `safen_cached_avatar_url_${userId}`;
 
+let cachedAvatarUrl: string | null = null;
+const avatarSubscribers = new Set<(url: string | null) => void>();
+
+const notifySubscribers = (url: string | null) => {
+  cachedAvatarUrl = url;
+  avatarSubscribers.forEach((cb) => cb(url));
+};
+
 export function useAvatar() {
   // Pull the session from the Water Tower (SessionContext) — free, no DB call.
   const session = useSession();
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(cachedAvatarUrl);
   const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const handler = (url: string | null) => setAvatarUrl(url);
+    avatarSubscribers.add(handler);
+    return () => {
+      avatarSubscribers.delete(handler);
+    };
+  }, []);
 
   // useCallback is necessary here because loadAvatar is a dependency of the
   // useEffect below. Without it, a new function is created every render,
@@ -27,7 +43,7 @@ export function useAvatar() {
       // avatar_url stores the full Cloudinary secure_url directly, so
       // it can be used as-is (no signed/public URL lookup needed).
       if (!error && data?.avatar_url) {
-        setAvatarUrl(data.avatar_url);
+        notifySubscribers(data.avatar_url);
         // Persist for offline use
         const cacheKey = getAvatarCacheKey(session.user.id);
         AsyncStorage.setItem(cacheKey, data.avatar_url).catch((err) => {
@@ -37,14 +53,14 @@ export function useAvatar() {
         // Offline — use the last known avatar
         const cacheKey = getAvatarCacheKey(session.user.id);
         const cached = await AsyncStorage.getItem(cacheKey);
-        if (cached) setAvatarUrl(cached);
+        if (cached) notifySubscribers(cached);
       }
     } catch (err) {
       // Also try cache on an unexpected exception
       try {
         const cacheKey = getAvatarCacheKey(session.user.id);
         const cached = await AsyncStorage.getItem(cacheKey);
-        if (cached) setAvatarUrl(cached);
+        if (cached) notifySubscribers(cached);
       } catch (cacheErr) {
         console.warn('Failed to load avatar from cache:', cacheErr);
       }
@@ -83,7 +99,7 @@ export function useAvatar() {
         return false;
       }
 
-      setAvatarUrl(secureUrl);
+      notifySubscribers(secureUrl);
       setUploading(false);
       return true;
     } catch (err) {

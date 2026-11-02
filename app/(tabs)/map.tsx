@@ -52,7 +52,7 @@ export default function MapScreen() {
   // ── Initial device location ────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== 'granted') {
         setErrorMsg('Permission to access location was denied');
         return;

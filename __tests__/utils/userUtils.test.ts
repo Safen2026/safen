@@ -79,4 +79,30 @@ describe('getUserDisplayName', () => {
     const user = makeUser({ email: undefined, user_metadata: {} });
     expect(getUserDisplayName(user)).toBe('A Safen user');
   });
+
+  // ── SAD PATHS: Corrupted / Non-string values ───────────────────────────────
+  describe('SAD PATHS: Corrupted metadata types and adversarial inputs', () => {
+    it('handles numeric full_name in user_metadata without throwing TypeError', () => {
+      const user = makeUser({ user_metadata: { full_name: 12345 as any } });
+      expect(getUserDisplayName(user)).toBe('test'); // falls through to email
+    });
+
+    it('handles object full_name or boolean first_name without throwing', () => {
+      const user = makeUser({
+        email: undefined,
+        user_metadata: { full_name: { nested: 'evil' } as any, first_name: true as any },
+      });
+      expect(getUserDisplayName(user)).toBe('A Safen user');
+    });
+
+    it('handles non-string profileName (e.g. number or object) without throwing', () => {
+      const user = makeUser({ email: 'user@safen.app' });
+      expect(getUserDisplayName(user, 9999 as any)).toBe('user');
+    });
+
+    it('handles user_metadata being null or undefined without throwing', () => {
+      const user = makeUser({ user_metadata: null as any, email: 'fallback@safen.app' });
+      expect(getUserDisplayName(user)).toBe('fallback');
+    });
+  });
 });

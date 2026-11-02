@@ -1,3 +1,4 @@
+import { customAlert } from '../utils/customAlert';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -8,13 +9,16 @@ import {
   Dimensions,
   ActivityIndicator,
   Vibration,
-  Alert,
   Easing,
+  TouchableOpacity,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useAlertContext } from '../context/AlertContext';
 import type { AlertResult } from '../hooks/useAlert';
 import { ActiveSOSModal } from './ActiveSOSModal';
+import { BroadcastScopeModal } from './BroadcastScopeModal';
+import { SCOPE_OPTIONS } from '../utils/broadcastScope';
+import { useTheme } from '../context/ThemeContext';
 import { showToast } from '../utils/toast';
 import { Shadows } from '../constants/Theme';
 
@@ -28,7 +32,16 @@ const TRIGGER_AT   = SWIPE_RANGE * 0.72;
 // ────────────────────────────────────────────────────────────────────────────
 
 export const SOSButton = React.memo(() => {
-  const { loading, activeAlert, triggerAlert, cancelAlert } = useAlertContext();
+  const {
+    loading,
+    activeAlert,
+    triggerAlert,
+    cancelAlert,
+    broadcastScope,
+    setBroadcastScope,
+  } = useAlertContext();
+  const { colors, isDark } = useTheme();
+  const [showScopeModal, setShowScopeModal] = useState(false);
   const isActivated = !!activeAlert;
 
   const pan          = useRef(new Animated.Value(0)).current;
@@ -140,7 +153,7 @@ export const SOSButton = React.memo(() => {
     return success;
   }, [cancelAlert]);
 
-  const handleTrigger = async () => {
+  const handleTrigger = useCallback(async () => {
     Vibration.vibrate([0, 300, 100, 300]);
     const result: AlertResult = await triggerAlert('sos');
     if (result === 'ok') {
@@ -148,14 +161,20 @@ export const SOSButton = React.memo(() => {
     } else if (result === 'sms') {
       setSmsMode(true);
     } else if (result === 'no_contacts') {
-      Alert.alert('No Contacts Available Offline',
+      customAlert('No Contacts Available Offline',
         'You are offline and no emergency contacts were found in your local cache.',
         [{ text: 'OK' }]
       );
     } else {
-      Alert.alert('SOS Failed', 'Could not activate SOS. Please try again.');
+      customAlert('SOS Failed', 'Could not activate SOS. Please try again.');
     }
-  };
+  }, [triggerAlert]);
+
+  const handleTriggerRef = useRef(handleTrigger);
+  handleTriggerRef.current = handleTrigger;
+
+  const handleOpenScopeModal = useCallback(() => setShowScopeModal(true), []);
+  const handleCloseScopeModal = useCallback(() => setShowScopeModal(false), []);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -177,7 +196,7 @@ export const SOSButton = React.memo(() => {
       onPanResponderRelease: (_, g) => {
         if (g.dx >= TRIGGER_AT) {
           Animated.spring(pan, { toValue: SWIPE_RANGE, useNativeDriver: false })
-            .start(handleTrigger);
+            .start(() => handleTriggerRef.current());
         } else {
           Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
         }
@@ -208,6 +227,7 @@ export const SOSButton = React.memo(() => {
         alertId={activeAlert?.id || ''}
         smsMode={smsMode}
         onCancel={handleCancelAlert}
+        scope={activeAlert?.scope || broadcastScope}
       />
 
       <Animated.View style={[styles.track, { backgroundColor: trackBgColor }]} aria-busy={loading}>
@@ -303,6 +323,44 @@ export const SOSButton = React.memo(() => {
           </View>
         )}
       </Animated.View>
+
+      {/* Layer 2: Ambient Broadcast Audience Pill */}
+      {!isActivated && (
+        <TouchableOpacity
+          style={[
+            styles.ambientPill,
+            {
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : colors.background,
+              borderColor: isDark ? 'rgba(255, 255, 255, 0.12)' : colors.border,
+            },
+          ]}
+          onPress={handleOpenScopeModal}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`SOS Broadcast audience is ${SCOPE_OPTIONS[broadcastScope].title}. Tap to change.`}
+        >
+          <Ionicons
+            name={SCOPE_OPTIONS[broadcastScope].icon}
+            size={13}
+            color={SCOPE_OPTIONS[broadcastScope].accentColor}
+          />
+          <Text style={[styles.ambientPillText, { color: colors.text.secondary }]}>
+            Audience:{' '}
+            <Text style={[styles.ambientPillHighlight, { color: SCOPE_OPTIONS[broadcastScope].accentColor }]}>
+              {SCOPE_OPTIONS[broadcastScope].badge}
+            </Text>
+          </Text>
+          <Ionicons name="chevron-down" size={12} color={colors.text.secondary} />
+        </TouchableOpacity>
+      )}
+
+      <BroadcastScopeModal
+        visible={showScopeModal}
+        currentScope={broadcastScope}
+        onSelect={setBroadcastScope}
+        onClose={handleCloseScopeModal}
+      />
     </View>
   );
 });
@@ -383,5 +441,24 @@ const styles = StyleSheet.create({
   },
   chevronOverlap: {
     marginLeft: -6,
+  },
+  ambientPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    marginTop: 8,
+    borderWidth: 1,
+  },
+  ambientPillText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  ambientPillHighlight: {
+    fontWeight: '700',
   },
 });

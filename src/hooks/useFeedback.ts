@@ -1,6 +1,7 @@
+import { customAlert } from '../utils/customAlert';
 import { useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Alert } from 'react-native';
+import {} from 'react-native';
 import { useSession } from '../context/SessionContext';
 
 export const useFeedback = () => {
@@ -12,13 +13,13 @@ export const useFeedback = () => {
     const trimmedMessage = message.trim();
     
     if (!trimmedMessage) {
-      Alert.alert('Error', 'Please enter a message before submitting.');
+      customAlert('Error', 'Please enter a message before submitting.');
       return false;
     }
 
     // Application-layer DoS protection
     if (trimmedMessage.length > 1000) {
-      Alert.alert('Error', 'Feedback cannot exceed 1000 characters.');
+      customAlert('Error', 'Feedback cannot exceed 1000 characters.');
       return false;
     }
 
@@ -44,12 +45,12 @@ export const useFeedback = () => {
       // The insert itself is what matters for the user — the email to
       // the team fires automatically via a Database Webhook on this
       // table, so there's nothing else to await here.
-      Alert.alert('Thank you!', 'Your feedback has been sent to the team.');
+      customAlert('Thank you!', 'Your feedback has been sent to the team.');
       return true;
     } catch (error: unknown) {
       console.error('Error submitting feedback:', error);
       const msg = error instanceof Error ? error.message : 'Failed to submit feedback.';
-      Alert.alert('Error', msg);
+      customAlert('Error', msg);
       return false;
     } finally {
       setIsSubmitting(false);

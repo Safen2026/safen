@@ -1,5 +1,7 @@
+import * as Updates from 'expo-updates';
+import { customAlert } from '../../src/utils/customAlert';
 import React, { useContext, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Modal, Switch, ScrollView, Image, Share, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, Switch, ScrollView, Image, Share, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -12,17 +14,24 @@ import { signOut } from '@react-native-firebase/auth';
 import { useSession } from '../../src/context/SessionContext';
 import { FeedbackModal } from '../../src/components/FeedbackModal';
 import { useAvatar } from '../../src/hooks/useAvatar';
+import { AvatarPickerModal } from '../../src/components/AvatarPickerModal';
 import { SignOutModal } from '../../src/components/settings/SignOutModal';
 import { DeleteAccountModal } from '../../src/components/settings/DeleteAccountModal';
 import { DisablePushModal } from '../../src/components/settings/DisablePushModal';
 import { SettingsRow } from '../../src/components/settings/SettingsRow';
+import { useAlertContext } from '../../src/context/AlertContext';
+import { BroadcastScopeModal } from '../../src/components/BroadcastScopeModal';
+import { SCOPE_OPTIONS } from '../../src/utils/broadcastScope';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
   const styles = React.useMemo(() => getStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
   const session = useSession();
-  const { avatarUrl } = useAvatar();
+  const { avatarUrl, uploadAvatar } = useAvatar();
+  const [avatarPickerVisible, setAvatarPickerVisible] = useState(false);
+  const { broadcastScope, setBroadcastScope } = useAlertContext();
+  const [scopeModalVisible, setScopeModalVisible] = useState(false);
   
   const [signingOut, setSigningOut] = useState(false);
   const [signOutModalVisible, setSignOutModalVisible] = useState(false);
@@ -63,7 +72,7 @@ export default function SettingsScreen() {
     if (error) {
       console.warn('Failed to update push preference:', error);
       setPushEnabled(!val); // Revert on failure
-      Alert.alert('Error', 'Failed to save your preference. Please try again.');
+      customAlert('Error', 'Failed to save your preference. Please try again.');
     }
   }, [session?.user?.id]);
 
@@ -100,7 +109,7 @@ export default function SettingsScreen() {
     } catch (err: unknown) {
       setSigningOut(false);
       const msg = err instanceof Error ? err.message : String(err);
-      Alert.alert('Error', msg);
+      customAlert('Error', msg);
     }
   }, []);
 
@@ -112,7 +121,7 @@ export default function SettingsScreen() {
     
     if (error) {
       setDeleting(false);
-      Alert.alert('Error', error.message || 'Could not delete your account.');
+      customAlert('Error', error.message || 'Could not delete your account.');
       return;
     }
     
@@ -126,7 +135,7 @@ export default function SettingsScreen() {
     try {
       await Linking.openURL(url);
     } catch {
-      Alert.alert("Error", "Could not open the link.");
+      customAlert("Error", "Could not open the link.");
     }
   }, []);
 
@@ -175,6 +184,22 @@ export default function SettingsScreen() {
     setDeleteModalVisible(true);
   }, [triggerHaptic]);
 
+  const handleOpenScopeModal = React.useCallback(() => {
+    triggerHaptic();
+    setScopeModalVisible(true);
+  }, [triggerHaptic]);
+
+  const handleOpenPermissions = React.useCallback(() => {
+    triggerHaptic();
+    router.push('/permissions');
+  }, [triggerHaptic]);
+
+  const handleCloseScopeModal = React.useCallback(() => setScopeModalVisible(false), []);
+  const handleCloseDeleteModal = React.useCallback(() => setDeleteModalVisible(false), []);
+  const handleCloseSignOutModal = React.useCallback(() => setSignOutModalVisible(false), []);
+  const handleClosePushModal = React.useCallback(() => setPushModalVisible(false), []);
+  const handleCloseFeedbackModal = React.useCallback(() => setFeedbackModalVisible(false), []);
+
   return (
     <View style={styles.container}>
       <ScrollView 
@@ -185,20 +210,29 @@ export default function SettingsScreen() {
 
         {/* Hero Profile Header */}
         <View style={styles.heroSection}>
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            activeOpacity={0.8}
+            onPress={() => setAvatarPickerVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Change profile picture"
+          >
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
             ) : (
               <Ionicons name="person" size={48} color={colors.white} />
             )}
-          </View>
+            <View style={styles.avatarCameraOverlay}>
+              <Ionicons name="camera" size={14} color="#fff" />
+            </View>
+          </TouchableOpacity>
           <Text style={styles.heroName}>{fullName}</Text>
           <Text style={styles.heroPhone}>{session?.user?.phone ?? 'Unknown Number'}</Text>
         </View>
 
-        {/* Profile */}
+        {/* Emergency & Safety */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>PROFILE</Text>
+          <Text style={styles.sectionLabel}>EMERGENCY & SAFETY</Text>
           <View style={styles.card}>
             <SettingsRow
               icon="medical-outline"
@@ -211,6 +245,35 @@ export default function SettingsScreen() {
                   <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
                 </View>
               }
+            />
+            <View style={styles.divider} />
+            <SettingsRow
+              icon="radio-outline"
+              title="Default SOS Audience"
+              subtitle={
+                <View style={styles.scopeSubtitleRow}>
+                  <Ionicons
+                    name={SCOPE_OPTIONS[broadcastScope].icon}
+                    size={12}
+                    color={SCOPE_OPTIONS[broadcastScope].accentColor}
+                  />
+                  <Text style={[styles.scopeSubtitleText, { color: SCOPE_OPTIONS[broadcastScope].accentColor }]}>
+                    {SCOPE_OPTIONS[broadcastScope].title}
+                  </Text>
+                </View>
+              }
+              colors={colors}
+              onPress={handleOpenScopeModal}
+              rightContent={<Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />}
+            />
+            <View style={styles.divider} />
+            <SettingsRow
+              icon="shield-checkmark-outline"
+              title="Device Permissions"
+              subtitle="Location, Camera, Microphone & Alerts"
+              colors={colors}
+              onPress={handleOpenPermissions}
+              rightContent={<Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />}
             />
           </View>
         </View>
@@ -325,7 +388,7 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={styles.versionText}>SAFEN v1.0.0</Text>
+        <Text style={styles.versionText}>SAFEN v1.0.0{Updates.updateId ? ' (' + Updates.updateId.slice(0, 7) + ')' : ''}</Text>
       </ScrollView>
 
       {/* Delete Account Modal */}
@@ -333,7 +396,7 @@ export default function SettingsScreen() {
         visible={deleteModalVisible}
         deleting={deleting}
         colors={colors}
-        onCancel={React.useCallback(() => setDeleteModalVisible(false), [])}
+        onCancel={handleCloseDeleteModal}
         onConfirm={confirmDeleteAccount}
       />
 
@@ -342,7 +405,7 @@ export default function SettingsScreen() {
         visible={signOutModalVisible}
         signingOut={signingOut}
         colors={colors}
-        onCancel={React.useCallback(() => setSignOutModalVisible(false), [])}
+        onCancel={handleCloseSignOutModal}
         onConfirm={confirmSignOut}
       />
 
@@ -350,11 +413,27 @@ export default function SettingsScreen() {
       <DisablePushModal 
         visible={pushModalVisible}
         colors={colors}
-        onCancel={React.useCallback(() => setPushModalVisible(false), [])}
+        onCancel={handleClosePushModal}
         onConfirm={confirmDisablePush}
       />
 
-      <FeedbackModal visible={feedbackModalVisible} onClose={React.useCallback(() => setFeedbackModalVisible(false), [])} />
+      <FeedbackModal visible={feedbackModalVisible} onClose={handleCloseFeedbackModal} />
+
+      {/* Avatar Picker */}
+      <AvatarPickerModal
+        visible={avatarPickerVisible}
+        onClose={() => setAvatarPickerVisible(false)}
+        onUpload={uploadAvatar}
+      />
+
+      {/* Broadcast Scope Modal */}
+      <BroadcastScopeModal
+        visible={scopeModalVisible}
+        currentScope={broadcastScope}
+        onSelect={setBroadcastScope}
+        onClose={handleCloseScopeModal}
+        source="settings"
+      />
     </View>
   );
 }
@@ -363,7 +442,8 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: { fontSize: 28, fontWeight: '800', color: colors.text.primary, marginBottom: 12, paddingHorizontal: 20 },
   heroSection: { alignItems: 'center', marginBottom: 32, paddingHorizontal: 20 },
-  avatarContainer: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#00875A', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: 12, borderWidth: 4, borderColor: colors.border },
+  avatarContainer: { width: 96, height: 96, borderRadius: 48, backgroundColor: '#00875A', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: 12, borderWidth: 4, borderColor: colors.border, position: 'relative' },
+  avatarCameraOverlay: { position: 'absolute', bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#fff' },
   avatarImage: { width: '100%', height: '100%' },
   heroName: { fontSize: 22, fontWeight: '700', color: colors.text.primary, marginBottom: 4 },
   heroPhone: { fontSize: 16, color: colors.text.secondary, fontWeight: '500' },
@@ -372,6 +452,8 @@ const getStyles = (colors: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: colors.white, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
   iceInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   iceInfoText: { fontSize: 13, color: colors.text.secondary, fontWeight: '500' },
+  scopeSubtitleRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
+  scopeSubtitleText: { fontSize: 13, fontWeight: '500' },
   rowBtn: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: colors.white },
   iconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
   rowText: { fontSize: 16, color: colors.text.primary, fontWeight: '500', flex: 1 },

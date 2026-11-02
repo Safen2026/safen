@@ -2,14 +2,27 @@ import { getInfoAsync, uploadAsync, FileSystemUploadType } from 'expo-file-syste
 import type { FileInfo } from 'expo-file-system';
 import { supabase } from './supabase';
 
+export interface CloudinaryUploadOptions {
+  public_id?: string;
+  folder?: string;
+  resourceType?: 'video' | 'audio' | 'image';
+}
+
 // ─── Detect resource type and filename from URI ────────────────────────────────
-const getUploadMeta = (uri: string): { fileName: string; mimeType: string; resourceType: 'video' | 'image' } => {
+const getUploadMeta = (
+  uri: string,
+  explicitType?: 'video' | 'audio' | 'image'
+): { fileName: string; mimeType: string; resourceType: 'video' | 'image' } => {
   const lower = uri.toLowerCase();
   const ts = Date.now();
 
-  const isVideo = lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.includes('/video') || lower.includes('camera');
+  if (explicitType === 'video') return { fileName: `video_${ts}.mp4`, mimeType: 'video/mp4', resourceType: 'video' };
+  if (explicitType === 'audio') return { fileName: `audio_${ts}.m4a`, mimeType: 'audio/m4a', resourceType: 'video' };
+  if (explicitType === 'image') return { fileName: `photo_${ts}.jpg`, mimeType: 'image/jpeg', resourceType: 'image' };
+
+  const isVideo = lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.includes('/video') || lower.includes('camera') || lower.includes('video_');
   const isAudio = lower.endsWith('.m4a') || lower.endsWith('.caf') || lower.endsWith('.mp3') || lower.endsWith('.wav')
-    || lower.includes('recording') || lower.includes('/av/');
+    || lower.includes('recording') || lower.includes('/av/') || lower.includes('audio_');
 
   if (isVideo) return { fileName: `video_${ts}.mp4`, mimeType: 'video/mp4', resourceType: 'video' };
   if (isAudio) return { fileName: `audio_${ts}.m4a`, mimeType: 'audio/m4a', resourceType: 'video' }; // Cloudinary uses /video endpoint for audio too
@@ -21,7 +34,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const attemptUpload = async (
   uri: string,
-  options?: { public_id?: string; folder?: string }
+  options?: CloudinaryUploadOptions
 ): Promise<string | null> => {
   const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
@@ -51,7 +64,14 @@ const attemptUpload = async (
   }
 
   // ── Build upload URL ──────────────────────────────────────────────────────
-  const { resourceType, fileName } = getUploadMeta(uri);
+  let explicitType: 'video' | 'audio' | 'image' | undefined = options?.resourceType;
+  if (!explicitType && options?.public_id) {
+    if (options.public_id.startsWith('video_')) explicitType = 'video';
+    else if (options.public_id.startsWith('audio_')) explicitType = 'audio';
+    else if (options.public_id.startsWith('photo_') || options.public_id.startsWith('snapshot_')) explicitType = 'image';
+  }
+
+  const { resourceType, fileName } = getUploadMeta(uri, explicitType);
   const uploadUrl = `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`;
 
   // Force Cloudinary to use our descriptive filename (without extension) as the public_id.
@@ -114,7 +134,7 @@ const attemptUpload = async (
 
 export const uploadToCloudinary = async (
   uri: string,
-  options?: { public_id?: string; folder?: string }
+  options?: CloudinaryUploadOptions
 ): Promise<string | null> => {
   if (__DEV__) console.log('[Cloudinary] Starting upload for:', uri);
 

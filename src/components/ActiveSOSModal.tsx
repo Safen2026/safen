@@ -1,3 +1,4 @@
+import { customAlert } from '../utils/customAlert';
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -8,8 +9,7 @@ import {
   ActivityIndicator,
   Easing,
   Modal,
-  ScrollView,
-  Alert
+  ScrollView
 } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,9 @@ import { formatDuration } from '../utils/dateUtils';
 import { useTheme } from '../context/ThemeContext';
 import { CancelSOSModal } from './CancelSOSModal';
 import { SOSFeed } from './SOSFeed';
+import { useAlertContext } from '../context/AlertContext';
+import type { BroadcastScope } from '../utils/broadcastScope';
+import { showToast } from '../utils/toast';
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface ActiveSOSModalProps {
@@ -27,6 +30,7 @@ interface ActiveSOSModalProps {
   alertId: string;
   smsMode: boolean;
   onCancel: () => Promise<boolean>;
+  scope?: BroadcastScope;
 }
 
 export const ActiveSOSModal = React.memo(({
@@ -34,8 +38,11 @@ export const ActiveSOSModal = React.memo(({
   alertId,
   smsMode,
   onCancel,
+  scope,
 }: ActiveSOSModalProps) => {
   const insets = useSafeAreaInsets();
+  const { activeAlert, escalateToCommunity, isEscalating } = useAlertContext();
+  const currentScope: BroadcastScope = activeAlert?.scope ?? scope ?? 'both';
 
   const {
     phase,
@@ -43,12 +50,24 @@ export const ActiveSOSModal = React.memo(({
     startRecording,
     stopRecording,
     bindCameraRef,
+    onCameraReady,
   } = useEmergencyRecording();
 
   const { colors } = useTheme();
 
   const [loadingCancel, setLoadingCancel] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
+
+  const handleEscalate = useCallback(async () => {
+    const success = await escalateToCommunity();
+    if (success) {
+      showToast({
+        title: 'Community Notified',
+        subtitle: 'Nearby Safen first responders (~800m) have been alerted.',
+        icon: 'megaphone',
+      });
+    }
+  }, [escalateToCommunity]);
 
   // Only start recording once per alertId
   const startedForRef = useRef<string | null>(null);
@@ -72,8 +91,9 @@ export const ActiveSOSModal = React.memo(({
   const scrollHeightRef = useRef(0);
   const contentHeightRef = useRef(0);
 
-  // Staggered slide-in for checklist
+  // Staggered slide-in for checklist (5 rows: location, contacts, community, video, audio)
   const rowAnims = useRef([
+    new Animated.Value(0),
     new Animated.Value(0),
     new Animated.Value(0),
     new Animated.Value(0),
@@ -147,6 +167,10 @@ export const ActiveSOSModal = React.memo(({
     setShowCancelModal(true);
   }, []);
 
+  const handleCloseCancelModal = useCallback(() => {
+    setShowCancelModal(false);
+  }, []);
+
   const handleConfirmCancel = useCallback(async () => {
     setLoadingCancel(true);
     stopRecording();
@@ -158,7 +182,7 @@ export const ActiveSOSModal = React.memo(({
     setLoadingCancel(false);
 
     if (!cancelled) {
-      Alert.alert('Error', 'Could not cancel SOS. Please try again.');
+      customAlert('Error', 'Could not cancel SOS. Please try again.');
     } else {
       setShowCancelModal(false);
     }
@@ -179,13 +203,15 @@ export const ActiveSOSModal = React.memo(({
       statusBarTranslucent={true}
     >
       <View style={styles.modalContainer}>
-        {/* Hidden CameraView for background video recording */}
-        <View style={styles.hiddenCameraContainer}>
+        {/* Off-screen CameraView for background video recording */}
+        <View style={styles.offscreenCameraContainer} pointerEvents="none">
           <CameraView
             ref={bindCameraRef}
-            style={{ width: 10, height: 10 }}
+            style={styles.offscreenCamera}
             facing="back"
             mode="video"
+            mute={true}
+            onCameraReady={onCameraReady}
           />
         </View>
 
@@ -277,10 +303,33 @@ export const ActiveSOSModal = React.memo(({
               <Ionicons name="checkmark" size={24} color="#27AE60" />
             </Animated.View>
 
-            {/* Video Clip */}
+            {/* Community Network */}
             <Animated.View style={[styles.checklistItem, {
               opacity: rowAnims[2],
               transform: [{ translateY: rowAnims[2].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+            }]}>
+              <View style={[styles.checklistIconWrapper, { backgroundColor: currentScope === 'both' ? '#10B981' : '#475569' }]}>
+                <Ionicons name={currentScope === 'both' ? 'radio' : 'lock-closed'} size={16} color="#fff" />
+              </View>
+              <View style={styles.checklistTextContainer}>
+                <Text style={styles.checklistTitle}>
+                  {currentScope === 'both' ? 'Community Responders' : 'Community Broadcast'}
+                </Text>
+                <Text style={styles.checklistSub}>
+                  {currentScope === 'both' ? 'Notified (~800m radius)' : 'Private (Contacts Only)'}
+                </Text>
+              </View>
+              {currentScope === 'both' ? (
+                <Ionicons name="checkmark" size={24} color="#10B981" />
+              ) : (
+                <Ionicons name="lock-closed" size={18} color="#94A3B8" />
+              )}
+            </Animated.View>
+
+            {/* Video Clip */}
+            <Animated.View style={[styles.checklistItem, {
+              opacity: rowAnims[3],
+              transform: [{ translateY: rowAnims[3].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
             }]}>
               <View style={[styles.checklistIconWrapper, { backgroundColor: isVideoPhase ? '#C0392B' : '#27AE60' }]}>
                 <Ionicons name={isVideoPhase ? 'videocam' : 'videocam-outline'} size={16} color="#fff" />
@@ -296,8 +345,8 @@ export const ActiveSOSModal = React.memo(({
 
             {/* Audio */}
             <Animated.View style={[styles.checklistItem, {
-              opacity: rowAnims[3],
-              transform: [{ translateY: rowAnims[3].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+              opacity: rowAnims[4],
+              transform: [{ translateY: rowAnims[4].interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
             }]}>
               <View style={[styles.checklistIconWrapper, { backgroundColor: isVideoPhase ? '#555' : '#E67E22' }]}>
                 <Ionicons name="mic" size={16} color="#fff" />
@@ -309,6 +358,31 @@ export const ActiveSOSModal = React.memo(({
               {!isVideoPhase && <Text style={styles.checklistTimer}>{audioTimerStr}</Text>}
             </Animated.View>
           </View>
+
+          {/* Layer 3: Escalate to Community Action Button */}
+          {currentScope === 'contacts_only' ? (
+            <TouchableOpacity
+              style={styles.escalateBtn}
+              onPress={handleEscalate}
+              disabled={isEscalating}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Broaden alert to nearby community first responders within 800 meters"
+            >
+              <View style={styles.escalateIconWrap}>
+                <Ionicons name="megaphone" size={18} color="#fff" />
+              </View>
+              <View style={styles.escalateTextContainer}>
+                <Text style={styles.escalateTitle}>Broaden to Community (~800m)</Text>
+                <Text style={styles.escalateSub}>Alert verified neighbors nearby for faster on-site help</Text>
+              </View>
+              {isEscalating ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="chevron-forward" size={18} color="#3B82F6" />
+              )}
+            </TouchableOpacity>
+          ) : null}
 
           {/* Real-time SOS Feed */}
           {alertId ? <SOSFeed alertId={alertId} /> : null}
@@ -331,7 +405,7 @@ export const ActiveSOSModal = React.memo(({
           visible={showCancelModal} 
           loading={loadingCancel} 
           colors={colors} 
-          onKeepActive={() => setShowCancelModal(false)} 
+          onKeepActive={handleCloseCancelModal} 
           onConfirmCancel={handleConfirmCancel} 
         />
       </View>
@@ -345,12 +419,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0b0c10',
   },
-  hiddenCameraContainer: {
+  offscreenCameraContainer: {
     position: 'absolute',
-    width: 10,
-    height: 10,
+    bottom: -400,
+    right: -400,
+    width: 320,
+    height: 240,
     overflow: 'hidden',
-    opacity: 0.01,
+    opacity: 1,
+  },
+  offscreenCamera: {
+    width: 320,
+    height: 240,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -470,6 +550,41 @@ const styles = StyleSheet.create({
     color: '#E74C3C',
     fontWeight: '700',
     fontSize: 14,
+  },
+  escalateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    borderColor: '#3B82F6',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 14,
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  escalateIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  escalateTextContainer: {
+    flex: 1,
+  },
+  escalateTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 2,
+  },
+  escalateSub: {
+    fontSize: 12,
+    color: '#94A3B8',
+    lineHeight: 16,
   },
   modalCancelBtn: {
     marginHorizontal: 20,

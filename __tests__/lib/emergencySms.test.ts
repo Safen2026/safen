@@ -41,9 +41,12 @@ jest.mock('react-native', () => ({
 }));
 
 // Import AFTER mocks are set up
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '../../src/lib/supabase';
 import {
   isOnline,
   sendEmergencySms,
+  getEmergencyContactPhones,
   type SmsContact,
 } from '../../src/lib/emergencySms';
 
@@ -319,5 +322,131 @@ describe('sendEmergencySms', () => {
     });
     await sendEmergencySms(CONTACTS, 'George', COORDS);
     expect(capturedBody).toContain('Safen');
+  });
+
+  it('SAD PATH: handles malicious script tags or multi-line injection in description without crash', async () => {
+    let capturedBody = '';
+    mockIsAvailable.mockResolvedValueOnce(true);
+    mockSendSMS.mockImplementationOnce((_phones: string[], body: string) => {
+      capturedBody = body;
+      return Promise.resolve({ result: 'sent' });
+    });
+    const malicious = '<script>alert("xss")</script>\n\nDROP TABLE alerts;--';
+    await sendEmergencySms(CONTACTS, 'George', COORDS, 'sos', malicious);
+    expect(mockSendSMS).toHaveBeenCalledTimes(1);
+    expect(capturedBody).toContain(malicious);
+  });
+});
+
+// ─── getEmergencyContactPhones ────────────────────────────────────────────────
+describe('getEmergencyContactPhones', () => {
+  const userId = 'user-test-123';
+  const cacheKey = `safen_cached_contacts_${userId}`;
+
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  it('returns contacts from Supabase when query succeeds', async () => {
+    (supabase.from as jest.Mock).mockReturnValueOnce({
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      not: jest.fn().mockResolvedValueOnce({
+        data: [
+          { name: 'Dr. Chidi', phone: ' +2348012345678 ' },
+          { name: null, phone: '+2348099999999' },
+          { name: 'Invalid', phone: '   ' }, // should be filtered out
+        ],
+        error: null,
+      }),
+    });
+
+    const contacts = await getEmergencyContactPhones(userId);
+    expect(contacts).toHaveLength(2);
+    expect(contacts[0]).toEqual({ name: 'Dr. Chidi', phone: '+2348012345678' });
+    expect(contacts[1]).toEqual({ name: 'Contact', phone: '+2348099999999' });
+  });
+
+  it('SAD PATH: falls back to AsyncStorage cache when Supabase errors (offline)', async () => {
+    (supabase.from as jest.Mock).mockReturnValueOnce({
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      not: jest.fn().mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Network connection lost' },
+      }),
+    });
+
+    const cachedData = {
+      cachedAt: Date.now(),
+      contacts: [
+        { name: 'Cached Alice', phone: '+2348011111111', status: 'accepted' },
+        { name: 'Cached Bob', phone: '+2348022222222', status: 'pending' }, // should be filtered out
+        { name: 'Cached Charlie', phone: '  ', status: 'accepted' }, // empty phone -> filtered out
+      ],
+    };
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(cachedData));
+
+    const contacts = await getEmergencyContactPhones(userId);
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0]).toEqual({ name: 'Cached Alice', phone: '+2348011111111' });
+  });
+
+  it('SAD PATH: handles corrupted non-JSON AsyncStorage cache safely', async () => {
+    (supabase.from as jest.Mock).mockReturnValueOnce({
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      not: jest.fn().mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Offline' },
+      }),
+    });
+
+    await AsyncStorage.setItem(cacheKey, '{{CORRUPT_NOT_JSON}}');
+
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const contacts = await getEmergencyContactPhones(userId);
+    expect(contacts).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Failed to fetch emergency contact phones:',
+      expect.any(Error)
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('SAD PATH: handles empty cache envelope in AsyncStorage gracefully', async () => {
+    (supabase.from as jest.Mock).mockReturnValueOnce({
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      not: jest.fn().mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Offline' },
+      }),
+    });
+
+    await AsyncStorage.setItem(cacheKey, JSON.stringify({ cachedAt: Date.now(), contacts: [] }));
+
+    const contacts = await getEmergencyContactPhones(userId);
+    expect(contacts).toEqual([]);
+  });
+
+  it('supports legacy plain-array cache shape for backwards compatibility', async () => {
+    (supabase.from as jest.Mock).mockReturnValueOnce({
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      not: jest.fn().mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Offline' },
+      }),
+    });
+
+    const legacyArray = [
+      { name: 'Legacy Dave', phone: '+2348033333333', status: 'accepted' },
+    ];
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(legacyArray));
+
+    const contacts = await getEmergencyContactPhones(userId);
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0]).toEqual({ name: 'Legacy Dave', phone: '+2348033333333' });
   });
 });

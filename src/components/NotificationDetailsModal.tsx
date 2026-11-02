@@ -1,7 +1,8 @@
+import { customAlert } from '../utils/customAlert';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Modal, TouchableOpacity,
-  ActivityIndicator, Alert, Image, ScrollView, Linking,
+  ActivityIndicator, Image, ScrollView, Linking,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -212,7 +213,7 @@ const NotificationDetailsModalComponent = ({
         onClose();
       }
     } catch {
-      Alert.alert('Error', 'Could not process request');
+      customAlert('Error', 'Could not process request');
     }
     setLoading(false);
   }, [notification, onClose, onStatusChange]);
@@ -231,7 +232,7 @@ const NotificationDetailsModalComponent = ({
       if (notification?.title) params.append('alertTitle', notification.title);
       router.push(`/map?${params.toString()}`);
     } else {
-      Alert.alert('Location Unavailable', 'No coordinates were attached to this alert.');
+      customAlert('Location Unavailable', 'No coordinates were attached to this alert.');
     }
   }, [details?.latitude, details?.longitude, notification?.latitude, notification?.longitude, notification?.sender_name, onClose]);
 
@@ -244,7 +245,7 @@ const NotificationDetailsModalComponent = ({
       onStatusChange?.();
       onClose();
     } catch {
-      Alert.alert('Error', 'Could not send acknowledgement');
+      customAlert('Error', 'Could not send acknowledgement');
     }
     setLoading(false);
   }, [notification, onClose, onStatusChange]);
@@ -254,15 +255,15 @@ const NotificationDetailsModalComponent = ({
       // SECURITY FIX: Prevent malicious deep links (e.g. javascript:, file:)
       const lowerUrl = url.toLowerCase();
       if (!lowerUrl.startsWith('http://') && !lowerUrl.startsWith('https://')) {
-        Alert.alert('Security Alert', 'This media link is not secure and cannot be opened.');
+        customAlert('Security Alert', 'This media link is not secure and cannot be opened.');
         return;
       }
       
       const canOpen = await Linking.canOpenURL(url);
       if (canOpen) await Linking.openURL(url);
-      else Alert.alert('Cannot Open', 'Your device cannot open this media file.');
+      else customAlert('Cannot Open', 'Your device cannot open this media file.');
     } catch {
-      Alert.alert('Error', 'Failed to open the media file.');
+      customAlert('Error', 'Failed to open the media file.');
     }
   }, []);
 

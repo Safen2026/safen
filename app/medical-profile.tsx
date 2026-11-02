@@ -1,7 +1,8 @@
+import { customAlert } from '../src/utils/customAlert';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, ActivityIndicator, Switch, Alert,
+  TextInput, ActivityIndicator, Switch,
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,12 +79,12 @@ export default function MedicalProfileScreen() {
       (profile.doctor_phone && profile.doctor_phone.length > 100) ||
       (profile.doctor_hospital && profile.doctor_hospital.length > 100)
     ) {
-      Alert.alert('Error', 'Contact fields cannot exceed 100 characters.');
+      customAlert('Error', 'Contact fields cannot exceed 100 characters.');
       return;
     }
     
     if (profile.conditions.some(c => c.length > 50) || profile.medications.some(m => m.length > 50) || profile.allergies.some(a => a.name.length > 50)) {
-       Alert.alert('Error', 'Individual conditions or medications cannot exceed 50 characters.');
+       customAlert('Error', 'Individual conditions or medications cannot exceed 50 characters.');
        return;
     }
 
@@ -109,9 +110,9 @@ export default function MedicalProfileScreen() {
 
     setSaving(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      customAlert('Error', error.message);
     } else {
-      Alert.alert('Saved', 'Your medical profile has been updated.');
+      customAlert('Saved', 'Your medical profile has been updated.');
     }
   }, [profile]);
 

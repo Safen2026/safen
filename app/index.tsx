@@ -1,50 +1,45 @@
-import { useContext, useEffect, useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Image } from 'react-native';
 import { Redirect } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSession } from '../src/context/SessionContext';
 import { useTheme } from '../src/context/ThemeContext';
-import { PERMISSIONS_STORAGE_KEY } from './permissions';
+import { checkNeedsPermissionsOnboarding } from '../src/utils/permissionUtils';
 
 export default function Root() {
   const { colors } = useTheme();
   const session = useSession();
   const [checking, setChecking] = useState(true);
-  const [permissionsDone, setPermissionsDone] = useState(false);
+  const [needsPermissions, setNeedsPermissions] = useState(false);
 
   useEffect(() => {
-    async function checkSetup() {
-      try {
-        const val = await AsyncStorage.getItem(PERMISSIONS_STORAGE_KEY);
-        setPermissionsDone(val === 'true');
-      } catch {
-        setPermissionsDone(false);
-      } finally {
+    if (!session) {
+      setChecking(false);
+      return;
+    }
+
+    let cancelled = false;
+    checkNeedsPermissionsOnboarding().then((needs) => {
+      if (!cancelled) {
+        setNeedsPermissions(needs);
         setChecking(false);
       }
-    }
-
-    if (session) {
-      checkSetup();
-    } else {
-      setChecking(false);
-    }
+    });
+    return () => { cancelled = true; };
   }, [session]);
 
+  // While verifying session & permissions, show seamless logo screen without any spinner
   if (checking) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <Image
+          source={require('../assets/logo.png')}
+          style={{ width: 140, height: 140, resizeMode: 'contain' }}
+        />
       </View>
     );
   }
 
-  // If not logged in, go to auth
   if (!session) return <Redirect href="/auth" />;
-
-  // If logged in but hasn't completed emergency readiness, go to permissions
-  if (!permissionsDone) return <Redirect href="/permissions" />;
-
-  // Otherwise, go straight to the app
+  if (needsPermissions) return <Redirect href="/permissions" />;
   return <Redirect href="/(tabs)" />;
 }

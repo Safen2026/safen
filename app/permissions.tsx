@@ -1,3 +1,4 @@
+import { customAlert } from '../src/utils/customAlert';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -6,11 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Alert,
+  Linking,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
@@ -116,6 +118,10 @@ export default function PermissionsScreen() {
       if (key === 'location') {
         const res = await Location.requestForegroundPermissionsAsync();
         granted = res.granted;
+        if (granted) {
+          // Attempt background location permission onboarding gracefully
+          await Location.requestBackgroundPermissionsAsync().catch(() => null);
+        }
       } else if (key === 'microphone') {
         const res = await Audio.requestPermissionsAsync();
         granted = res.granted;
@@ -134,12 +140,29 @@ export default function PermissionsScreen() {
       } else {
         // Log rejection for security auditing or prompt user to open OS settings
         console.warn(`User rejected ${key} permission.`);
+        customAlert(
+          'Permission Required',
+          `Safen needs ${key} access for emergency protection. If blocked in system settings, please tap Open Settings to enable it.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => {
+                if (Platform.OS === 'ios') {
+                  Linking.openURL('app-settings:').catch(() => {});
+                } else {
+                  Linking.openSettings().catch(() => {});
+                }
+              },
+            },
+          ]
+        );
       }
 
       setPermissions(prev => ({ ...prev, [key]: granted }));
     } catch (e) {
       console.warn(`Error requesting ${key} permission:`, e);
-      Alert.alert('Permission Error', `We encountered a problem requesting the ${key} permission. Please try again or check your OS settings.`);
+      customAlert('Permission Error', `We encountered a problem requesting the ${key} permission. Please try again or check your OS settings.`);
     } finally {
       setRequestingKey(null);
     }
@@ -153,6 +176,9 @@ export default function PermissionsScreen() {
       if (!permissions.location) {
         try {
           const res = await Location.requestForegroundPermissionsAsync();
+          if (res.granted) {
+            await Location.requestBackgroundPermissionsAsync().catch(() => null);
+          }
           setPermissions(prev => ({ ...prev, location: res.granted }));
         } catch (e) {
           console.warn('Failed to request location:', e);
@@ -234,6 +260,19 @@ export default function PermissionsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Back Button (shown if opened from banner or settings) */}
+        {router.canGoBack() && (
+          <TouchableOpacity
+            style={currentStyles.backBtn}
+            onPress={() => router.back()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel="Back to previous screen"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+          </TouchableOpacity>
+        )}
+
         {/* Hero Header */}
         <View style={currentStyles.heroSection}>
           <View style={currentStyles.heroIconCircle}>
@@ -308,6 +347,18 @@ const getStyles = (colors: ThemeColors, isDark: boolean) => StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    alignSelf: 'flex-start',
   },
   heroSection: {
     alignItems: 'center',

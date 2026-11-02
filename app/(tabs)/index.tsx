@@ -14,6 +14,8 @@ import { useSafeCheckIn }   from '../../src/hooks/useSafeCheckIn';
 import { AlertsBanner }          from '../../src/components/AlertsBanner';
 import { ProtectionStatusCard }  from '../../src/components/ProtectionStatusCard';
 import { LocationCard }          from '../../src/components/LocationCard';
+import { PermissionWarningBanner } from '../../src/components/PermissionWarningBanner';
+import { CommunityAlertBanner } from '../../src/components/CommunityAlertBanner';
 
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -34,10 +36,7 @@ export default function HomeScreen() {
   // every 30 seconds when the timeLeftStr timer ticks and causes a re-render.
   const openCheckInModal = useCallback(() => setCheckInModalVisible(true), []);
   const closeCheckInModal = useCallback(() => setCheckInModalVisible(false), []);
-
-  const handleStartCheckIn = useCallback(async (data: { destination: string; durationMinutes: number; notifyContacts: boolean }) => {
-    await startCheckIn(data);
-  }, [startCheckIn]);
+  const handleOpenSafetyGuidelines = useCallback(() => router.push('/safety-guidelines'), [router]);
 
   // Memoize activeCheckIn so SafeCheckInCard's React.memo actually works.
   // Without this, the inline object literal was recreated every second by the
@@ -75,6 +74,13 @@ export default function HomeScreen() {
           <View style={styles.topRowRight}><ProtectionStatusCard /></View>
         </View>
 
+        {/* 1a. Permission warning banner — only shown when Location or Notifications
+              have been revoked post-onboarding. Non-blocking, 1-tap fix. */}
+        <PermissionWarningBanner />
+
+        {/* 1b. High-visibility community alert banner — shown when a nearby broadcast is active */}
+        <CommunityAlertBanner />
+
         {/* 2. SOS — always above the fold, always accessible */}
         <SOSButton />
 
@@ -99,11 +105,12 @@ export default function HomeScreen() {
         {/* 6. Safety Network - horizontal contact row */}
         <SafetyNetworkRow />
         {/* Safety Guidelines Card */}
-        <TouchableOpacity 
-        
-          style={[styles.safetyCard, { backgroundColor: colors.white, borderColor: colors.border }]} 
-          onPress={() => router.push('/safety-guidelines')}
+        <TouchableOpacity
+          style={[styles.safetyCard, { backgroundColor: colors.white, borderColor: colors.border }]}
+          onPress={handleOpenSafetyGuidelines}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Read safety tips and real-time updates"
         >
           <View style={styles.safetyCardContent}>
             <View style={styles.safetyIconContainer}>
@@ -125,7 +132,7 @@ export default function HomeScreen() {
       <SafeCheckInModal
         visible={checkInModalVisible}
         onClose={closeCheckInModal}
-        onStartCheckIn={handleStartCheckIn}
+        onStartCheckIn={startCheckIn}
         initialSession={initialSession}
       />
     </View>

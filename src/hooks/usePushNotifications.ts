@@ -7,6 +7,8 @@ import { Notifications, isExpoGo } from '../lib/expoNotifications';
 
 
 
+
+
 // Foreground behavior: show a banner + play a sound even while the app
 // is open. Without this handler, Expo suppresses notifications whenever
 // the app is in the foreground.
@@ -51,14 +53,8 @@ async function registerForPushNotifications(userId: string) {
       return;
     }
 
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') {
-      console.warn('Push notification permission was not granted.');
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
       return;
     }
 

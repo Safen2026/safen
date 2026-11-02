@@ -1,5 +1,6 @@
+import { customAlert } from '../utils/customAlert';
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import type { ThemeColors } from '../constants/Theme';
@@ -25,7 +26,7 @@ export const ActiveTripShareCardComponent = ({
   const styles = useMemo(() => getStyles(colors), [colors]);
 
   const handleExtend = () => {
-    Alert.alert(
+    customAlert(
       'Extend Sharing',
       'Add more time to your live location share?',
       [
@@ -37,7 +38,7 @@ export const ActiveTripShareCardComponent = ({
   };
 
   const handleStop = () => {
-    Alert.alert(
+    customAlert(
       'Stop Sharing?',
       `${contactName} will be notified that you stopped sharing your location.`,
       [

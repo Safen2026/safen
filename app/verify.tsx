@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView
+  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,10 +9,11 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { firebaseAuth } from '../src/lib/firebase';
 import { PhoneAuthProvider, signInWithCredential, signInWithPhoneNumber, updateProfile } from '@react-native-firebase/auth';
 import { supabase } from '../src/lib/supabase';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PERMISSIONS_STORAGE_KEY } from './permissions';
 import { useTheme } from '../src/context/ThemeContext';
 import { getSignupData } from '../src/utils/signupStore';
+import { checkNeedsPermissionsOnboarding } from '../src/utils/permissionUtils';
+import { customAlert } from '../src/utils/customAlert';
+import { showToast } from '../src/utils/toast';
 
 const BRAND_BLUE = '#0A2463';
 const OTP_LENGTH = 6;
@@ -78,7 +79,7 @@ export default function VerifyScreen() {
   const handleVerify = useCallback(async () => {
     const token = otp.join('');
     if (token.length < OTP_LENGTH) {
-      Alert.alert('Incomplete code', 'Please enter all 6 digits.');
+      customAlert('Incomplete Code', 'Please enter all 6 digits of the verification code.', undefined, { type: 'warning' });
       return;
     }
 
@@ -104,7 +105,12 @@ export default function VerifyScreen() {
       if (sbError?.message.includes('Invalid login credentials')) {
         if (!firstName || !lastName) {
           setLoading(false);
-          Alert.alert('Account not found', 'This phone number is not registered. Please go back and select Sign Up.');
+          customAlert(
+            'Account Not Found',
+            'This phone number is not registered. Please go back and select Create Account.',
+            [{ text: 'Go Back', onPress: () => router.back() }],
+            { type: 'warning' }
+          );
           // Sign out of Firebase so they can restart fresh
           await firebaseAuth?.signOut();
           return;
@@ -123,7 +129,7 @@ export default function VerifyScreen() {
 
         if (signUpError) {
           setLoading(false);
-          Alert.alert('Registration Error', signUpError.message);
+          customAlert('Registration Error', signUpError.message, undefined, { type: 'error' });
           await firebaseAuth?.signOut();
           return;
         }
@@ -132,40 +138,39 @@ export default function VerifyScreen() {
         // If they provided firstName and lastName, they are in the SIGN UP flow
         if (firstName && lastName) {
           setLoading(false);
-          Alert.alert('Account already exists', 'This phone number is already registered to an account. Please go back and select Sign In instead.');
+          customAlert(
+            'Account Already Exists',
+            'This phone number is already registered to an account. Please go back and select Sign In instead.',
+            [{ text: 'Go to Sign In', onPress: () => router.back() }],
+            { type: 'info' }
+          );
           await firebaseAuth?.signOut();
           await supabase.auth.signOut();
           return;
         }
       } else if (sbError?.message.includes('Phone not confirmed')) {
         setLoading(false);
-        Alert.alert(
-          'Account Stuck',
-          'This phone number was registered before the confirmation setting was disabled. Please delete this user from the Supabase Authentication dashboard and try again.'
+        customAlert(
+          'Account Notice',
+          'This phone number requires verification setting adjustments. Please check your account settings or contact support.',
+          undefined,
+          { type: 'error' }
         );
         return;
       } else if (sbError) {
         setLoading(false);
-        Alert.alert('Supabase Error', sbError.message);
+        customAlert('Authentication Error', sbError.message, undefined, { type: 'error' });
         return;
       }
       
       setLoading(false);
-      // Check if permissions onboarding was completed
-      try {
-        const done = await AsyncStorage.getItem(PERMISSIONS_STORAGE_KEY);
-        if (done === 'true') {
-          router.replace('/(tabs)');
-        } else {
-          router.replace('/permissions');
-        }
-      } catch {
-        router.replace('/permissions');
-      }
+      // Verify real OS permission state (fixes Android Auto Backup reinstall skip)
+      const needsOnboarding = await checkNeedsPermissionsOnboarding();
+      router.replace(needsOnboarding ? '/permissions' : '/(tabs)');
     } catch (err: unknown) {
       setLoading(false);
       const msg = err instanceof Error ? err.message : String(err);
-      Alert.alert('Verification failed', msg);
+      customAlert('Verification Failed', msg, undefined, { type: 'error' });
       setOtp(Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
     }
@@ -182,11 +187,11 @@ export default function VerifyScreen() {
       setResendCooldown(RESEND_COOLDOWN);
       setOtp(Array(OTP_LENGTH).fill(''));
       inputRefs.current[0]?.focus();
-      Alert.alert('Code sent', 'A new verification code has been sent to your phone.');
+      showToast({ title: 'Code Sent', subtitle: 'A new verification code has been sent to your phone.', icon: 'checkmark-circle' });
     } catch (err: unknown) {
       setLoading(false);
       const msg = err instanceof Error ? err.message : String(err);
-      Alert.alert('Resend failed', msg);
+      customAlert('Resend Failed', msg, undefined, { type: 'error' });
     }
   }, [resendCooldown, phone]);
 
@@ -196,7 +201,6 @@ export default function VerifyScreen() {
     <View style={styles.flex}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.flex} contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 32 }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-
           {/* Back button */}
           <TouchableOpacity 
             style={styles.backBtn} 

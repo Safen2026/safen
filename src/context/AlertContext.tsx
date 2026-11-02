@@ -12,6 +12,10 @@
 import React, { createContext, useContext } from 'react';
 import { useAlert } from '../hooks/useAlert';
 import type { ActiveAlert, AlertType, AlertResult } from '../hooks/useAlert';
+import type { BroadcastScope } from '../utils/broadcastScope';
+
+export type { ActiveAlert, AlertType, AlertResult } from '../hooks/useAlert';
+export type { BroadcastScope } from '../utils/broadcastScope';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -19,7 +23,11 @@ interface AlertContextValue {
   loading: boolean;
   loadingMessage: string | null;
   activeAlert: ActiveAlert | null;
-  triggerAlert: (type: AlertType, description?: string) => Promise<AlertResult>;
+  broadcastScope: BroadcastScope;
+  setBroadcastScope: (scope: BroadcastScope) => Promise<void>;
+  isEscalating: boolean;
+  escalateToCommunity: () => Promise<boolean>;
+  triggerAlert: (type: AlertType, description?: string, customScope?: BroadcastScope) => Promise<AlertResult>;
   cancelAlert: () => Promise<boolean>;
 }
 

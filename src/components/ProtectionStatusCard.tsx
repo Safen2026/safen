@@ -12,7 +12,7 @@ try { Battery = require('expo-battery'); } catch {}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type GPSStatus   = 'on' | 'off' | 'unknown';
-type NetStatus   = 'strong' | 'active' | 'none' | 'unknown';
+type NetStatus   = 'strong' | 'weak' | 'none' | 'unknown';
 
 // ── Battery visual ───────────────────────────────────────────────────────────
 // Drawn with plain Views — no extra packages needed.
@@ -93,12 +93,10 @@ export const ProtectionStatusCard = React.memo(() => {
       const state = await Network.getNetworkStateAsync();
       if (!state.isConnected) {
         setNet('none');
-      } else if (state.type === Network.NetworkStateType.WIFI) {
-        setNet('strong');
-      } else if (state.type === Network.NetworkStateType.CELLULAR) {
-        setNet('active');
+      } else if (state.isInternetReachable === false) {
+        setNet('weak');
       } else {
-        setNet('active');
+        setNet('strong');
       }
     } catch {
       setNet('unknown');
@@ -140,8 +138,8 @@ export const ProtectionStatusCard = React.memo(() => {
   const gpsLabel   = gps === 'on' ? 'On'   : gps === 'off' ? 'Off'  : '—';
   const gpsColor   = gps === 'on' ? '#22C55E' : gps === 'off' ? '#EF4444' : colors.text.secondary;
 
-  const netLabel   = net === 'strong' ? 'Strong' : net === 'active' ? 'Active' : net === 'none' ? 'None'  : '—';
-  const netColor   = net === 'strong' ? '#22C55E' : net === 'active' ? '#F59E0B' : net === 'none' ? '#EF4444' : colors.text.secondary;
+  const netLabel   = net === 'strong' ? 'Strong' : net === 'weak' ? 'Weak' : net === 'none' ? 'None'  : '—';
+  const netColor   = net === 'strong' ? '#22C55E' : net === 'weak' ? '#F59E0B' : net === 'none' ? '#EF4444' : colors.text.secondary;
 
   const battColor  =
     !hasBattery ? colors.text.secondary :
@@ -150,7 +148,7 @@ export const ProtectionStatusCard = React.memo(() => {
     battLevel <= 40 ? '#F59E0B' :
     '#22C55E';
 
-  const allGood = gps === 'on' && net !== 'none' && (battLevel > 20 || charging);
+  const allGood = gps === 'on' && net === 'strong' && (battLevel > 20 || charging);
 
   return (
     <View style={styles.card}>

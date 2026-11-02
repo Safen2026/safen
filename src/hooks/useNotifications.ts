@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { AppState } from 'react-native';
 import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
@@ -21,6 +21,7 @@ export type AppNotification = {
   latitude: number | null;
   longitude: number | null;
   is_read: boolean;
+  is_community_broadcast: boolean;
   created_at: string;
 };
 
@@ -61,12 +62,14 @@ export function useNotifications() {
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let isMounted = true;
 
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user) return;
-      userIdRef.current = user.id;
+    function setupChannel(userId: string) {
+      // Remove previous channel before creating a new one
+      if (channel) {
+        supabase.removeChannel(channel).catch(() => {});
+        channel = null;
+      }
 
       const handleNewNotification = (payload: RealtimePostgresChangesPayload<AppNotification>) => {
         const row = payload.new as AppNotification;
@@ -100,14 +103,14 @@ export function useNotifications() {
       };
 
       channel = supabase
-        .channel(`notifications:user:${user.id}`)
+        .channel(`notifications:user:${userId}:${Date.now()}`)
         .on(
           'postgres_changes',
           {
             event: 'INSERT',
             schema: 'public',
             table: 'notifications',
-            filter: `recipient_id=eq.${user.id}`,
+            filter: `recipient_id=eq.${userId}`,
           },
           handleNewNotification
         )
@@ -120,7 +123,7 @@ export function useNotifications() {
             event: 'UPDATE',
             schema: 'public',
             table: 'notifications',
-            filter: `recipient_id=eq.${user.id}`,
+            filter: `recipient_id=eq.${userId}`,
           },
           handleNewNotification
         )
@@ -130,10 +133,32 @@ export function useNotifications() {
             fetchNotifications();
           }
         });
+    }
 
-      // 30-second polling fallback — catches any edge case realtime misses
-      pollTimer = setInterval(() => fetchNotifications(), 30_000);
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!isMounted) return;
+      const user = session?.user;
+      if (!user) return;
+      userIdRef.current = user.id;
+
+      setupChannel(user.id);
+
+      // 8-second polling fallback — ensures near-real-time coverage even if
+      // Supabase Realtime misses an event (e.g. network blip, subscription lag).
+      pollTimer = setInterval(() => fetchNotifications(), 8_000);
     })();
+
+    // Re-subscribe when auth state changes (sign-in after app open)
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMounted) return;
+      const userId = session?.user?.id;
+      if (userId) {
+        userIdRef.current = userId;
+        setupChannel(userId);
+        fetchNotifications();
+      }
+    });
 
     // AppState: re-fetch the moment the app comes back to foreground
     const appStateSub = AppState.addEventListener('change', (state: string) => {
@@ -141,14 +166,19 @@ export function useNotifications() {
     });
 
     return () => {
+      isMounted = false;
       if (channel) supabase.removeChannel(channel);
       if (pollTimer) clearInterval(pollTimer);
+      authListener.subscription.unsubscribe();
       appStateSub.remove();
     };
   }, [fetchNotifications]);
 
+  const notificationsRef = useRef(notifications);
+  notificationsRef.current = notifications;
+
   const markAllRead = useCallback(async () => {
-    const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+    const unreadIds = notificationsRef.current.filter(n => !n.is_read).map(n => n.id);
     if (unreadIds.length === 0) return;
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     const { error } = await supabase
@@ -156,7 +186,7 @@ export function useNotifications() {
       .update({ is_read: true })
       .in('id', unreadIds);
     if (error) console.warn('markAllRead failed:', error.message);
-  }, [notifications]);
+  }, []);
 
   const removeNotification = useCallback(async (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -164,7 +194,16 @@ export function useNotifications() {
     if (error) console.warn('removeNotification failed:', error.message);
   }, []);
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadCount = useMemo(() => {
+    return notifications.filter(n => !n.is_read).length;
+  }, [notifications]);
 
-  return { notifications, loading, unreadCount, refetch: fetchNotifications, markAllRead, removeNotification };
+  return useMemo(() => ({
+    notifications,
+    loading,
+    unreadCount,
+    refetch: fetchNotifications,
+    markAllRead,
+    removeNotification,
+  }), [notifications, loading, unreadCount, fetchNotifications, markAllRead, removeNotification]);
 }

@@ -58,6 +58,27 @@ async function getAcceptedContactIds(userId: string): Promise<string[]> {
   return contacts.map(c => c.contact_user_id as string);
 }
 
+/**
+ * Resolves the current user's session, display name, and accepted contact IDs
+ * in parallel. Returns null if there is no authenticated session.
+ * Used as a shared foundation for all fan-out notification functions.
+ */
+async function resolveNotificationContext(): Promise<{
+  userId: string;
+  senderName: string;
+  contactIds: string[];
+} | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) return null;
+
+  const [senderName, contactIds] = await Promise.all([
+    fetchSenderName(user.id),
+    getAcceptedContactIds(user.id),
+  ]);
+
+  return { userId: user.id, senderName, contactIds };
+}
 
 
 // ─── Public API ────────────────────────────────────────────────────────────────
@@ -68,13 +89,9 @@ async function getAcceptedContactIds(userId: string): Promise<string[]> {
 // The client just writes the row — no direct Expo API calls needed.
 export async function notifyEmergencyContacts(params: NotifyParams): Promise<void> {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user) return;
-
-    const senderName = await fetchSenderName(user.id);
-    const contactIds = await getAcceptedContactIds(user.id);
-    if (contactIds.length === 0) return;
+    const ctx = await resolveNotificationContext();
+    if (!ctx || ctx.contactIds.length === 0) return;
+    const { userId, senderName, contactIds } = ctx;
 
     const label = TYPE_LABEL[params.type];
     const isEmergency = params.type !== 'report';
@@ -87,7 +104,7 @@ export async function notifyEmergencyContacts(params: NotifyParams): Promise<voi
 
     const rows = contactIds.map(contactId => ({
       recipient_id: contactId,
-      sender_id: user.id,
+      sender_id: userId,
       sender_name: senderName,
       type: params.type,
       title,
@@ -108,7 +125,182 @@ export async function notifyEmergencyContacts(params: NotifyParams): Promise<voi
   }
 }
 
-// Fired when a user's Safe Check-In deadline passes without confirmation.
+/**
+ * Fans out an urgent alert to verified Safen users located in the same LGA/area.
+ * Excludes the sender and any contacts who are already notified via notifyEmergencyContacts.
+ *
+ * Privacy model (Responder-Gated Disclosure):
+ *   • Notification row: first name only + coarse coords (~11m) — enough to humanise
+ *     the alert and let the recipient judge proximity. No full name, no exact unit.
+ *   • Exact coords + full name: only unlocked server-side via get_community_alert_details()
+ *     AFTER the recipient inserts a row into community_responders (i.e. taps "I'm Responding").
+ */
+export async function notifyCommunityNearby(params: {
+  alertId: string;
+  type: NotifyType;
+  latitude?: number | null;
+  longitude?: number | null;
+  detailsSnippet?: string | null;
+}): Promise<{ count: number }> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user) return { count: 0 };
+
+    // Get sender's profile to find their last_lga_code and sender name
+    const [senderProfileRes, acceptedContacts] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('full_name, last_lga_code')  // last_state_code not needed here
+        .eq('id', user.id)
+        .maybeSingle(),
+      getAcceptedContactIds(user.id),
+    ]);
+
+    const senderProfile = senderProfileRes.data;
+    const lgaCode = senderProfile?.last_lga_code;
+    const fullName = senderProfile?.full_name?.trim() || '';
+
+    // Extract first name only — humanises the alert without exposing full identity
+    const firstName = fullName.split(' ')[0] || 'Someone';
+
+    if (!lgaCode) {
+      console.warn('[notifyCommunityNearby] Sender has no last_lga_code; skipping community broadcast');
+      return { count: 0 };
+    }
+
+    // Query profiles in the same LGA who have push enabled
+    const { data: communityUsers, error: queryErr } = await supabase
+      .from('profiles')
+      .select('id, expo_push_token')
+      .eq('last_lga_code', lgaCode)
+      .eq('push_enabled', true)
+      .neq('id', user.id)
+      .not('expo_push_token', 'is', null)
+      .limit(50); // Bound community radius broadcast to prevent notification storms
+
+    if (queryErr || !communityUsers || communityUsers.length === 0) {
+      return { count: 0 };
+    }
+
+    // Filter out contacts who already received the private emergency contact notification
+    const contactSet = new Set(acceptedContacts);
+    const recipients = communityUsers.filter(u => !contactSet.has(u.id));
+
+    if (recipients.length === 0) return { count: 0 };
+
+    const label = TYPE_LABEL[params.type] || 'Emergency SOS';
+    // Use first name to create an emotional hook that drives action.
+    // "Sarah needs help nearby" is far more compelling than "Someone nearby".
+    const title = `🚨 ${firstName} needs help — ${label}`;
+    const body = `${firstName} triggered a distress signal nearby. Tap to see how close you are and decide if you can help.`;
+
+    // PRIVACY & SAFETY: Round coordinates to 4 decimal places (~11m street-level)
+    // so community recipients can gauge approximate distance without pinpointing
+    // an exact room or apartment. Full coords unlock only after the user responds.
+    const communityLat = params.latitude != null ? Math.round(params.latitude * 10000) / 10000 : null;
+    const communityLng = params.longitude != null ? Math.round(params.longitude * 10000) / 10000 : null;
+
+    const rows = recipients.map(r => ({
+      recipient_id:          r.id,
+      sender_id:             user.id,
+      // First name only in the notification — full name gated behind respond action
+      sender_name:           firstName,
+      type:                  params.type,
+      title,
+      body,
+      // Coarse coords only — exact coords gated behind respond action
+      latitude:              communityLat,
+      longitude:             communityLng,
+      alert_id:              params.alertId,
+      // Flag used by the client to route to the community alert screen
+      // instead of the standard notification details modal.
+      is_community_broadcast: true,
+    }));
+
+    const { error: insertErr } = await supabase.from('notifications').insert(rows);
+    if (insertErr) {
+      console.warn('[notifyCommunityNearby] failed to insert notifications:', insertErr.message);
+      return { count: 0 };
+    }
+
+    return { count: rows.length };
+  } catch (err) {
+    console.warn('[notifyCommunityNearby] error:', err);
+    return { count: 0 };
+  }
+}
+
+/**
+ * Sends a cancellation notification to emergency contacts (and nearby community if broadcast)
+ * when the SOS owner cancels or resolves their alert.
+ */
+export async function notifySosCancelled(params: {
+  alertId: string;
+  hadCommunityBroadcast?: boolean;
+}): Promise<void> {
+  try {
+    const ctx = await resolveNotificationContext();
+    if (!ctx) return;
+    const { userId, senderName, contactIds } = ctx;
+
+    const allRecipientIds = new Set<string>(contactIds);
+
+    // If community was also broadcast to, inform nearby community users so they stand down
+    if (params.hadCommunityBroadcast) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('last_lga_code')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profile?.last_lga_code) {
+        const { data: communityUsers } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('last_lga_code', profile.last_lga_code)
+          .eq('push_enabled', true)
+          .neq('id', userId)
+          .not('expo_push_token', 'is', null)
+          .limit(50);
+
+        if (communityUsers) {
+          for (const u of communityUsers) {
+            allRecipientIds.add(u.id);
+          }
+        }
+      }
+    }
+
+    if (allRecipientIds.size === 0) return;
+
+    const rows = Array.from(allRecipientIds).map(recipientId => {
+      const isContact = contactIds.includes(recipientId);
+      return {
+        recipient_id: recipientId,
+        sender_id: userId,
+        sender_name: isContact ? senderName : 'A neighbor',
+        type: 'sos_ack' as NotifyType,
+        title: isContact
+          ? `✅ Emergency Cancelled — ${senderName}`
+          : `✅ All Clear: Emergency Resolved Nearby`,
+        body: isContact
+          ? `${senderName} has cancelled their SOS. They are safe. No further action is needed.`
+          : `The emergency alert reported nearby has been cancelled. All clear.`,
+        alert_id: params.alertId,
+      };
+    });
+
+    const { error } = await supabase.from('notifications').insert(rows);
+    if (error) {
+      console.warn('[notifySosCancelled] failed to insert notifications:', error.message);
+    }
+  } catch (err) {
+    console.warn('[notifySosCancelled] error:', err);
+  }
+}
+
+
 // Fans out to all accepted emergency contacts via the notifications table.
 // Push is dispatched automatically by the send-push Edge Function webhook.
 export async function notifyCheckInMissed(params: {
@@ -362,38 +554,56 @@ export async function sendSosAcknowledgement(params: {
     const user = session?.user;
     if (!user) return false;
 
-    // ── Relationship guard ────────────────────────────────────────────────────
-    // Only an accepted emergency contact of the SOS owner can acknowledge.
-    // This prevents anyone who intercepts an alertId from injecting fake
-    // responses ("I've called police") into a live SOS feed.
-    const { data: contactRow, error: guardError } = await supabase
-      .from('emergency_contacts')
-      .select('id')
-      .eq('user_id', params.alertOwnerId)   // the SOS owner's contact list
-      .eq('contact_user_id', user.id)        // must contain the responder
-      .eq('status', 'accepted')              // must be fully accepted
-      .maybeSingle();
+    // ── Run all guards in parallel to minimise round-trip latency ────────────
+    // 1. Relationship guard — only an accepted contact of the SOS owner can ack.
+    // 2. Alert status — must still be 'active' (prevent post-cancel responses).
+    // 3. Profile — responder's display name for the return notification.
+    const [
+      { data: contactRow, error: guardError },
+      { data: alertRow,   error: alertErr   },
+      { data: profile                        },
+    ] = await Promise.all([
+      supabase
+        .from('emergency_contacts')
+        .select('id')
+        .eq('user_id', params.alertOwnerId)
+        .eq('contact_user_id', user.id)
+        .eq('status', 'accepted')
+        .maybeSingle(),
+      supabase
+        .from('alerts')
+        .select('status')
+        .eq('id', params.alertId)
+        .maybeSingle(),
+      supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle(),
+    ]);
 
     if (guardError) {
       console.warn('[SosAck] relationship guard query failed:', guardError.message);
       return false;
     }
-
     if (!contactRow) {
-      // Not a verified contact — silently reject. No writes, no notifications.
       console.warn('[SosAck] rejected: responder is not an accepted contact of the SOS owner.');
+      return false;
+    }
+
+    if (alertErr) {
+      console.warn('[SosAck] alert status check failed:', alertErr.message);
+      return false;
+    }
+    if (!alertRow || alertRow.status !== 'active') {
+      console.warn('[SosAck] rejected: alert is no longer active (status:', alertRow?.status ?? 'not found', ')');
       return false;
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.id)
-      .maybeSingle();
     const myName = profile?.full_name?.trim() || 'Your contact';
-
     const meta = ACK_LABEL[params.response];
+
 
     // 1. Upsert acknowledgement row (idempotent — contact can change response)
     const { error: upsertError } = await supabase
